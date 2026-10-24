@@ -1,8 +1,14 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { buildLaunchdPlistXml, renderSystemdServiceUnit, renderWindowsScheduledTaskWrapperPs1 } from '@happier-dev/cli-common/service';
+import {
+  buildLaunchdPlistXml,
+  renderSystemdServiceUnit,
+  renderWindowsScheduledTaskWrapperPs1,
+  resolveInstalledWindowsServiceLauncherPaths,
+  WINDOWS_SERVICE_LAUNCHER_BUILD_VERSION,
+} from '@happier-dev/cli-common/service';
 
 import { withTempDir } from '@/testkit/fs/tempDir';
 import { withConfiguredDaemonTestHome, writeDaemonSettingsFixture } from '@/daemon/testkit/fakeDaemonLifecycle.testkit';
@@ -776,9 +782,65 @@ describe('discoverInstalledDaemonServiceEntries', () => {
           releaseChannel: 'stable',
           label: 'Happier\\happier-daemon.default',
           path: 'C:\\Users\\tester\\.happier\\services\\happier-daemon.default.ps1',
+          windowsLauncherUpgradeNeeded: true,
         }),
       ]);
       expect(ranFullScheduledTaskEnumeration()).toBe(false);
+    });
+  });
+
+  it('recognizes a validated versioned native launcher action as current', async () => {
+    await withTempDir('happier-discover-native-launcher-', async (homeDir) => {
+      const happierHomeDir = join(homeDir, '.happier');
+      const wrapperPath = join(happierHomeDir, 'services', 'happier-daemon.default.ps1');
+      mkdirSync(join(happierHomeDir, 'services'), { recursive: true });
+      writeFileSync(wrapperPath, renderWindowsScheduledTaskWrapperPs1({
+        workingDirectory: homeDir,
+        programArgs: ['node.exe', 'daemon', 'start-sync'],
+        env: {
+          HAPPIER_HOME_DIR: happierHomeDir,
+          HAPPIER_DAEMON_STARTUP_SOURCE: 'background-service',
+        },
+      }));
+      const launcher = resolveInstalledWindowsServiceLauncherPaths({
+        definitionPath: wrapperPath,
+        label: 'happier-daemon.default',
+        version: WINDOWS_SERVICE_LAUNCHER_BUILD_VERSION,
+      });
+      mkdirSync(dirname(launcher.launcherPath), { recursive: true });
+      const pe = Buffer.alloc(512);
+      pe.writeUInt16LE(0x5a4d, 0);
+      pe.writeUInt32LE(0x80, 0x3c);
+      pe.writeUInt32LE(0x00004550, 0x80);
+      pe.writeUInt16LE(0x8664, 0x84);
+      pe.writeUInt16LE(0x20b, 0x98);
+      pe.writeUInt16LE(2, 0x98 + 68);
+      pe.write('HAPPIER_SERVICE_LAUNCHER_V1', 0x120, 'ascii');
+      writeFileSync(launcher.launcherPath, pe);
+
+      spawnSyncMock.mockImplementation((command, args) => {
+        if (isHappierTaskFolderListing(command, args)) return happierTaskFolderListing(['\\Happier\\happier-daemon.default']);
+        if (command === 'schtasks' && args?.includes('/XML')) {
+          return {
+            status: 0,
+            stdout: `<Task><Actions><Exec><Command>${launcher.launcherPath}</Command><Arguments>--wrapper &quot;${wrapperPath}&quot; --diagnostic-log &quot;${launcher.diagnosticLogPath}&quot;</Arguments></Exec></Actions></Task>`,
+            stderr: '',
+          } as never;
+        }
+        return { status: 1, stdout: '', stderr: '' } as never;
+      });
+
+      const entries = await discoverInstalledDaemonServiceEntries({
+        platform: 'win32',
+        userHomeDir: homeDir,
+        happierHomeDir,
+        mode: 'user',
+        serversById: {},
+      });
+      expect(entries).toEqual([expect.objectContaining({
+        path: wrapperPath,
+        windowsLauncherUpgradeNeeded: false,
+      })]);
     });
   });
 

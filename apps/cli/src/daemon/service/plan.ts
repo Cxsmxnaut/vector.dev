@@ -4,7 +4,7 @@ import { getReleaseRingCatalogEntry, type PublicReleaseRingId } from '@happier-d
 import { isServerIdFilesystemSafe } from '@/server/serverId';
 
 import { buildLaunchAgentPlistXml, buildLaunchdPath } from './darwin';
-import { buildServicePath, planServiceAction, renderSystemdServiceUnit, renderWindowsScheduledTaskWrapperPs1 } from '@happier-dev/cli-common/service';
+import { buildServicePath, planServiceAction, renderSystemdServiceUnit, renderWindowsScheduledTaskWrapperPs1, type PlannedCopy } from '@happier-dev/cli-common/service';
 
 export type DaemonServicePlatform = 'darwin' | 'linux' | 'win32';
 export type DaemonServiceMode = 'user' | 'system';
@@ -75,6 +75,7 @@ export type DaemonServicePlannedCommand = Readonly<{
 export type DaemonServiceInstallPlan = Readonly<{
   platform: DaemonServicePlatform;
   files: DaemonServicePlannedFile[];
+  copies?: PlannedCopy[];
   commands: DaemonServicePlannedCommand[];
 }>;
 
@@ -482,6 +483,7 @@ export function planDaemonServiceInstall(params: Readonly<{
     return {
       platform: 'win32',
       files: [{ path: wrapperPath, content: wrapper, mode: 0o644 }],
+      copies: basePlan.copies,
       commands,
     };
   }

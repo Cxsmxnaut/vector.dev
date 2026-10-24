@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
+  buildWindowsScheduledTaskLauncherAction,
   buildListWindowsScheduledTaskFolderPowerShellCommand,
   buildRemoveWindowsScheduledTaskIfPresentPowerShellCommand,
   buildReadWindowsScheduledTaskStatusPowerShellCommand,
@@ -13,6 +14,21 @@ import {
   parseWindowsScheduledTaskStatusPowerShellJson,
   renderWindowsScheduledTaskWrapperPs1,
 } from './windows';
+
+describe('Windows scheduled-task launcher action', () => {
+  it('keeps executable and arguments structured with literal Unicode and metacharacters', () => {
+    const action = buildWindowsScheduledTaskLauncherAction({
+      launcherPath: 'C:\\Users\\Zoë & QA\\launcher.exe',
+      definitionPath: 'C:\\Users\\Zoë & QA\\daemon `$1.ps1',
+      diagnosticLogPath: 'C:\\Users\\Zoë & QA\\daemon.launcher.log',
+    });
+
+    expect(action).toEqual({
+      executable: 'C:\\Users\\Zoë & QA\\launcher.exe',
+      arguments: '--wrapper "C:\\Users\\Zoë & QA\\daemon `$1.ps1" --diagnostic-log "C:\\Users\\Zoë & QA\\daemon.launcher.log"',
+    });
+  });
+});
 
 describe('Windows scheduled task folder listing PowerShell helper', () => {
   it('lists only the requested task folder instead of enumerating every scheduled task', () => {
@@ -198,11 +214,26 @@ describe('Windows scheduled task lifecycle PowerShell helpers', () => {
     expect(command).toContain('Get-CimInstance Win32_Process');
     expect(command).toContain('-File `"C:\\Users\\test\\.happier\\services\\happier-daemon.default.ps1`"');
     expect(command).toContain('taskkill.exe /PID $serviceProcessId /T /F');
-    expect(command.indexOf('taskkill.exe')).toBeLessThan(command.indexOf('Stop-ScheduledTask'));
+    expect(command.indexOf('taskkill.exe')).toBeLessThan(command.lastIndexOf('Stop-ScheduledTask'));
     expect(command).toContain('Stop-ScheduledTask');
     expect(command).toContain('-ErrorAction Stop');
     expect(command.trim()).toMatch(/exit 0$/);
     expect(command).not.toContain('schtasks');
+  });
+
+  it('stops a matching native launcher through Task Scheduler so its job contains the tree', () => {
+    const command = buildStopWindowsScheduledTaskIfRunningPowerShellCommand({
+      qualifiedTaskName: 'Happier\\happier-daemon.default',
+      definitionPath: 'C:\\Users\\test\\.happier\\services\\happier-daemon.default.ps1',
+      launcherPath: 'C:\\Users\\test\\.happier\\services\\happier-daemon.default\\launcher-1\\happier-service-launcher.exe',
+      diagnosticLogPath: 'C:\\Users\\test\\.happier\\services\\happier-daemon.default.launcher.log',
+    });
+
+    expect(command).toContain('$registeredLauncherRoot.Equals($expectedLauncherRoot');
+    expect(command).toContain('$registeredLauncherVersionDir -match "^launcher-');
+    expect(command).toContain('$registeredArguments.Equals($expectedNativeArguments');
+    expect(command.indexOf('Stop-ScheduledTask')).toBeLessThan(command.indexOf('taskkill.exe'));
+    expect(command).toContain('Refusing to stop scheduled task');
   });
 
   it('removes only an existing task without parsing localized command output', () => {

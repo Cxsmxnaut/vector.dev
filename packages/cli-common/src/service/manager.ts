@@ -1,5 +1,5 @@
 import { dirname, join } from 'node:path';
-import { chmod, mkdir, rename, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import type { SpawnSyncReturns } from 'node:child_process';
 import { userInfo } from 'node:os';
 
@@ -13,11 +13,18 @@ import {
   buildRemoveWindowsScheduledTaskIfPresentPowerShellCommand,
   buildApplyWindowsScheduledTaskServicePolicyPowerShellCommand,
   buildStopWindowsScheduledTaskIfRunningPowerShellCommand,
+  buildWindowsScheduledTaskLauncherAction,
   buildWindowsScheduledTaskPowerShellAction,
   parseWindowsScheduledTaskStatusPowerShellJson,
   renderWindowsScheduledTaskWrapperPs1,
   splitQualifiedWindowsScheduledTaskName,
 } from './windows.js';
+import {
+  readValidatedWindowsServiceLauncher,
+  resolveInstalledWindowsServiceLauncherPaths,
+  resolvePackagedWindowsServiceLauncherInstallSpec,
+  type WindowsServiceLauncherInstallSpec,
+} from './windowsLauncher.js';
 
 export type ServiceMode = 'user' | 'system';
 
@@ -49,6 +56,11 @@ export type ServiceDefinition = Readonly<{
 }>;
 
 export type PlannedWrite = Readonly<{ path: string; contents: string; mode?: number }>;
+export type PlannedCopy = Readonly<{
+  sourcePath: string;
+  destinationPath: string;
+  validation: 'windows-service-launcher-x64-v1';
+}>;
 export type PlannedCommand = Readonly<{
   cmd: string;
   args: readonly string[];
@@ -56,7 +68,7 @@ export type PlannedCommand = Readonly<{
   expectedFailure?: 'service-absent';
   completePlanOnExpectedFailure?: boolean;
 }>;
-export type ServicePlan = Readonly<{ writes: PlannedWrite[]; commands: PlannedCommand[] }>;
+export type ServicePlan = Readonly<{ writes: PlannedWrite[]; copies?: PlannedCopy[]; commands: PlannedCommand[] }>;
 export type ServiceRegistrationState = 'registered' | 'absent';
 
 function windowsPowerShellCommandArgs(command: string): readonly string[] {
@@ -259,6 +271,7 @@ export function planServiceAction(params: Readonly<{
   persistent?: boolean;
   uid?: number | null;
   restartPolicy?: 'always' | 'on-failure' | 'no';
+  windowsLauncher?: WindowsServiceLauncherInstallSpec;
 }>): ServicePlan {
   const backend = String(params.backend ?? '').trim() as ServiceBackend;
   const action = String(params.action ?? '').trim();
@@ -274,6 +287,7 @@ export function planServiceAction(params: Readonly<{
   if (!label) throw new Error('label is required');
 
   const writes: PlannedWrite[] = [];
+  const copies: PlannedCopy[] = [];
   const commands: PlannedCommand[] = [];
 
   if (action === 'install') {
@@ -371,17 +385,38 @@ export function planServiceAction(params: Readonly<{
     if (action !== 'start' && !definitionPath) {
       throw new Error(`definitionPath is required for schtasks ${action}`);
     }
+    const launcher = params.windowsLauncher ?? resolvePackagedWindowsServiceLauncherInstallSpec();
+    const launcherPaths = modeForWindowsBackend(backend) === 'user' && definitionPath
+      ? resolveInstalledWindowsServiceLauncherPaths({
+        definitionPath,
+        label,
+        version: launcher.version,
+      })
+      : null;
     const stopIfRunning = (): PlannedCommand => ({
       cmd: 'powershell.exe',
       args: windowsPowerShellCommandArgs(buildStopWindowsScheduledTaskIfRunningPowerShellCommand({
         qualifiedTaskName: name,
         definitionPath,
+        ...(launcherPaths ? {
+          launcherPath: launcherPaths.launcherPath,
+          diagnosticLogPath: launcherPaths.diagnosticLogPath,
+        } : {}),
       })),
     });
-    const mode: ServiceMode = backend === 'schtasks-system' ? 'system' : 'user';
+    const mode: ServiceMode = modeForWindowsBackend(backend);
     if (action === 'install') {
       if (!definitionPath) throw new Error('definitionPath is required for schtasks install');
-      const ps = buildWindowsScheduledTaskPowerShellAction({ definitionPath });
+      const scheduledTaskAction = mode === 'user' && launcherPaths
+        ? buildWindowsScheduledTaskLauncherAction({
+          launcherPath: launcherPaths.launcherPath,
+          definitionPath,
+          diagnosticLogPath: launcherPaths.diagnosticLogPath,
+        })
+        : null;
+      const ps = scheduledTaskAction
+        ? `${scheduledTaskAction.executable} ${scheduledTaskAction.arguments}`
+        : buildWindowsScheduledTaskPowerShellAction({ definitionPath });
       const schedule = persistent ? 'ONSTART' : 'ONCE';
       const args = [
         '/Create',
@@ -402,11 +437,19 @@ export function planServiceAction(params: Readonly<{
         ...(mode === 'system' ? ['/RU', 'SYSTEM', '/RL', 'HIGHEST'] : []),
       ];
       commands.push(stopIfRunning());
+      if (scheduledTaskAction && launcherPaths) {
+        copies.push({
+          sourcePath: launcher.sourcePath,
+          destinationPath: launcherPaths.launcherPath,
+          validation: 'windows-service-launcher-x64-v1',
+        });
+      }
       commands.push(mode === 'user'
         ? {
           cmd: 'powershell.exe',
           args: windowsPowerShellCommandArgs(buildRegisterWindowsUserScheduledTaskPowerShellCommand({
             qualifiedTaskName: name, definitionPath, persistent,
+            ...(scheduledTaskAction ? { action: scheduledTaskAction } : {}),
           })),
         }
         : { cmd: 'schtasks', args });
@@ -424,7 +467,7 @@ export function planServiceAction(params: Readonly<{
         })),
       });
       commands.push({ cmd: 'schtasks', args: ['/Run', '/TN', name] });
-      return { writes, commands };
+      return { writes, copies, commands };
     }
     if (action === 'uninstall') {
       commands.push(stopIfRunning());
@@ -456,6 +499,15 @@ export function planServiceAction(params: Readonly<{
 
 export async function applyServicePlan(plan: ServicePlan, options: Readonly<{ runCommands?: boolean }> = {}): Promise<void> {
   let launchdUsedLegacyLoadFallback = false;
+  const preparedCopies = await Promise.all((plan.copies ?? []).map(async (copy) => ({
+    copy,
+    bytes: copy.validation === 'windows-service-launcher-x64-v1'
+      ? await readValidatedWindowsServiceLauncher(copy.sourcePath)
+      : await readFile(copy.sourcePath),
+  })));
+  for (const prepared of preparedCopies) {
+    await writeAtomicBinaryFile(prepared.copy.destinationPath, prepared.bytes);
+  }
   for (const w of plan.writes) {
     await writeAtomicTextFile(w.path, w.contents, w.mode ?? 0o644);
   }
@@ -533,6 +585,10 @@ export async function applyServicePlan(plan: ServicePlan, options: Readonly<{ ru
       throw new Error(`[service] command failed (${status ?? 'unknown'}): ${c.cmd} ${c.args.join(' ')}${details}`.trim());
     }
   }
+}
+
+function modeForWindowsBackend(backend: ServiceBackend): ServiceMode {
+  return backend === 'schtasks-system' ? 'system' : 'user';
 }
 
 export function isBenignServiceAbsenceFailure(params: Readonly<{
@@ -652,5 +708,23 @@ async function writeAtomicTextFile(path: string, contents: string, mode: number)
     await chmod(path, mode);
   } catch {
     // ignore
+  }
+}
+
+async function writeAtomicBinaryFile(path: string, bytes: Buffer): Promise<void> {
+  const current = await readFile(path).catch(() => null);
+  if (current) {
+    if (current.equals(bytes)) return;
+    throw new Error(`[service] refusing to replace a different versioned Windows service launcher: ${path}`);
+  }
+  const dir = dirname(path);
+  await mkdir(dir, { recursive: true });
+  const tmp = join(dir, `.tmp.${Date.now()}.${Math.random().toString(16).slice(2)}`);
+  try {
+    await writeFile(tmp, bytes, { flag: 'wx' });
+    await rename(tmp, path);
+  } catch (error) {
+    await import('node:fs/promises').then(({ rm }) => rm(tmp, { force: true })).catch(() => {});
+    throw error;
   }
 }

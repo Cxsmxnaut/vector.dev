@@ -4,6 +4,7 @@ import { createRequire } from 'node:module';
 import { join } from 'node:path';
 
 import { CLI_BINARY_TARGETS, resolveCliToolsPlatformDir, resolveCurrentBinaryTarget, resolveExecutableName, type BinaryTarget } from './targets.js';
+import { WINDOWS_SERVICE_LAUNCHER_FILE_NAME } from '../service/windowsLauncher.js';
 import { commandExists, compileBunBinary, ensureFileExists, execOrThrow, resolveBunCommand, resolveYarnCommand, type RunCommand } from './commands.js';
 import {
   bundleInstalledPackageWithRuntimeDependencies,
@@ -288,6 +289,20 @@ export async function buildCliBinaryArtifactPayload({
       });
       await rm(join(payloadDir, 'node_modules'), { recursive: true, force: true });
       await copyCliNodeRuntimePayload(repoRoot, payloadDir, snapshotDistDir, workspaceBundles, target);
+      if (target.os === 'windows' && target.arch === 'x64') {
+        const launcherSource = join(
+          repoRoot,
+          'packages',
+          'cli-common',
+          'native',
+          'windows',
+          'bin',
+          'windows-x64',
+          WINDOWS_SERVICE_LAUNCHER_FILE_NAME,
+        );
+        await ensureFileExists(launcherSource);
+        await cp(launcherSource, join(payloadDir, WINDOWS_SERVICE_LAUNCHER_FILE_NAME));
+      }
     } finally {
       if (snapshotDistDir) {
         await rm(snapshotDistDir, { recursive: true, force: true }).catch(() => {});
@@ -303,6 +318,12 @@ export async function buildCliBinaryArtifactPayload({
     payloadDir,
     relativePath: executableName,
   });
+  if (target.os === 'windows' && target.arch === 'x64') {
+    recordCliBinaryArtifactRuntimeAssetBuildManifest({
+      payloadDir,
+      relativePath: WINDOWS_SERVICE_LAUNCHER_FILE_NAME,
+    });
+  }
 
   return {
     executableName,

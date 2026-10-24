@@ -302,7 +302,10 @@ function buildWorkspaceBundleSourceSignature({ bundles }) {
     bundles: bundles.map((bundle) => {
       const packageJsonPath = resolve(bundle.srcDir, 'package.json');
       const packageJson = JSON.parse(String(readFileSync(packageJsonPath, 'utf8')));
-      const expectedFiles = collectExpectedPackageFiles(packageJson, bundle.srcDir);
+      const expectedFiles = [...new Set([
+        ...collectExpectedPackageFiles(packageJson, bundle.srcDir),
+        ...(Array.isArray(bundle.includeFiles) ? bundle.includeFiles : []),
+      ])].sort();
       return {
         packageName: resolveBundlePackageName(bundle),
         packageJson: collectPathFingerprint(packageJsonPath),

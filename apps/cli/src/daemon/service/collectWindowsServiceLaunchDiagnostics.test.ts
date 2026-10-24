@@ -212,4 +212,23 @@ describe('collectWindowsServiceLaunchDiagnostics', () => {
     expect(result).not.toContain('Wrapper stdout');
     expect(result).toContain('Wrapper stderr');
   });
+
+  it('reports a missing launcher and tails its stage diagnostics', async () => {
+    const launcherPath = join(homeDir, 'services', 'launcher-1', 'happier-service-launcher.exe');
+    const launcherDiagnosticLogPath = join(homeDir, 'services', 'daemon.launcher.log');
+    await mkdir(join(homeDir, 'services'), { recursive: true });
+    await writeFile(launcherDiagnosticLogPath, 'stage=create_process message=failed win32_error=2\n', 'utf8');
+
+    const result = collectWindowsServiceLaunchDiagnostics({
+      taskName: 'Happier\\happier-daemon.default',
+      stdoutPath: join(homeDir, 'logs', 'daemon-service.default.out.log'),
+      stderrPath: join(homeDir, 'logs', 'daemon-service.default.err.log'),
+      launcherPath,
+      launcherDiagnosticLogPath,
+    });
+
+    expect(result).toContain(`Windows service launcher is missing: ${launcherPath}`);
+    expect(result).toContain('Launcher diagnostics');
+    expect(result).toContain('stage=create_process');
+  });
 });
