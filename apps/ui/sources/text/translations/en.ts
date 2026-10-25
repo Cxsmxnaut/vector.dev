@@ -6389,6 +6389,9 @@ export const en = {
         thinking: 'Thinking',
         thinkingSince: 'Thinking Since',
         thinkingLevel: 'Thinking level',
+        peerReportFrom: ({ name }: { name: string }) => `Report from ${name}`,
+        peerMessageFrom: ({ name }: { name: string }) => `Message from ${name}`,
+        peerUnnamedSender: 'another agent',
         cliVersion: 'CLI Version',
         cliVersionOutdated: 'CLI Update Required',
         cliVersionOutdatedMessage: ({ currentVersion, requiredVersion }: { currentVersion: string; requiredVersion: string }) =>

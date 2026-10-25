@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { SDKMessage, SDKUserMessage } from '@/backends/claude/sdk';
+import { CLAUDE_HANDBACK_REPORT, claudeHandbackUserRow } from '../attachments/claudePeerMessage.testkit';
 import { convertSDKToLog } from './sdkToLogConverter';
 import { asRecord, conversionContext, createConverter } from './sdkToLogConverter.testkit';
 
@@ -26,6 +27,24 @@ describe('SDKToLogConverter tool result mode metadata', () => {
     expect(result?.origin).toEqual({ kind: 'peer', from: 'uds:/tmp/sender.sock', name: 'Sender' });
     if (!result || result.type !== 'user') throw new Error('Missing SDK peer output');
     expect(result.message.content).toBe('From Sender:\n\nDelivered');
+  });
+
+  it('attaches a subagent hand-back report to its launching tool and absorbs the pointer notification', () => {
+    const converter = createConverter();
+    converter.convert({ type: 'user', uuid: 'ack-a1', tool_use_result: { status: 'async_launched', agentId: 'a1' },
+      message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'toolu_a1', content: 'Async agent launched successfully.' }] } });
+    // Native hand-back user rows carry transcript-only fields beyond the installed SDK declaration.
+    const handback = converter.convert(claudeHandbackUserRow({ withReportText: true }) as unknown as SDKMessage);
+    expect(handback).toMatchObject({ uuid: 'handback', type: 'user', origin: { kind: 'peer', from: 'a1', handback: true },
+      message: { content: [{ type: 'tool_result', tool_use_id: 'toolu_a1', content: [{ type: 'text', text: CLAUDE_HANDBACK_REPORT }], is_error: false }] } });
+    expect(converter.convert({ type: 'system', subtype: 'task_notification', task_id: 'a1', status: 'completed',
+      summary: 'Agent "Diagnose" finished', output_file: '/tmp/a1.output', uuid: 'done-a1', session_id: conversionContext.sessionId })).toBeNull();
+  });
+
+  it('keeps an unlinked subagent hand-back as a sender-labelled peer message', () => {
+    const result = createConverter().convert(claudeHandbackUserRow({ withReportText: false }) as unknown as SDKMessage);
+    expect(result).toMatchObject({ origin: { kind: 'peer', from: 'a1', name: 'general-purpose', handback: true },
+      message: { content: `From general-purpose:\n\n${CLAUDE_HANDBACK_REPORT}` } });
   });
 
   it('projects native SDK peer text blocks as visible user content', () => {

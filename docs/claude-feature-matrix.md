@@ -48,12 +48,29 @@ does not establish message acceptance or foreground activity. UI normalization a
 filters already-persisted internal records, while genuinely unknown output retains
 the unsupported-output diagnostic.
 
-In development source, native cross-session messages use the shared
+In development source, native peer deliveries (cross-session messages, teammate
+messages and subagent hand-backs) use the shared
 `attachments/claudePeerMessageProjection.ts` conversation projector. Delivered
-queued-command attachments become sender-labelled text with native peer provenance;
-ordinary queued commands and queue operations remain internal. The JSONL parser,
-scanner, direct-session reader and SDK converter consume that projection. Peer input
-cannot acknowledge a pending human prompt.
+queued-command attachments and peer user rows become sender-labelled text with native
+peer provenance; ordinary queued commands and queue operations remain internal. The
+projected body comes from the native `origin.body` (or the `<cross-session-message>` /
+`<agent-message>` wrapper when absent), so delivery sentences and harness guidance are
+not shown. Hand-backs show `origin.handbackReportText` (Claude 2.1.304), or the
+framed body with its provenance frame and two-space report indentation removed
+(Claude 2.1.296). Projected rows drop `body` and `handbackReportText` and keep the
+`From <sender>:` label that released clients display; current clients read the sender
+and body back through `@happier-dev/protocol` `readClaudePeerMessage`. The JSONL parser,
+scanner, direct-session reader and SDK converter consume that projection. Session
+writes send peer rows as raw agent output with `messageRole: 'agent'`, never as user
+text, so the UI renders them as a collapsible "Message from" / "Report from" row and
+composer history, rollback and voice replies do not treat them as human input. Peer
+input cannot acknowledge a pending human prompt.
+
+A hand-back whose sender matches an async Agent launch already correlated by the task
+projector becomes that tool call's result, so the report appears on the Agent card.
+Claude's following `completed` task notification only points back at the hand-back
+and is dropped. Hand-backs without a known launch (for example after a resume or a
+CLI restart) stay standalone peer rows.
 
 The remote Agent SDK registers its live permission-mode control with the launcher's
 existing metadata consumer. Registration re-reads current permission intent, and

@@ -197,7 +197,8 @@ export function collectFinalAssistantReplySinceBaseline(
       || (typeof submittedSeq === 'number' && message.seq <= submittedSeq)
     )) continue;
     if (typeof message?.id === 'string' && baseline.baselineIds.has(message.id)) continue;
-    if (message?.kind === 'tool-call' || message?.kind === 'user-text') {
+    // A delivered peer report is input to the agent, not its answer.
+    if (message?.kind === 'tool-call' || message?.kind === 'user-text' || (message?.kind === 'agent-text' && message.peer)) {
       trailing = [];
       continue;
     }

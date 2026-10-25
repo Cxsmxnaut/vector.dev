@@ -19,7 +19,8 @@ import { providers } from '@happier-dev/agents'
 import { buildClaudeSdkResultUsageTelemetry } from './sdkResultUsageTelemetry'
 import { readNonBlankOpaqueIdentifier } from '@/utils/opaqueIdentifiers'
 import { createClaudeTaskNotificationToolResultProjector, readClaudeTaskLifecycleEnvelope } from '../taskNotifications/claudeTaskLifecycleEnvelope'
-import { formatClaudePeerMessageText, projectClaudePeerMessage } from '../attachments/claudePeerMessageProjection'
+import { projectClaudePeerMessage } from '../attachments/claudePeerMessageProjection'
+import { formatClaudePeerMessageText } from '@happier-dev/protocol'
 
 /**
  * Context for converting SDK messages to log format
@@ -153,7 +154,8 @@ export class SDKToLogConverter {
         const peerMessage = projectClaudePeerMessage({ ...sdkMessage, ...baseFields });
         if (peerMessage) {
             if (!isSidechain) this.lastMainUuid = uuid;
-            return peerMessage;
+            // A linked subagent hand-back becomes its launching tool's result.
+            return this.taskNotificationProjector.project(peerMessage, sidechainId ? { sidechainId } : undefined) ?? peerMessage;
         }
         const taskResult = this.taskNotificationProjector.project({ ...sdkMessage, ...baseFields }, sidechainId ? { sidechainId } : undefined);
         if (taskResult || fact?.subtype === 'task_notification') return taskResult;

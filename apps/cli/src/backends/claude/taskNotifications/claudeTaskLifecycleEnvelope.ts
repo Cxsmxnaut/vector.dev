@@ -1,4 +1,4 @@
-import { isClaudeAsyncAgentLaunchToolResult, isGenericSubAgentToolName, normalizeClaudeActivityStatusSignal, type ClaudeActivityStatusSignal } from '@happier-dev/protocol';
+import { isClaudeAsyncAgentLaunchToolResult, isGenericSubAgentToolName, normalizeClaudeActivityStatusSignal, readClaudePeerMessage, type ClaudeActivityStatusSignal } from '@happier-dev/protocol';
 
 import { parseClaudeTaskNotificationXml } from './claudeTaskNotificationXml';
 import { RawJSONLinesSchema, type RawJSONLines } from '../types';
@@ -166,9 +166,21 @@ export function projectClaudeTaskNotificationToolResult(value: unknown, correlat
   return projected.success ? projected.data : null;
 }
 
+/** Show a delivered hand-back report as its launching tool's result; the peer origin keeps its lifecycle fact. */
+function projectClaudeHandbackToolResult(row: Record<string, unknown>, toolUseId: string, report: string,
+  sidechain?: Readonly<{ sidechainId: string }>): RawJSONLines | null {
+  const projected = RawJSONLinesSchema.safeParse({
+    ...row,
+    ...(sidechain ? { isSidechain: true, sidechainId: sidechain.sidechainId } : {}),
+    message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: toolUseId,
+      content: [{ type: 'text', text: report }], is_error: false }] },
+  });
+  return projected.success ? projected.data : null;
+}
+
 /** Conversation correlation only; activity admission remains with the native lifecycle owner. */
 export function createClaudeTaskNotificationToolResultProjector(sidechain?: Readonly<{ sidechainId: string; agentId: string }>) {
-  const tasks = new Map<string, { toolUseId?: string; sidechainId?: string; unroutedNotification?: unknown }>();
+  const tasks = new Map<string, { toolUseId?: string; sidechainId?: string; unroutedNotification?: unknown; reportDelivered?: true }>();
   return {
     clear: () => tasks.clear(),
     project(value: unknown, observedSidechain?: Readonly<{ sidechainId: string }>): RawJSONLines | null {
@@ -180,6 +192,7 @@ export function createClaudeTaskNotificationToolResultProjector(sidechain?: Read
       const task = fact.taskId ? tasks.get(fact.taskId) ?? {} : null;
       if (fact.subtype === 'agent-resume' && task) {
         delete task.unroutedNotification;
+        delete task.reportDelivered;
         delete task.toolUseId;
         delete task.sidechainId;
         return null;
@@ -192,7 +205,17 @@ export function createClaudeTaskNotificationToolResultProjector(sidechain?: Read
         delete task.unroutedNotification;
         return pending ? projectClaudeTaskNotificationToolResult(pending, fact.toolUseId, sidechain ?? observedSidechain) : null;
       }
+      if (fact.subtype === 'handback') {
+        const report = readClaudePeerMessage(row)?.text;
+        if (!task?.toolUseId || !report || (fact.toolUseId && fact.toolUseId !== task.toolUseId)) return null;
+        const projected = projectClaudeHandbackToolResult(row, task.toolUseId, report,
+          sidechain ?? observedSidechain ?? (task.sidechainId ? { sidechainId: task.sidechainId } : undefined));
+        if (projected) task.reportDelivered = true;
+        return projected;
+      }
       if (fact.subtype !== 'task_notification') return null;
+      // Claude's settled notification only points back at the delivered hand-back report.
+      if (task?.reportDelivered && fact.status === 'complete') return null;
       const scope = sidechain ?? observedSidechain ?? (task?.sidechainId
         && (!fact.toolUseId || fact.toolUseId === task.toolUseId) ? { sidechainId: task.sidechainId } : undefined);
       const projected = projectClaudeTaskNotificationToolResult(value, task?.toolUseId, scope);

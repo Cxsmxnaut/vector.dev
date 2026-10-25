@@ -6371,6 +6371,9 @@ deps: {
         thinking: 'Pensant',
         thinkingSince: 'Pensant des de',
         thinkingLevel: 'Nivell de pensament',
+        peerReportFrom: ({ name }: { name: string }) => `Informe de ${name}`,
+        peerMessageFrom: ({ name }: { name: string }) => `Missatge de ${name}`,
+        peerUnnamedSender: 'un altre agent',
         cliVersion: 'Versió del CLI',
         cliVersionOutdated: 'Actualització del CLI requerida',
         cliVersionOutdatedMessage: ({ currentVersion, requiredVersion }: { currentVersion: string; requiredVersion: string }) =>

@@ -68,6 +68,21 @@ describe('voice reply binding through the real transcript store', () => {
     await waiting;
   });
 
+  it('never speaks a delivered subagent report as the assistant reply', async () => {
+    publish(turns('turn-0', 'completed', [1], 2), []);
+    const baseline = captureSessionTurnBaseline('s1');
+    const waiting = waitForTurnFinalAssistantText({
+      sessionId: 's1', baseline, signal: abort.signal, submittedUserLocalId: 'voice-input',
+    });
+    publish(turns('turn-voice', 'completed', [12], 15), [
+      user('u1', 'voice-input', 12),
+      { kind: 'agent-text', id: 'report', text: 'Subagent findings.', seq: 13, createdAt: 1, localId: null,
+        peer: { name: 'general-purpose', handback: true } },
+      agent('a1', 'The fix is ready.', 14),
+    ]);
+    await expect(waiting).resolves.toBe('The fix is ready.');
+  });
+
   it('does not mistake another client\'s terminal turn for the queued voice input', async () => {
     publish(turns('turn-0', 'completed', [1], 2), []);
     const baseline = captureSessionTurnBaseline('s1');

@@ -6344,6 +6344,9 @@ export const fr: TranslationStructure = {
         thinking: 'Réflexion',
         thinkingSince: 'Réflexion depuis',
         thinkingLevel: 'Niveau de réflexion',
+        peerReportFrom: ({ name }: { name: string }) => `Rapport de ${name}`,
+        peerMessageFrom: ({ name }: { name: string }) => `Message de ${name}`,
+        peerUnnamedSender: 'un autre agent',
         cliVersion: 'Version du CLI',
         cliVersionOutdated: 'Mise à jour du CLI requise',
         cliVersionOutdatedMessage: ({ currentVersion, requiredVersion }: { currentVersion: string; requiredVersion: string }) =>
