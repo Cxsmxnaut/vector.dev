@@ -260,12 +260,15 @@ function parseWindowsScheduledTaskDefinitionFromXml(contents: string): WindowsSc
 function parseWindowsScheduledTaskDefinitionFromTaskToRun(taskToRunText: string): WindowsScheduledTaskDefinition | null {
   const taskToRun = String(taskToRunText ?? '').trim();
   if (!taskToRun) return null;
-  const nativeOptionIndex = taskToRun.search(/\s--wrapper(?:\s|$)/iu);
-  const executable = nativeOptionIndex > 0 ? taskToRun.slice(0, nativeOptionIndex) : taskToRun;
-  return parseWindowsScheduledTaskDefinitionFromAction(
-    executable,
-    nativeOptionIndex > 0 ? taskToRun.slice(nativeOptionIndex) : taskToRun,
-  );
+  // `schtasks /FO LIST /V` reports the action as one localized field among many, so locate the
+  // native action by its own shape on its line instead of by field label.
+  for (const line of taskToRun.split(/\r?\n/u)) {
+    const nativeAction = /("?(?:[A-Za-z]:)?[\\/][^"\r\n]*?happier-service-launcher\.exe"?)\s+(--wrapper\s.*)$/iu.exec(line);
+    if (nativeAction) {
+      return parseWindowsScheduledTaskDefinitionFromAction(nativeAction[1] ?? '', nativeAction[2] ?? '');
+    }
+  }
+  return parseWindowsScheduledTaskDefinitionFromAction('', taskToRun);
 }
 
 function isInstalledWindowsLauncherActionHealthy(definition: WindowsScheduledTaskDefinition): boolean {

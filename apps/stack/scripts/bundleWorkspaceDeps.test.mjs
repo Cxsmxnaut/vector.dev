@@ -562,6 +562,40 @@ test('bundleWorkspaceDeps vendors external runtime dependency trees for bundled 
   }
 });
 
+test('bundleWorkspaceDeps stays fresh while a declared bundle file is not built, and refreshes once it is', async () => {
+  const { repoRoot, stackDir, cliCommonDir } = createBundleFixture('happy-stack-bundle-workspace-deps-optional-include-');
+  try {
+    const launcherRelativePath = 'native/windows/bin/windows-x64/happier-service-launcher.exe';
+    writeJson(resolve(cliCommonDir, 'package.json'), {
+      name: '@happier-dev/cli-common',
+      version: '0.0.0',
+      type: 'module',
+      main: './dist/index.js',
+      exports: { '.': { default: './dist/index.js' } },
+      happierWorkspaceBundleFiles: [launcherRelativePath],
+    });
+    writeFileSync(resolve(cliCommonDir, 'dist', 'index.js'), 'export const z = 3;\n', 'utf8');
+
+    await bundleWorkspaceDeps({ repoRoot, stackDir });
+    const manifestPath = resolve(stackDir, 'node_modules', '@happier-dev', '.workspace-bundle-manifest.json');
+    const firstMtimeMs = statSync(manifestPath).mtimeMs;
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 20));
+
+    await bundleWorkspaceDeps({ repoRoot, stackDir });
+    assert.equal(statSync(manifestPath).mtimeMs, firstMtimeMs, 'an unbuilt optional bundle file must not force a rebundle');
+
+    mkdirSync(resolve(cliCommonDir, 'native', 'windows', 'bin', 'windows-x64'), { recursive: true });
+    writeFileSync(resolve(cliCommonDir, launcherRelativePath), 'built launcher');
+    await bundleWorkspaceDeps({ repoRoot, stackDir });
+    assert.equal(
+      readFileSync(resolve(stackDir, 'node_modules', '@happier-dev', 'cli-common', launcherRelativePath), 'utf8'),
+      'built launcher',
+    );
+  } finally {
+    rmSync(repoRoot, { recursive: true, force: true });
+  }
+});
+
 test('bundleWorkspaceDeps refreshes the bundle when a vendored runtime dependency is incomplete', async () => {
   const { repoRoot, stackDir, cliCommonDir } = createBundleFixture('happy-stack-bundle-workspace-deps-refresh-runtime-dep-');
   try {

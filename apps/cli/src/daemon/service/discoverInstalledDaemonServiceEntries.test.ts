@@ -895,6 +895,60 @@ describe('discoverInstalledDaemonServiceEntries', () => {
     });
   });
 
+  it('recognizes a healthy native launcher action from the schtasks LIST fallback', async () => {
+    await withTempDir('happier-discover-native-launcher-list-', async (homeDir) => {
+      const happierHomeDir = join(homeDir, '.happier');
+      const wrapperPath = join(happierHomeDir, 'services', 'happier-daemon.default.ps1');
+      mkdirSync(join(happierHomeDir, 'services'), { recursive: true });
+      writeFileSync(wrapperPath, renderWindowsScheduledTaskWrapperPs1({
+        workingDirectory: homeDir,
+        programArgs: ['node.exe', 'daemon', 'start-sync'],
+        env: {
+          HAPPIER_HOME_DIR: happierHomeDir,
+          HAPPIER_DAEMON_STARTUP_SOURCE: 'background-service',
+        },
+      }));
+      const launcher = resolveInstalledWindowsServiceLauncherPaths({
+        definitionPath: wrapperPath,
+        label: 'happier-daemon.default',
+        version: resolveDaemonWindowsServiceLauncherInstallSpec().version,
+      });
+      mkdirSync(dirname(launcher.launcherPath), { recursive: true });
+      writeFileSync(launcher.launcherPath, createWindowsServiceLauncherPeFixture());
+      // A full `schtasks /FO LIST /V` report: the action is one field among many (labels are localized).
+      const listReport = [
+        '',
+        'Folder: \\Happier',
+        'HostName:                             HOST',
+        'TaskName:                             \\Happier\\happier-daemon.default',
+        'Status:                               Running',
+        `Task To Run:                          ${launcher.launcherPath} --wrapper "${wrapperPath}" --diagnostic-log "${launcher.diagnosticLogPath}"`,
+        'Start In:                             N/A',
+        'Comment:                              N/A',
+        '',
+      ].join('\r\n');
+
+      spawnSyncMock.mockImplementation((command, args) => {
+        if (isHappierTaskFolderListing(command, args)) return happierTaskFolderListing(['\\Happier\\happier-daemon.default']);
+        if (command === 'schtasks' && args?.includes('/XML')) return { status: 1, stdout: '', stderr: 'unavailable' } as never;
+        if (command === 'schtasks' && args?.includes('LIST')) return { status: 0, stdout: listReport, stderr: '' } as never;
+        return { status: 1, stdout: '', stderr: '' } as never;
+      });
+
+      const entries = await discoverInstalledDaemonServiceEntries({
+        platform: 'win32',
+        userHomeDir: homeDir,
+        happierHomeDir,
+        mode: 'user',
+        serversById: {},
+      });
+      expect(entries).toEqual([expect.objectContaining({
+        path: wrapperPath,
+        windowsLauncherUpgradeNeeded: false,
+      })]);
+    });
+  });
+
   it('uses schtasks LIST fallback wrapper path when XML task export is unavailable', async () => {
     await withTempDir('happier-discover-service-entry-windows-list-fallback-', async (homeDir) => {
       const happierHomeDir = join(homeDir, '.happier');

@@ -385,8 +385,11 @@ export function planServiceAction(params: Readonly<{
     if (action !== 'start' && !definitionPath) {
       throw new Error(`definitionPath is required for schtasks ${action}`);
     }
-    const launcher = params.windowsLauncher ?? resolvePackagedWindowsServiceLauncherInstallSpec();
-    const launcherPaths = modeForWindowsBackend(backend) === 'user' && definitionPath
+    // Only current-user tasks run the packaged launcher; resolving it reads and hashes the file.
+    const launcher = modeForWindowsBackend(backend) === 'user' && definitionPath
+      ? params.windowsLauncher ?? resolvePackagedWindowsServiceLauncherInstallSpec()
+      : null;
+    const launcherPaths = launcher && definitionPath
       ? resolveInstalledWindowsServiceLauncherPaths({
         definitionPath,
         label,
@@ -437,7 +440,7 @@ export function planServiceAction(params: Readonly<{
         ...(mode === 'system' ? ['/RU', 'SYSTEM', '/RL', 'HIGHEST'] : []),
       ];
       commands.push(stopIfRunning());
-      if (scheduledTaskAction && launcherPaths) {
+      if (scheduledTaskAction && launcher && launcherPaths) {
         copies.push({
           sourcePath: launcher.sourcePath,
           destinationPath: launcherPaths.launcherPath,

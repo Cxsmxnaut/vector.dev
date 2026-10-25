@@ -321,6 +321,8 @@ jobs:
               - 'packages/tests/src/testkit/process/**'
             installers_smoke:
               - 'packages/cli-common/src/service/**'
+              - 'packages/cli-common/native/windows/**'
+              - 'scripts/pipeline/release/build-windows-service-launcher.mjs'
               - 'apps/cli/src/daemon/service/**'
               - '.github/actions/bootstrap-minisign/**'
               - 'apps/ui/src-tauri/**'
