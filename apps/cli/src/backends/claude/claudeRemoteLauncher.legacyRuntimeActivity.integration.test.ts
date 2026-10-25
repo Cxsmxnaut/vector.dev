@@ -258,6 +258,65 @@ describe.sequential('claudeRemoteLauncher legacy Runtime Activity subscriber', (
     }
   });
 
+  it('starts a fresh Claude session for the first remote message when the observed terminal id never materialized', async () => {
+    const { session, switchHandlerReady } = createHarness(undefined, { providerSessionId: null });
+    Object.assign(session.client, {
+      getStoredContentEncryptionContext: () => ({ mode: 'plain' }),
+      upsertSessionSystemRecord: async () => {},
+    });
+    const finishQuery = createDeferred<void>();
+    let queryIdle = false;
+    const createQuery: NonNullable<Parameters<typeof actualClaudeRemoteAgentSdk.claudeRemoteAgentSdk>[0]['createQuery']> = () => ({
+      // Only the external SDK query is replaced. The launcher, start-plan resolution and
+      // Session identity owner run for real, so a ghost resume id would fail before this
+      // query ever starts.
+      async *[Symbol.asyncIterator]() {
+        yield { type: 'system', subtype: 'init', model: 'claude-requested', session_id: 'claude-fresh-start' };
+        yield { type: 'result', subtype: 'success', is_error: false, result: 'First remote message handled' };
+        queryIdle = true;
+        await finishQuery.promise;
+      },
+      close: () => finishQuery.resolve(undefined),
+      setPermissionMode: async () => {}, setModel: async () => {}, setMaxThinkingTokens: async () => {},
+      supportedCommands: async () => [], supportedModels: async () => [],
+    } as unknown as Query);
+    mockClaudeRemoteAgentSdk.mockImplementation((opts: Parameters<typeof actualClaudeRemoteAgentSdk.claudeRemoteAgentSdk>[0]) => (
+      actualClaudeRemoteAgentSdk.claudeRemoteAgentSdk({ ...opts, claudeExecutablePath: '/tmp/claude', createQuery })
+    ));
+    const transcriptDir = await mkdtemp(join(tmpdir(), 'claude-zero-turn-takeover-'));
+    const infoFile = vi.spyOn(logger, 'infoFile');
+    try {
+      // Zero-turn terminal birth: the SessionStart hook observed an id whose transcript
+      // never materialized (no turn ran locally before the App took over).
+      session.onSessionFound('claude-ghost', {
+        transcript_path: join(transcriptDir, 'claude-ghost.jsonl'),
+      } as SessionHookData);
+      await session.drainCriticalMetadataWrites({ timeoutMs: 500 });
+      session.queue.push('first message from the app', {
+        permissionMode: 'default',
+        claudeRemoteAgentSdkEnabled: true, claudeUnifiedTerminalEnabled: false,
+      }, { userMessageLocalId: 'zero-turn-input' });
+      const launcher = claudeRemoteLauncher(session);
+      const switchHandler = await switchHandlerReady;
+      try {
+        await vi.waitFor(() => expect(queryIdle).toBe(true));
+        expect(infoFile).not.toHaveBeenCalledWith('[remote]: launch error', expect.objectContaining({
+          error: expect.stringContaining('ClaudeResumeSessionUnavailableError'),
+        }));
+        expect(session.client.sendSessionEvent).not.toHaveBeenCalledWith(expect.objectContaining({
+          type: 'message',
+          message: expect.stringContaining('transcript is unavailable'),
+        }));
+      } finally {
+        finishQuery.resolve(undefined);
+        await Promise.all([Promise.resolve(switchHandler({ to: 'local' })), session.cleanup(), launcher]);
+      }
+    } finally {
+      infoFile.mockRestore();
+      await rm(transcriptDir, { recursive: true, force: true });
+    }
+  });
+
   it('applies SDK permission metadata during startup and while idle without another prompt', async () => {
     const { session, switchHandlerReady } = createHarness();
     const transcriptDir = await mkdtemp(join(tmpdir(), 'claude-live-permission-mode-'));

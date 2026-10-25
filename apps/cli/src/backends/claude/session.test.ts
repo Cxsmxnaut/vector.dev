@@ -811,6 +811,103 @@ describe('Session', () => {
     }
   });
 
+  it('keeps a hook-observed session id provisional for remote resume until its transcript materializes', async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'happier-claude-session-'));
+    vi.stubEnv('CLAUDE_CONFIG_DIR', tempDir);
+    const transcriptDir = join(tempDir, 'projects', 'project-a');
+    mkdirSync(transcriptDir, { recursive: true });
+    const transcriptPath = join(transcriptDir, 'sess_zero_turn.jsonl');
+    const session = createSession(createSessionClientStub());
+
+    try {
+      // Zero-turn terminal birth: SessionStart observed an id before any turn wrote the transcript.
+      session.onSessionFound('sess_zero_turn', hookWithTranscript(transcriptPath));
+      await session.drainCriticalMetadataWrites({ timeoutMs: 500 });
+
+      expect(session.sessionId).toBe('sess_zero_turn');
+      expect(session.getResumableSessionId()).toBeNull();
+
+      // An allocated-but-empty transcript has not materialized a conversation either.
+      writeFileSync(transcriptPath, '', 'utf8');
+      expect(session.getResumableSessionId()).toBeNull();
+
+      // The first turn materializes the transcript; resumability follows without re-observation.
+      writeClaudeTranscriptInit(transcriptPath, 'sess_zero_turn');
+      expect(session.getResumableSessionId()).toBe('sess_zero_turn');
+    } finally {
+      session.cleanup();
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('treats an explicitly requested --resume id as resumable from birth', () => {
+    const session = createSession(createSessionClientStub(), ['--resume', 'sess_requested']);
+
+    try {
+      expect(session.getResumableSessionId()).toBe('sess_requested');
+    } finally {
+      session.cleanup();
+    }
+  });
+
+  it('resets requested-resume semantics when Claude reports a different session id', async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'happier-claude-session-'));
+    const session = createSession(createSessionClientStub(), ['--resume', 'sess_requested']);
+
+    try {
+      session.onSessionFound('sess_forked', hookWithTranscript(join(tempDir, 'sess_forked.jsonl')));
+      await session.drainCriticalMetadataWrites({ timeoutMs: 500 });
+
+      expect(session.sessionId).toBe('sess_forked');
+      expect(session.getResumableSessionId()).toBeNull();
+    } finally {
+      session.cleanup();
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('restores requested-resume semantics when an unconfirmed fork rolls back a cleared identity', () => {
+    const session = createSession(createSessionClientStub(), ['--resume', 'sess_requested']);
+
+    try {
+      expect(session.getResumableSessionId()).toBe('sess_requested');
+
+      const cleared = session.clearSessionId();
+      expect(session.getResumableSessionId()).toBeNull();
+      expect(cleared).toEqual({
+        sessionId: 'sess_requested',
+        transcriptPath: null,
+        wasRequestedResume: true,
+      });
+
+      session.restoreClearedSessionIdentity(cleared!);
+      // The restored id keeps fail-closed resumability even though its transcript
+      // does not exist.
+      expect(session.getResumableSessionId()).toBe('sess_requested');
+    } finally {
+      session.cleanup();
+    }
+  });
+
+  it('keeps a provisional identity provisional across a cleared-identity rollback', async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'happier-claude-session-'));
+    const session = createSession(createSessionClientStub(), []);
+
+    try {
+      session.onSessionFound('sess_zero_turn', hookWithTranscript(join(tempDir, 'sess_zero_turn.jsonl')));
+      await session.drainCriticalMetadataWrites({ timeoutMs: 500 });
+
+      const cleared = session.clearSessionId();
+      expect(cleared?.wasRequestedResume).toBe(false);
+
+      session.restoreClearedSessionIdentity(cleared!);
+      expect(session.getResumableSessionId()).toBeNull();
+    } finally {
+      session.cleanup();
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
   it('does not promote Claude resume metadata from a transcript file that does not match the session id', async () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'happier-claude-session-'));
     vi.stubEnv('CLAUDE_CONFIG_DIR', tempDir);

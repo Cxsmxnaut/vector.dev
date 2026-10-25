@@ -448,10 +448,13 @@ export async function claudeLocalLauncher(
             const resumeFromSessionId = session.sessionId;
             const resumeFromTranscriptPath = session.transcriptPath;
             const expectsFork = resumeFromSessionId !== null;
+            let clearedIdentity: ReturnType<typeof session.clearSessionId> = null;
             const restoreUnconfirmedFork = () => {
-                if (expectsFork && session.sessionId === null) {
-                    session.sessionId = resumeFromSessionId;
-                    session.transcriptPath = resumeFromTranscriptPath;
+                if (expectsFork && session.sessionId === null && clearedIdentity) {
+                    // Restore through the Session API so the cleared identity's
+                    // requested-resume semantics survive the rollback instead of
+                    // silently turning provisional.
+                    session.restoreClearedSessionIdentity(clearedIdentity);
                 }
             };
             if (expectsFork) {
@@ -459,7 +462,7 @@ export async function claudeLocalLauncher(
                 // to a new Claude session ID and transcript file. Clear the current
                 // session info so a fast local→remote switch waits for the new hook data,
                 // instead of resuming the stale pre-fork sessionId/transcriptPath.
-                session.clearSessionId();
+                clearedIdentity = session.clearSessionId();
             }
 
             // Launch

@@ -37,7 +37,16 @@ type ResolveClaudeRemoteSessionStartPlanDeps = {
   logPrefix: string;
 };
 
-function hasClaudeMaterializedSessionTranscript(
+/**
+ * Remote-resumability threshold: a session id may back a remote resume once its
+ * native transcript file exists and is non-empty. Exported for the Session
+ * identity owner, which applies the same threshold when deciding whether an
+ * observed id is a usable resume target. This gate is intentionally weaker than
+ * the metadata publication proof (`isProvenClaudeTranscriptPath` in session.ts),
+ * which additionally requires a complete matching record before an identity is
+ * advertised for resume.
+ */
+export function hasClaudeMaterializedSessionTranscript(
   sessionId: string,
   path: string,
   transcriptPath: string | null,

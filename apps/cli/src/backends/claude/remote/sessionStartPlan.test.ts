@@ -145,6 +145,27 @@ describe('resolveClaudeRemoteSessionStartPlan', () => {
     expect(logDebug).not.toHaveBeenCalled();
   });
 
+  it('starts fresh without throwing when the session identity owner resolved a provisional id to null', () => {
+    const result = resolveClaudeRemoteSessionStartPlan(
+      {
+        sessionId: null,
+        transcriptPath: '/tmp/never-materialized.jsonl',
+        path: '/tmp/workspace',
+        claudeConfigDir: null,
+        claudeArgs: undefined,
+      },
+      {
+        checkSession: () => true,
+        findLastSession: () => null,
+        hasMaterializedSessionTranscript: () => false,
+        logDebug: vi.fn(),
+        logPrefix: 'claudeRemote',
+      },
+    );
+
+    expect(result).toEqual({ startFrom: null, shouldContinue: false });
+  });
+
   it('keeps a materialized current session even when deep transcript validation is conservative', () => {
     const result = resolveClaudeRemoteSessionStartPlan(
       {

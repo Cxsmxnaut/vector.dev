@@ -1474,9 +1474,11 @@ export async function claudeRemoteLauncher(
                     // SDK resume does not replay historical Agent launches and acknowledgements.
                     // Runtime selection is now known; observe aliases before returning its first
                     // input to the dispatcher, which can then construct the SDK query and hooks.
+                    // Seed only a resumable id: a provisional, never-materialized id names no
+                    // conversation, and demanding its transcript would fail the fresh start.
                     session.adoptExplicitResumeSessionIdFromArgs();
                     await seedClaudeTranscriptHistory(
-                        session.sessionId,
+                        session.getResumableSessionId(),
                         session.transcriptPath ?? null,
                         activeRuntimeModeKind === 'agentSdk' && workflowActivitySource !== null,
                     );
@@ -1615,7 +1617,11 @@ export async function claudeRemoteLauncher(
                 const remoteDispatch = await inputConsumer.runProviderInputDispatch({
                     abortSignal: controller.signal,
                     dispatch: async () => claudeRemoteDispatch({
-                    sessionId: session.sessionId,
+                    // Only a resumable id may back the remote start plan: a hook-observed
+                    // id whose transcript never materialized is provisional and resolves
+                    // to null here, so the first remote message starts a fresh Claude
+                    // session instead of failing an unrequested resume.
+                    sessionId: session.getResumableSessionId(),
                     happySessionId: session.client.sessionId,
                     transcriptPath: session.transcriptPath,
                     path: session.path,

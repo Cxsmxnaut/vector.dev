@@ -30,6 +30,7 @@ import { resolveConfiguredClaudeConfigDir } from './utils/resolveConfiguredClaud
 import type { TerminalRuntimeFlags } from '@/terminal/runtime/terminalRuntimeFlags';
 import { resolveSessionCriticalMetadataDrainTimeoutMs } from '@/session/transport/shared/sessionTimeouts';
 import { canPublishSessionResumeIdentity } from '@/session/metadata/sessionIdentityPublication';
+import { hasClaudeMaterializedSessionTranscript } from './remote/sessionStartPlan';
 import { getProjectPath } from './utils/path';
 import { readExplicitClaudeResumeSessionIdFromArgs } from './utils/claudeResumeArgs';
 import {
@@ -49,6 +50,16 @@ import { readJsonlFileForward } from '@/api/directSessions/filePaging/jsonlForwa
 export type SessionFoundInfo = {
     sessionId: string;
     transcriptPath: string | null;
+};
+
+/**
+ * Identity cleared by `Session.clearSessionId`, restorable via
+ * `Session.restoreClearedSessionIdentity` when an unconfirmed fork rolls back.
+ */
+export type ClearedClaudeSessionIdentity = {
+    sessionId: string;
+    transcriptPath: string | null;
+    wasRequestedResume: boolean;
 };
 
 type SessionMetadataDaemonReporter = (input: Readonly<{
@@ -335,6 +346,15 @@ export class Session {
 
     sessionId: string | null;
     transcriptPath: string | null = null;
+    /**
+     * True when the current `sessionId` was adopted from an identity this runner was
+     * asked to continue (an explicit `--resume <id>` request, or an established id
+     * supplied before any observation). Such ids are resumable from birth: when their
+     * transcript is unavailable, remote start must fail closed instead of silently
+     * starting a replacement conversation. A hook-observed id is provisional until its
+     * transcript materializes (see `getResumableSessionId`).
+     */
+    private sessionIdWasRequestedResume = false;
     mode: 'local' | 'remote' = 'local';
     thinking: boolean = false;
     private currentTaskId: string | null = null;
@@ -444,6 +464,9 @@ export class Session {
         this.accountSettingsSecretsReadKeys = opts.accountSettingsSecretsReadKeys ?? [];
         this.logPath = opts.logPath;
         this.sessionId = opts.sessionId;
+        // An externally supplied id is an established identity this runner continues,
+        // not a fresh allocation observed from a hook.
+        this.sessionIdWasRequestedResume = Boolean(opts.sessionId);
         this.queue = opts.messageQueue;
         this.claudeArgs = opts.claudeArgs;
         this.adoptExplicitResumeSessionIdFromArgs();
@@ -498,7 +521,44 @@ export class Session {
         if (!resumeSessionId) return;
 
         this.sessionId = resumeSessionId;
+        // An explicitly requested resume is resumable from birth and must keep failing
+        // closed when its transcript is unavailable.
+        this.sessionIdWasRequestedResume = true;
         logger.debug(`[Session] Adopted provisional Claude resume session ID from args: ${resumeSessionId}`);
+    }
+
+    /**
+     * The Claude session id that remote start may resume, or null while the current
+     * in-memory id is still provisional.
+     *
+     * A hook-observed id is provisional until its native transcript materializes:
+     * Claude's SessionStart can fire before any turn writes the transcript, and such
+     * an id names no resumable conversation yet. Remote takeover then starts a fresh
+     * Claude session under the same Happier session instead of failing the resume.
+     * Ids this runner was asked to continue (`--resume <id>` args, or an established
+     * id supplied at construction) are resumable from birth and are never downgraded.
+     *
+     * Resumability uses the transcript-materialization threshold (file exists and is
+     * non-empty) shared with the remote start plan; relay metadata publication keeps
+     * the stricter complete-record proof in `isProvenClaudeTranscriptPath`.
+     */
+    getResumableSessionId = (): string | null => {
+        if (!this.sessionId) return null;
+        if (this.sessionIdWasRequestedResume) return this.sessionId;
+        if (
+            hasClaudeMaterializedSessionTranscript(
+                this.sessionId,
+                this.path,
+                this.transcriptPath,
+                resolveConfiguredClaudeConfigDir({ env: process.env }),
+            )
+        ) {
+            return this.sessionId;
+        }
+        logger.debug(
+            `[Session] Claude session ${this.sessionId} has no materialized transcript; treating it as provisional (remote takeover starts fresh)`,
+        );
+        return null;
     }
 
     setPushSender(pushSender: PushNotificationClient | null): void {
@@ -875,6 +935,9 @@ export class Session {
             // Avoid carrying a transcript path across different Claude sessions.
             // If the hook didn't provide a transcript path for this session, force fallback to heuristics.
             this.transcriptPath = observedTranscriptPath;
+            // A newly observed id starts provisional: only an identity this runner was
+            // asked to continue keeps resumable-from-birth semantics.
+            this.sessionIdWasRequestedResume = false;
         } else if (observedTranscriptPath) {
             // Same sessionId, but we learned/updated the exact transcript path.
             this.transcriptPath = observedTranscriptPath;
@@ -1051,11 +1114,20 @@ export class Session {
     }
 
     /**
-     * Clear the current session ID (used by /clear command)
+     * Identity cleared by `clearSessionId`, restorable via
+     * `restoreClearedSessionIdentity` when an unconfirmed fork rolls back.
      */
-    clearSessionId = (): void => {
+    clearSessionId = (): ClearedClaudeSessionIdentity | null => {
+        const cleared: ClearedClaudeSessionIdentity | null = this.sessionId
+            ? {
+                sessionId: this.sessionId,
+                transcriptPath: this.transcriptPath,
+                wasRequestedResume: this.sessionIdWasRequestedResume,
+            }
+            : null;
         this.claudeToolHookCorrelation.clear();
         this.sessionId = null;
+        this.sessionIdWasRequestedResume = false;
         this.transcriptPath = null;
         updateMetadataBestEffort(
             this.client,
@@ -1064,6 +1136,19 @@ export class Session {
             'claude_session_cleared',
         );
         logger.debug('[Session] Session ID cleared');
+        return cleared;
+    }
+
+    /**
+     * Restore an identity previously returned by `clearSessionId` when the launch
+     * whose fork confirmation was being awaited never confirmed. Restoring also
+     * restores the cleared identity's requested-resume semantics, so an explicitly
+     * requested resume still fails closed after the rollback.
+     */
+    restoreClearedSessionIdentity = (cleared: ClearedClaudeSessionIdentity): void => {
+        this.sessionId = cleared.sessionId;
+        this.transcriptPath = cleared.transcriptPath;
+        this.sessionIdWasRequestedResume = cleared.wasRequestedResume;
     }
 
     /**
