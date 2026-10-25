@@ -10,6 +10,7 @@ import {
 } from '@happier-dev/cli-common/service';
 
 import { withTempDir } from '@/testkit/fs/tempDir';
+import { createWindowsServiceLauncherPeFixture } from '@/testkit/fs/windowsServiceLauncherFixture';
 import { withConfiguredDaemonTestHome, writeDaemonSettingsFixture } from '@/daemon/testkit/fakeDaemonLifecycle.testkit';
 import { evaluateDaemonStartupServiceConflict } from '@/daemon/ownership/daemonServiceInventory';
 import { resolveDaemonServiceCliRuntimeFromEnv } from './cli';
@@ -840,6 +841,56 @@ describe('discoverInstalledDaemonServiceEntries', () => {
       expect(entries).toEqual([expect.objectContaining({
         path: wrapperPath,
         windowsLauncherUpgradeNeeded: false,
+      })]);
+    });
+  });
+
+  it.each([
+    ['is missing', () => ''],
+    ['names another file', (logPath: string) => ` --diagnostic-log &quot;${logPath}.elsewhere&quot;`],
+  ])('reports a launcher upgrade when the native action diagnostic log %s', async (_case, diagnosticLogArgument) => {
+    await withTempDir('happier-discover-native-launcher-malformed-', async (homeDir) => {
+      const happierHomeDir = join(homeDir, '.happier');
+      const wrapperPath = join(happierHomeDir, 'services', 'happier-daemon.default.ps1');
+      mkdirSync(join(happierHomeDir, 'services'), { recursive: true });
+      writeFileSync(wrapperPath, renderWindowsScheduledTaskWrapperPs1({
+        workingDirectory: homeDir,
+        programArgs: ['node.exe', 'daemon', 'start-sync'],
+        env: {
+          HAPPIER_HOME_DIR: happierHomeDir,
+          HAPPIER_DAEMON_STARTUP_SOURCE: 'background-service',
+        },
+      }));
+      const launcher = resolveInstalledWindowsServiceLauncherPaths({
+        definitionPath: wrapperPath,
+        label: 'happier-daemon.default',
+        version: resolveDaemonWindowsServiceLauncherInstallSpec().version,
+      });
+      mkdirSync(dirname(launcher.launcherPath), { recursive: true });
+      writeFileSync(launcher.launcherPath, createWindowsServiceLauncherPeFixture());
+
+      spawnSyncMock.mockImplementation((command, args) => {
+        if (isHappierTaskFolderListing(command, args)) return happierTaskFolderListing(['\\Happier\\happier-daemon.default']);
+        if (command === 'schtasks' && args?.includes('/XML')) {
+          return {
+            status: 0,
+            stdout: `<Task><Actions><Exec><Command>${launcher.launcherPath}</Command><Arguments>--wrapper &quot;${wrapperPath}&quot;${diagnosticLogArgument(launcher.diagnosticLogPath)}</Arguments></Exec></Actions></Task>`,
+            stderr: '',
+          } as never;
+        }
+        return { status: 1, stdout: '', stderr: '' } as never;
+      });
+
+      const entries = await discoverInstalledDaemonServiceEntries({
+        platform: 'win32',
+        userHomeDir: homeDir,
+        happierHomeDir,
+        mode: 'user',
+        serversById: {},
+      });
+      expect(entries).toEqual([expect.objectContaining({
+        path: wrapperPath,
+        windowsLauncherUpgradeNeeded: true,
       })]);
     });
   });

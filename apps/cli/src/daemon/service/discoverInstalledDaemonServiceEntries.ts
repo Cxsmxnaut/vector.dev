@@ -2,6 +2,7 @@ import * as fs from 'node:fs';
 import { spawnBackgroundSync } from '@happier-dev/cli-common/process';
 import {
   buildListWindowsScheduledTaskFolderPowerShellCommand,
+  buildWindowsScheduledTaskLauncherAction,
   parsePowerShellQuotedString,
   parseWindowsScheduledTaskFolderPowerShellJson,
   resolveInstalledWindowsServiceLauncherPaths,
@@ -209,6 +210,8 @@ type WindowsScheduledTaskDefinition = Readonly<{
   wrapperPath: string;
   actionKind: 'native-launcher' | 'legacy-powershell';
   launcherPath?: string;
+  /** Registered arguments of a native-launcher action, compared exactly against the expected action. */
+  launcherArguments?: string;
 }>;
 
 function decodeWindowsTaskXmlText(value: string): string {
@@ -230,6 +233,7 @@ function parseWindowsScheduledTaskDefinitionFromAction(executable: string, argum
       wrapperPath: nativeWrapperPath,
       actionKind: 'native-launcher',
       launcherPath: String(executable ?? '').trim().replace(/^"|"$/gu, ''),
+      launcherArguments: argumentsValue,
     };
   }
 
@@ -258,7 +262,10 @@ function parseWindowsScheduledTaskDefinitionFromTaskToRun(taskToRunText: string)
   if (!taskToRun) return null;
   const nativeOptionIndex = taskToRun.search(/\s--wrapper(?:\s|$)/iu);
   const executable = nativeOptionIndex > 0 ? taskToRun.slice(0, nativeOptionIndex) : taskToRun;
-  return parseWindowsScheduledTaskDefinitionFromAction(executable, taskToRun);
+  return parseWindowsScheduledTaskDefinitionFromAction(
+    executable,
+    nativeOptionIndex > 0 ? taskToRun.slice(nativeOptionIndex) : taskToRun,
+  );
 }
 
 function isInstalledWindowsLauncherActionHealthy(definition: WindowsScheduledTaskDefinition): boolean {
@@ -269,6 +276,13 @@ function isInstalledWindowsLauncherActionHealthy(definition: WindowsScheduledTas
     version: resolveDaemonWindowsServiceLauncherInstallSpec().version,
   });
   if (definition.launcherPath.toLowerCase() !== expected.launcherPath.toLowerCase()) return false;
+  // The launcher accepts only this exact action; a missing or different diagnostic log is not current.
+  const expectedArguments = buildWindowsScheduledTaskLauncherAction({
+    launcherPath: expected.launcherPath,
+    definitionPath: definition.wrapperPath,
+    diagnosticLogPath: expected.diagnosticLogPath,
+  }).arguments;
+  if (definition.launcherArguments !== expectedArguments) return false;
   try {
     validateWindowsServiceLauncherPe(fs.readFileSync(expected.launcherPath), expected.launcherPath);
     return true;
