@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { dirname, join, win32 } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -27,9 +28,7 @@ export function resolvePackagedWindowsServiceLauncherInstallSpec(
     return resolveWindowsServiceLauncherInstallSpec(join(runtimeRoot, WINDOWS_SERVICE_LAUNCHER_FILE_NAME));
   }
   const packageAsset = join(
-    dirname(fileURLToPath(import.meta.url)),
-    '..',
-    '..',
+    resolveCliCommonPackageRoot(),
     'native',
     'windows',
     'bin',
@@ -37,6 +36,40 @@ export function resolvePackagedWindowsServiceLauncherInstallSpec(
     WINDOWS_SERVICE_LAUNCHER_FILE_NAME,
   );
   return resolveWindowsServiceLauncherInstallSpec(packageAsset);
+}
+
+const CLI_COMMON_PACKAGE_NAME = '@happier-dev/cli-common';
+
+/**
+ * Root of the installed cli-common package. The CLI build inlines this module into its own dist,
+ * so the root comes from resolving the package, not from this module's URL. If the package cannot
+ * be resolved, the module-relative root (correct when unbundled) is kept; staging then fails
+ * closed on a missing asset with that path in the error.
+ */
+function resolveCliCommonPackageRoot(): string {
+  const moduleRelativeRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+  let dir: string;
+  try {
+    dir = dirname(createRequire(import.meta.url).resolve(`${CLI_COMMON_PACKAGE_NAME}/service`));
+  } catch {
+    return moduleRelativeRoot;
+  }
+  while (true) {
+    const manifestPath = join(dir, 'package.json');
+    if (existsSync(manifestPath) && readPackageName(manifestPath) === CLI_COMMON_PACKAGE_NAME) return dir;
+    const parent = dirname(dir);
+    if (parent === dir) return moduleRelativeRoot;
+    dir = parent;
+  }
+}
+
+function readPackageName(manifestPath: string): string | null {
+  try {
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as { name?: unknown };
+    return typeof manifest.name === 'string' ? manifest.name : null;
+  } catch {
+    return null;
+  }
 }
 
 /**

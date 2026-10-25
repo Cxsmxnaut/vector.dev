@@ -1,6 +1,7 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
@@ -76,6 +77,37 @@ describe('Windows service launcher asset', () => {
       expect(resolvePackagedWindowsServiceLauncherInstallSpec({
         execPath: join(root, 'payload', 'happier.exe'),
       }).sourcePath).toBe(payloadLauncher);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('resolves the npm launcher from cli-common when the resolver runs from a bundling package', async () => {
+    // The CLI build inlines this resolver into its own dist; npm installs cli-common under the
+    // CLI's node_modules. Run the built resolver from that CLI dist location against that layout.
+    const cliCommonRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+    const root = await mkdtemp(join(tmpdir(), 'happier-launcher-bundled-'));
+    try {
+      const cliRoot = join(root, 'node_modules', '@happier-dev', 'cli');
+      const installedCliCommon = join(cliRoot, 'node_modules', '@happier-dev', 'cli-common');
+      const launcher = join(installedCliCommon, 'native', 'windows', 'bin', 'windows-x64', 'happier-service-launcher.exe');
+      await mkdir(dirname(launcher), { recursive: true });
+      await mkdir(join(installedCliCommon, 'dist', 'service'), { recursive: true });
+      await copyFile(join(cliCommonRoot, 'package.json'), join(installedCliCommon, 'package.json'));
+      await writeFile(join(installedCliCommon, 'dist', 'service', 'index.js'), 'export {};\n');
+      await writeFile(launcher, createPeFixture());
+      for (const relativePath of [
+        join('service', 'windowsLauncher.js'),
+        join('firstPartyRuntime', 'resolveSelfContainedCliRuntimeRoot.js'),
+      ]) {
+        await mkdir(dirname(join(cliRoot, 'dist', relativePath)), { recursive: true });
+        await copyFile(join(cliCommonRoot, 'dist', relativePath), join(cliRoot, 'dist', relativePath));
+      }
+
+      const bundled = await import(pathToFileURL(join(cliRoot, 'dist', 'service', 'windowsLauncher.js')).href) as
+        typeof import('./windowsLauncher');
+
+      expect(bundled.resolvePackagedWindowsServiceLauncherInstallSpec().sourcePath).toBe(launcher);
     } finally {
       await rm(root, { recursive: true, force: true });
     }
