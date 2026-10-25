@@ -117,11 +117,14 @@ async function copyCliNodeRuntimePayload(
     await mkdir(join(destination, '..'), { recursive: true });
     await cp(entry.sourcePath, destination, { recursive: true });
   }
-  for (const { packageName, srcDir } of workspaceBundles) {
+  // The node-hosted package-dist resolves package assets (such as the Windows service launcher)
+  // from these bundled copies, so they carry the same declared files as the npm bundle.
+  for (const { packageName, srcDir, includeFiles } of workspaceBundles) {
     bundleWorkspacePackageWithRuntimeDependencies({
       packageName,
       srcDir,
       destDir: join(payloadDir, 'node_modules', ...packageName.split('/')),
+      includeFiles,
     });
   }
 }
