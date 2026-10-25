@@ -142,6 +142,106 @@ Set-Content -LiteralPath $ExitPath -Value $run.ExitCode
   Assert-True ($nestedExit -eq '37') "Expected nested-job wrapper exit 37, got $nestedExit"
   Assert-True (-not ((Get-Content -LiteralPath $nestedLog -Raw) -match 'stage=assign_job')) 'Launcher failed to assign its job inside an outer job'
 
+  # The wrapper may inherit only the launcher's NUL standard handles. A test-owned
+  # parent holds an inheritable pipe write end (the marker) and starts the process
+  # under test with bInheritHandles=TRUE; the wrapper writes "LEAK" to that exact
+  # handle value if it received it. A direct PowerShell child is the control.
+  Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+using System.Text;
+using System.Threading;
+
+public static class HappierLauncherHandleMarker {
+  [StructLayout(LayoutKind.Sequential)]
+  struct SecurityAttributes { public int nLength; public IntPtr lpSecurityDescriptor; public int bInheritHandle; }
+  [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+  struct StartupInfo {
+    public int cb; public string lpReserved; public string lpDesktop; public string lpTitle;
+    public int dwX, dwY, dwXSize, dwYSize, dwXCountChars, dwYCountChars, dwFillAttribute, dwFlags;
+    public short wShowWindow, cbReserved2; public IntPtr lpReserved2, hStdInput, hStdOutput, hStdError;
+  }
+  [StructLayout(LayoutKind.Sequential)]
+  struct ProcessInformation { public IntPtr hProcess, hThread; public int dwProcessId, dwThreadId; }
+
+  [DllImport("kernel32.dll", SetLastError = true)]
+  static extern bool CreatePipe(out IntPtr read, out IntPtr write, ref SecurityAttributes sa, int size);
+  [DllImport("kernel32.dll", SetLastError = true)]
+  static extern bool SetHandleInformation(IntPtr handle, int mask, int flags);
+  [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+  static extern bool CreateProcessW(string app, StringBuilder cmd, IntPtr pa, IntPtr ta, bool inherit,
+    int flags, IntPtr env, string cwd, ref StartupInfo si, out ProcessInformation pi);
+  [DllImport("kernel32.dll", SetLastError = true)]
+  static extern int WaitForSingleObject(IntPtr handle, int ms);
+  [DllImport("kernel32.dll", SetLastError = true)]
+  static extern bool GetExitCodeProcess(IntPtr handle, out int code);
+  [DllImport("kernel32.dll", SetLastError = true)]
+  static extern bool CloseHandle(IntPtr handle);
+  [DllImport("kernel32.dll", SetLastError = true)]
+  static extern bool PeekNamedPipe(IntPtr pipe, IntPtr buf, int size, IntPtr read, out int avail, IntPtr left);
+  [DllImport("kernel32.dll", SetLastError = true)]
+  static extern bool ReadFile(IntPtr handle, byte[] buf, int size, out int read, IntPtr overlapped);
+
+  // Returns "exit=<code> pipeClosed=<bool> data=<bytes the process tree wrote to the marker>".
+  public static string Run(string app, string commandLine, int timeoutMs) {
+    var sa = new SecurityAttributes();
+    sa.nLength = Marshal.SizeOf(sa);
+    sa.bInheritHandle = 1;
+    IntPtr read, write;
+    if (!CreatePipe(out read, out write, ref sa, 0)) throw new Exception("CreatePipe failed " + Marshal.GetLastWin32Error());
+    SetHandleInformation(read, 1, 0);
+    Environment.SetEnvironmentVariable("HAPPIER_MARKER_HANDLE", write.ToInt64().ToString());
+    var si = new StartupInfo();
+    si.cb = Marshal.SizeOf(si);
+    ProcessInformation pi;
+    if (!CreateProcessW(app, new StringBuilder(commandLine), IntPtr.Zero, IntPtr.Zero, true,
+        0x08000000, IntPtr.Zero, null, ref si, out pi)) {
+      int error = Marshal.GetLastWin32Error();
+      CloseHandle(read); CloseHandle(write);
+      throw new Exception("CreateProcess failed " + error);
+    }
+    CloseHandle(write);
+    CloseHandle(pi.hThread);
+    if (WaitForSingleObject(pi.hProcess, timeoutMs) != 0) { CloseHandle(pi.hProcess); CloseHandle(read); throw new Exception("process under test timed out"); }
+    int exitCode; GetExitCodeProcess(pi.hProcess, out exitCode); CloseHandle(pi.hProcess);
+    var data = new StringBuilder();
+    bool closed = false;
+    var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
+    var buffer = new byte[256];
+    while (DateTime.UtcNow < deadline) {
+      int avail;
+      if (!PeekNamedPipe(read, IntPtr.Zero, 0, IntPtr.Zero, out avail, IntPtr.Zero)) {
+        closed = Marshal.GetLastWin32Error() == 109;
+        break;
+      }
+      if (avail > 0) { int n; ReadFile(read, buffer, buffer.Length, out n, IntPtr.Zero); data.Append(Encoding.ASCII.GetString(buffer, 0, n)); }
+      else Thread.Sleep(50);
+    }
+    CloseHandle(read);
+    return "exit=" + exitCode + " pipeClosed=" + closed + " data=" + data;
+  }
+}
+'@
+  $markerWrapper = Join-Path $fixtureRoot 'handle marker probe.ps1'
+  Set-Content -LiteralPath $markerWrapper -Encoding UTF8 -Value @'
+try {
+  $safe = New-Object Microsoft.Win32.SafeHandles.SafeFileHandle([IntPtr][Int64]$env:HAPPIER_MARKER_HANDLE, $false)
+  $stream = New-Object System.IO.FileStream($safe, [System.IO.FileAccess]::Write)
+  $bytes = [Text.Encoding]::ASCII.GetBytes('LEAK')
+  $stream.Write($bytes, 0, $bytes.Length)
+  $stream.Flush()
+} catch {
+}
+exit 0
+'@
+  $windowsPowerShell = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
+  $markerControl = [HappierLauncherHandleMarker]::Run($windowsPowerShell,
+    ('"{0}" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "{1}"' -f $windowsPowerShell, $markerWrapper), 30000)
+  Assert-True ($markerControl -match '^exit=0 pipeClosed=True data=LEAK$') "Handle marker control did not observe an inherited marker: $markerControl"
+  $markerLauncher = [HappierLauncherHandleMarker]::Run($LauncherPath,
+    ('"{0}" --wrapper "{1}" --diagnostic-log "{2}"' -f $LauncherPath, $markerWrapper, (Join-Path $fixtureRoot 'marker.launcher.log')), 30000)
+  Assert-True ($markerLauncher -match '^exit=0 pipeClosed=True data=$') "Launcher passed an inheritable non-standard handle to the wrapper: $markerLauncher"
+
   $rapidRuns = 1..4 | ForEach-Object {
     Start-Launcher $deniedWrapper (Join-Path $fixtureRoot ("rapid-$_.launcher.log"))
   }
