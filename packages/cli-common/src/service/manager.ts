@@ -515,14 +515,26 @@ export async function preflightServiceInstallAssets(params: Readonly<{
   await readValidatedWindowsServiceLauncher(launcher.sourcePath);
 }
 
+/**
+ * Reads and validates every planned copy and rejects a destination that already holds different
+ * bytes, without writing. Callers that remove or stop services before applying a plan run this
+ * first, so a copy that would fail cannot leave those services removed without a replacement.
+ */
+export async function prepareServicePlanCopies(
+  copies: readonly PlannedCopy[] = [],
+): Promise<Array<Readonly<{ copy: PlannedCopy; bytes: Buffer }>>> {
+  return await Promise.all(copies.map(async (copy) => {
+    const bytes = copy.validation === 'windows-service-launcher-x64-v1'
+      ? await readValidatedWindowsServiceLauncher(copy.sourcePath)
+      : await readFile(copy.sourcePath);
+    assertCopyDestinationAccepts(copy.destinationPath, await readFile(copy.destinationPath).catch(() => null), bytes);
+    return { copy, bytes };
+  }));
+}
+
 export async function applyServicePlan(plan: ServicePlan, options: Readonly<{ runCommands?: boolean }> = {}): Promise<void> {
   let launchdUsedLegacyLoadFallback = false;
-  const preparedCopies = await Promise.all((plan.copies ?? []).map(async (copy) => ({
-    copy,
-    bytes: copy.validation === 'windows-service-launcher-x64-v1'
-      ? await readValidatedWindowsServiceLauncher(copy.sourcePath)
-      : await readFile(copy.sourcePath),
-  })));
+  const preparedCopies = await prepareServicePlanCopies(plan.copies);
   for (const prepared of preparedCopies) {
     await writeAtomicBinaryFile(prepared.copy.destinationPath, prepared.bytes);
   }
@@ -729,12 +741,16 @@ async function writeAtomicTextFile(path: string, contents: string, mode: number)
   }
 }
 
-async function writeAtomicBinaryFile(path: string, bytes: Buffer): Promise<void> {
-  const current = await readFile(path).catch(() => null);
-  if (current) {
-    if (current.equals(bytes)) return;
+function assertCopyDestinationAccepts(path: string, current: Buffer | null, bytes: Buffer): void {
+  if (current && !current.equals(bytes)) {
     throw new Error(`[service] refusing to replace a different versioned Windows service launcher: ${path}`);
   }
+}
+
+async function writeAtomicBinaryFile(path: string, bytes: Buffer): Promise<void> {
+  const current = await readFile(path).catch(() => null);
+  assertCopyDestinationAccepts(path, current, bytes);
+  if (current) return;
   const dir = dirname(path);
   await mkdir(dir, { recursive: true });
   const tmp = join(dir, `.tmp.${Date.now()}.${Math.random().toString(16).slice(2)}`);

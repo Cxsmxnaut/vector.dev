@@ -3,6 +3,8 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
+import { createWindowsServiceLauncherPeFixture } from '@/testkit/fs/windowsServiceLauncherFixture';
+
 import type { InstalledDaemonServiceEntry } from './discoverInstalledDaemonServiceEntries';
 import type { DaemonServiceInstallPlan } from './plan';
 
@@ -872,6 +874,56 @@ describe('installDaemonService conflict handling', () => {
     });
 
     expect(applyDaemonServiceInstallPlanMock).toHaveBeenCalledTimes(applies);
+  });
+
+  it('rejects different launcher bytes at the planned destination before removing a competing service', async () => {
+    const homeDir = mkdtempSync(join(tmpdir(), 'happier-installer-launcher-destination-'));
+    const sourcePath = join(homeDir, 'package', 'happier-service-launcher.exe');
+    const destinationPath = join(homeDir, '.happier', 'services', 'happier-daemon.default', 'launcher-1-abc', 'happier-service-launcher.exe');
+    mkdirSync(dirname(sourcePath), { recursive: true });
+    mkdirSync(dirname(destinationPath), { recursive: true });
+    writeFileSync(sourcePath, createWindowsServiceLauncherPeFixture());
+    writeFileSync(destinationPath, Buffer.concat([createWindowsServiceLauncherPeFixture(), Buffer.from('different build')]));
+    planDaemonServiceInstallMock.mockReturnValueOnce({
+      platform: 'win32',
+      files: [{ path: join(homeDir, '.happier', 'services', 'happier-daemon.default.ps1'), content: 'expected wrapper', mode: 0o644 }],
+      copies: [{ sourcePath, destinationPath, validation: 'windows-service-launcher-x64-v1' }],
+      commands: [],
+    });
+    discoverInstalledDaemonServiceEntriesMock.mockResolvedValueOnce([
+      {
+        serverId: 'default',
+        name: 'Default background service',
+        installed: true,
+        path: join(homeDir, 'other-home', 'services', 'happier-daemon.default.ps1'),
+        platform: 'win32',
+        mode: 'user',
+        happierHomeDir: join(homeDir, 'other-home'),
+        releaseChannel: 'stable',
+        label: 'Happier\\happier-daemon.default',
+        targetMode: 'default-following',
+      },
+    ]);
+    const beforeApply = vi.fn(async () => undefined);
+
+    const { installDaemonService } = await import('./installer');
+
+    await expect(installDaemonService({
+      platform: 'win32',
+      userHomeDir: homeDir,
+      happierHomeDir: join(homeDir, '.happier'),
+      channel: 'publicdev',
+      targetMode: 'default-following',
+      instanceId: 'default',
+      strategy: 'replace-all',
+      runCommands: false,
+      beforeApply,
+    })).rejects.toThrow(/refusing to replace a different versioned Windows service launcher/u);
+
+    expect(planDaemonServiceUninstallMock).not.toHaveBeenCalled();
+    expect(applyDaemonServiceUninstallPlanMock).not.toHaveBeenCalled();
+    expect(beforeApply).not.toHaveBeenCalled();
+    expect(applyDaemonServiceInstallPlanMock).not.toHaveBeenCalled();
   });
 
   it('rejects an invalid packaged launcher before stopping the current owner', async () => {

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 
-import { readValidatedWindowsServiceLauncher } from '@happier-dev/cli-common/service';
+import { prepareServicePlanCopies } from '@happier-dev/cli-common/service';
 
 import { configuration } from '@/configuration';
 
@@ -447,12 +447,9 @@ export async function installDaemonService(options: Readonly<{
   const installIsCurrent = preview.exactTargetIsConverged && preview.exactTargetMatchesExpectedDefinition
     && !preview.exactTargetRuntimeReplacement && options.restartRunningDaemon !== true;
   if (!installIsCurrent) {
-    // Reject a missing or invalid packaged asset before removing services or stopping the owner.
-    for (const copy of preview.plan.copies ?? []) {
-      if (copy.validation === 'windows-service-launcher-x64-v1') {
-        await readValidatedWindowsServiceLauncher(copy.sourcePath);
-      }
-    }
+    // Reject a missing or invalid packaged asset, or a destination holding different bytes,
+    // before removing services or stopping the owner.
+    await prepareServicePlanCopies(preview.plan.copies);
   }
 
   for (const service of preview.conflictPlan.servicesToRemove) {
