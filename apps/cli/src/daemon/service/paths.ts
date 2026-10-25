@@ -1,9 +1,6 @@
 import { join, win32 } from 'node:path';
 
-import {
-  resolveInstalledWindowsServiceLauncherPaths,
-  WINDOWS_SERVICE_LAUNCHER_BUILD_VERSION,
-} from '@happier-dev/cli-common/service';
+import { resolveInstalledWindowsServiceLauncherPaths } from '@happier-dev/cli-common/service';
 
 import type { PublicReleaseRingId } from '@happier-dev/release-runtime/releaseRings';
 
@@ -21,6 +18,7 @@ import {
   type DaemonServiceMode,
   type DaemonServiceTargetMode,
 } from './plan';
+import { resolveDaemonWindowsServiceLauncherInstallSpec } from './windowsServiceLauncher';
 
 export type SupportedPlatform = 'darwin' | 'linux' | 'win32';
 
@@ -150,7 +148,7 @@ export function resolveDaemonServicePaths(
     ? resolveInstalledWindowsServiceLauncherPaths({
         definitionPath: wrapperPath,
         label: win32.basename(wrapperPath, '.ps1'),
-        version: WINDOWS_SERVICE_LAUNCHER_BUILD_VERSION,
+        version: resolveDaemonWindowsServiceLauncherInstallSpec().version,
       })
     : { launcherPath: '', diagnosticLogPath: '' };
   const logPaths = runtime.platform === 'win32'

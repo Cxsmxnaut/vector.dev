@@ -27,6 +27,7 @@ enum ExitCode : int {
   kWaitProcessFailed = 20,
   kReadExitCodeFailed = 21,
   kDisarmJobFailed = 22,
+  kConfigureHandleInheritanceFailed = 23,
 };
 
 struct Handle {
@@ -222,17 +223,42 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
   std::vector<wchar_t> mutableCommand(commandLine.begin(), commandLine.end());
   mutableCommand.push_back(L'\0');
 
-  STARTUPINFOW startup{};
-  startup.cb = sizeof(startup);
-  startup.dwFlags = STARTF_USESTDHANDLES;
-  startup.hStdInput = nullInput.value;
-  startup.hStdOutput = nullOutput.value;
-  startup.hStdError = nullOutput.value;
+  // Inherit only the two NUL standard handles, never other inheritable handles
+  // this launcher may itself have received.
+  HANDLE inheritedHandles[] = {nullInput.value, nullOutput.value};
+  SIZE_T attributeListSize = 0;
+  InitializeProcThreadAttributeList(nullptr, 1, 0, &attributeListSize);
+  std::vector<unsigned char> attributeListStorage(attributeListSize);
+  auto attributeList = reinterpret_cast<LPPROC_THREAD_ATTRIBUTE_LIST>(attributeListStorage.data());
+  if (attributeListSize == 0 || !InitializeProcThreadAttributeList(attributeList, 1, 0, &attributeListSize)) {
+    Log(log.value, "configure_handle_inheritance", "failed", GetLastError());
+    return kConfigureHandleInheritanceFailed;
+  }
+  const BOOL handleListSet = UpdateProcThreadAttribute(
+    attributeList, 0, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, inheritedHandles, sizeof(inheritedHandles),
+    nullptr, nullptr);
+  if (!handleListSet) {
+    const DWORD error = GetLastError();
+    DeleteProcThreadAttributeList(attributeList);
+    Log(log.value, "configure_handle_inheritance", "failed", error);
+    return kConfigureHandleInheritanceFailed;
+  }
+
+  STARTUPINFOEXW startup{};
+  startup.StartupInfo.cb = sizeof(startup);
+  startup.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
+  startup.StartupInfo.hStdInput = nullInput.value;
+  startup.StartupInfo.hStdOutput = nullOutput.value;
+  startup.StartupInfo.hStdError = nullOutput.value;
+  startup.lpAttributeList = attributeList;
   PROCESS_INFORMATION process{};
-  const DWORD flags = CREATE_NO_WINDOW | CREATE_SUSPENDED;
-  if (!CreateProcessW(powershell.c_str(), mutableCommand.data(), nullptr, nullptr, TRUE, flags,
-                      nullptr, nullptr, &startup, &process)) {
-    Log(log.value, "create_process", "failed", GetLastError());
+  const DWORD flags = CREATE_NO_WINDOW | CREATE_SUSPENDED | EXTENDED_STARTUPINFO_PRESENT;
+  const BOOL processCreated = CreateProcessW(powershell.c_str(), mutableCommand.data(), nullptr, nullptr, TRUE,
+                                      flags, nullptr, nullptr, &startup.StartupInfo, &process);
+  const DWORD createError = processCreated ? 0 : GetLastError();
+  DeleteProcThreadAttributeList(attributeList);
+  if (!processCreated) {
+    Log(log.value, "create_process", "failed", createError);
     return kCreateProcessFailed;
   }
   Handle childProcess(process.hProcess);

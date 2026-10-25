@@ -497,6 +497,21 @@ export function planServiceAction(params: Readonly<{
   throw new Error(`Unsupported plan: ${backend} ${action}`);
 }
 
+/**
+ * Validates the packaged assets an install plan for `backend` will copy. Consumers that stop
+ * or replace a running service before applying their install plan call this first, so a
+ * missing asset cannot leave the old service stopped with an install and rollback that both fail.
+ */
+export async function preflightServiceInstallAssets(params: Readonly<{
+  backend: ServiceBackend;
+  windowsLauncher?: WindowsServiceLauncherInstallSpec;
+}>): Promise<void> {
+  // Only current-user scheduled tasks use the packaged launcher (see planServiceAction).
+  if (params.backend !== 'schtasks-user') return;
+  const launcher = params.windowsLauncher ?? resolvePackagedWindowsServiceLauncherInstallSpec();
+  await readValidatedWindowsServiceLauncher(launcher.sourcePath);
+}
+
 export async function applyServicePlan(plan: ServicePlan, options: Readonly<{ runCommands?: boolean }> = {}): Promise<void> {
   let launchdUsedLegacyLoadFallback = false;
   const preparedCopies = await Promise.all((plan.copies ?? []).map(async (copy) => ({

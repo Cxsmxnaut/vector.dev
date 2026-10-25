@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { applyServicePlan, planServiceAction } from './manager';
+import { applyServicePlan, planServiceAction, preflightServiceInstallAssets } from './manager';
 
 describe('planServiceAction (schtasks install)', () => {
   it('creates Windows user tasks through the packaged windowless launcher', () => {
@@ -145,5 +145,19 @@ describe('planServiceAction (schtasks install)', () => {
 
     await expect(applyServicePlan(plan, { runCommands: false })).rejects.toThrow(/invalid .*launcher/u);
     await expect(readFile(definitionPath, 'utf8')).resolves.toBe('original wrapper');
+  });
+
+  it('lets consumers reject a missing helper before they stop the current service', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'happier-launcher-consumer-preflight-'));
+    const sourcePath = join(root, 'missing.exe');
+
+    await expect(preflightServiceInstallAssets({
+      backend: 'schtasks-user',
+      windowsLauncher: { sourcePath, version: 'fixture' },
+    })).rejects.toThrow(/launcher is unavailable/u);
+    await expect(preflightServiceInstallAssets({
+      backend: 'systemd-user',
+      windowsLauncher: { sourcePath, version: 'fixture' },
+    })).resolves.toBeUndefined();
   });
 });

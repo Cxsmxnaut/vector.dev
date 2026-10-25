@@ -731,6 +731,9 @@ async function assertExpectedDaemonServiceOwnership(params: Readonly<{
   );
   const pollMs = readPositiveIntEnv('HAPPIER_DAEMON_SERVICE_OWNERSHIP_WAIT_POLL_MS', 100);
   const stableMs = readPositiveIntEnv('HAPPIER_DAEMON_SERVICE_OWNERSHIP_STABLE_MS', 1000);
+  // Only install writes the task action. Start/restart of a task still registered with the
+  // legacy PowerShell action must keep working; status reports it as a launcher upgrade.
+  const launcherActionToVerify = params.action === 'install' ? params.windowsLaunchDiagnostics : null;
   const expectedOwnerObserved = await waitForExpectedDaemonServiceOwnership({
     platform: params.platform,
     expectedServiceLabel: params.expectedServiceLabel,
@@ -740,7 +743,7 @@ async function assertExpectedDaemonServiceOwnership(params: Readonly<{
     expectedInstalledServiceContents: params.expectedInstalledServiceContents,
     installedServicePath: params.installedServicePath,
     healthCommand: params.healthCommand,
-    windowsLaunchDiagnostics: params.windowsLaunchDiagnostics,
+    windowsLaunchDiagnostics: launcherActionToVerify,
   });
   if (expectedOwnerObserved) {
     return;
@@ -760,7 +763,7 @@ async function assertExpectedDaemonServiceOwnership(params: Readonly<{
       expectedInstalledServiceContents: params.expectedInstalledServiceContents,
       installedServicePath: params.installedServicePath,
       healthCommand: params.healthCommand,
-      windowsLaunchDiagnostics: params.windowsLaunchDiagnostics,
+      windowsLaunchDiagnostics: launcherActionToVerify,
     });
     if (expectedOwnerObservedDuringGrace) {
       return;

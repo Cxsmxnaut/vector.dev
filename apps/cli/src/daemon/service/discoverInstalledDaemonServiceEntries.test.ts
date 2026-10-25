@@ -7,7 +7,6 @@ import {
   renderSystemdServiceUnit,
   renderWindowsScheduledTaskWrapperPs1,
   resolveInstalledWindowsServiceLauncherPaths,
-  WINDOWS_SERVICE_LAUNCHER_BUILD_VERSION,
 } from '@happier-dev/cli-common/service';
 
 import { withTempDir } from '@/testkit/fs/tempDir';
@@ -15,6 +14,7 @@ import { withConfiguredDaemonTestHome, writeDaemonSettingsFixture } from '@/daem
 import { evaluateDaemonStartupServiceConflict } from '@/daemon/ownership/daemonServiceInventory';
 import { resolveDaemonServiceCliRuntimeFromEnv } from './cli';
 import { previewDaemonServiceInstall } from './installer';
+import { resolveDaemonWindowsServiceLauncherInstallSpec } from './windowsServiceLauncher';
 import { planServiceDaemonsRestartAfterUpdate } from '@/cli/runtime/update/restartServiceDaemonAfterUpdate';
 
 import { discoverInstalledDaemonServiceEntries, isInstalledDaemonServiceForHappierHome, isValidInstalledDaemonServiceFile, readInstalledDaemonServiceAutostartMode, readInstalledDaemonServiceHomeDir, readInstalledDaemonServiceTargetMode } from './discoverInstalledDaemonServiceEntries';
@@ -805,7 +805,7 @@ describe('discoverInstalledDaemonServiceEntries', () => {
       const launcher = resolveInstalledWindowsServiceLauncherPaths({
         definitionPath: wrapperPath,
         label: 'happier-daemon.default',
-        version: WINDOWS_SERVICE_LAUNCHER_BUILD_VERSION,
+        version: resolveDaemonWindowsServiceLauncherInstallSpec().version,
       });
       mkdirSync(dirname(launcher.launcherPath), { recursive: true });
       const pe = Buffer.alloc(512);

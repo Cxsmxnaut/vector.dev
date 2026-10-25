@@ -72,6 +72,76 @@ exit 37
   Assert-True ($exitDiagnostics -match 'wrapper_creation_filetime=\d+') 'Launcher diagnostics omitted wrapper creation time'
   Assert-True ($exitDiagnostics -match 'child_exit=37') 'Launcher diagnostics omitted exact wrapper exit'
 
+  # A console-subsystem wrapper and its console descendant must run without a
+  # console window. This is synthetic evidence only, not desktop flash/taskbar proof.
+  $consoleProbePath = Join-Path $fixtureRoot 'console-window.txt'
+  $consoleProbeScript = Join-Path $fixtureRoot 'console probe.ps1'
+  $consoleWrapper = Join-Path $fixtureRoot 'console window probe.ps1'
+  $consoleLog = Join-Path $fixtureRoot 'console.launcher.log'
+  Set-Content -LiteralPath $consoleProbeScript -Encoding UTF8 -Value @'
+param([string]$Out)
+Add-Type -Namespace HappierLauncherTest -Name ConsoleProbe -MemberDefinition '[DllImport("kernel32.dll")] public static extern System.IntPtr GetConsoleWindow();'
+Add-Content -LiteralPath $Out -Value ([int64][HappierLauncherTest.ConsoleProbe]::GetConsoleWindow())
+'@
+  $quotedProbeScript = "'{0}'" -f $consoleProbeScript.Replace("'", "''")
+  $quotedProbePath = "'{0}'" -f $consoleProbePath.Replace("'", "''")
+  Set-Content -LiteralPath $consoleWrapper -Encoding UTF8 -Value @"
+& $quotedProbeScript -Out $quotedProbePath
+& powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $quotedProbeScript -Out $quotedProbePath
+exit `$LASTEXITCODE
+"@
+  $consoleRun = Start-Launcher $consoleWrapper $consoleLog
+  $consoleRun.WaitForExit(30000) | Out-Null
+  Assert-True ($consoleRun.HasExited -and $consoleRun.ExitCode -eq 0) "Console probe launcher failed with exit $($consoleRun.ExitCode)"
+  $consoleWindows = @(Get-Content -LiteralPath $consoleProbePath)
+  Assert-True ($consoleWindows.Count -eq 2) "Expected wrapper and descendant console probes, got $($consoleWindows.Count)"
+  Assert-True (@($consoleWindows | Where-Object { $_ -ne '0' }).Count -eq 0) "Wrapper chain received a console window: $($consoleWindows -join ',')"
+
+  # Task Scheduler may already contain the launcher in a job; the launcher's
+  # private job must nest inside it rather than failing assignment.
+  Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class HappierLauncherJobFixture {
+  [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+  public static extern IntPtr CreateJobObject(IntPtr attributes, string name);
+  [DllImport("kernel32.dll", SetLastError = true)]
+  public static extern bool AssignProcessToJobObject(IntPtr job, IntPtr process);
+  [DllImport("kernel32.dll", SetLastError = true)]
+  public static extern bool CloseHandle(IntPtr handle);
+}
+'@
+  $nestedGoPath = Join-Path $fixtureRoot 'nested.go'
+  $nestedExitPath = Join-Path $fixtureRoot 'nested.exit'
+  $nestedLog = Join-Path $fixtureRoot 'nested.launcher.log'
+  $nestedParentScript = Join-Path $fixtureRoot 'nested parent.ps1'
+  Set-Content -LiteralPath $nestedParentScript -Encoding UTF8 -Value @'
+param([string]$Launcher, [string]$Wrapper, [string]$Log, [string]$Go, [string]$ExitPath)
+while (-not (Test-Path -LiteralPath $Go)) { Start-Sleep -Milliseconds 50 }
+$run = Start-Process -FilePath $Launcher -ArgumentList @('--wrapper', ('"{0}"' -f $Wrapper), '--diagnostic-log', ('"{0}"' -f $Log)) -PassThru -Wait
+Set-Content -LiteralPath $ExitPath -Value $run.ExitCode
+'@
+  $outerJob = [HappierLauncherJobFixture]::CreateJobObject([IntPtr]::Zero, $null)
+  Assert-True ($outerJob -ne [IntPtr]::Zero) 'Could not create the outer fixture job'
+  try {
+    $nestedParent = Start-Process -FilePath powershell.exe -ArgumentList @(
+      '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', ('"{0}"' -f $nestedParentScript),
+      '-Launcher', ('"{0}"' -f $LauncherPath), '-Wrapper', ('"{0}"' -f $exitWrapper),
+      '-Log', ('"{0}"' -f $nestedLog), '-Go', ('"{0}"' -f $nestedGoPath), '-ExitPath', ('"{0}"' -f $nestedExitPath)
+    ) -PassThru -WindowStyle Hidden
+    $ownedProcessIds.Add($nestedParent.Id) | Out-Null
+    Assert-True ([HappierLauncherJobFixture]::AssignProcessToJobObject($outerJob, $nestedParent.Handle)) 'Could not assign the fixture parent to the outer job'
+    Set-Content -LiteralPath $nestedGoPath -Value 'go'
+    Wait-ForFile $nestedExitPath 30000
+    Wait-ForExit $nestedParent.Id
+    $ownedProcessIds.Remove($nestedParent.Id) | Out-Null
+  } finally {
+    [HappierLauncherJobFixture]::CloseHandle($outerJob) | Out-Null
+  }
+  $nestedExit = (Get-Content -LiteralPath $nestedExitPath -Raw).Trim()
+  Assert-True ($nestedExit -eq '37') "Expected nested-job wrapper exit 37, got $nestedExit"
+  Assert-True (-not ((Get-Content -LiteralPath $nestedLog -Raw) -match 'stage=assign_job')) 'Launcher failed to assign its job inside an outer job'
+
   $rapidRuns = 1..4 | ForEach-Object {
     Start-Launcher $deniedWrapper (Join-Path $fixtureRoot ("rapid-$_.launcher.log"))
   }

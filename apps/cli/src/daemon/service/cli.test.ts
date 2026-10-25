@@ -5,7 +5,12 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { buildLaunchdPlistXml, renderSystemdServiceUnit, renderWindowsScheduledTaskWrapperPs1 } from '@happier-dev/cli-common/service';
+import {
+  buildLaunchdPlistXml,
+  buildWindowsScheduledTaskLauncherAction,
+  renderSystemdServiceUnit,
+  renderWindowsScheduledTaskWrapperPs1,
+} from '@happier-dev/cli-common/service';
 import { withConfiguredDaemonTestHome, writeDaemonSettingsFixture } from '@/daemon/testkit/fakeDaemonLifecycle.testkit';
 import { createEnvKeyScope } from '@/testkit/env/envScope';
 import { withTempDir } from '@/testkit/fs/tempDir';
@@ -30,7 +35,14 @@ function doMockChildProcessSpawnSync(
     const actual = await importOriginal<typeof import('node:child_process')>();
     return {
       ...actual,
-      spawnSync: vi.fn(spawnSyncImpl),
+      // Like the real spawnSync, return strings when the caller requests an encoding.
+      spawnSync: vi.fn((command: string, args?: readonly string[], options?: { encoding?: BufferEncoding | 'buffer' }) => {
+        const result = spawnSyncImpl(command, args) as { stdout?: unknown; stderr?: unknown } | null;
+        const encoding = options?.encoding;
+        if (!encoding || encoding === 'buffer' || !result || typeof result !== 'object') return result;
+        const decode = (value: unknown) => (Buffer.isBuffer(value) ? value.toString(encoding) : value);
+        return { ...result, stdout: decode(result.stdout), stderr: decode(result.stderr) };
+      }),
     };
   });
 }
@@ -39,6 +51,34 @@ function isHappierTaskFolderListing(command: string, args: readonly string[]): b
   return command === 'powershell.exe' && args.some((arg) => arg.includes('.GetFolder("\\Happier")'));
 }
 
+function isWindowsScheduledTaskStatusRead(command: string, args: readonly string[]): boolean {
+  return command === 'powershell.exe' && args.some((arg) => arg.includes('Get-ScheduledTaskInfo'));
+}
+
+type WindowsNativeTaskPaths = Readonly<{
+  installedPath: string;
+  launcherPath: string;
+  launcherDiagnosticLogPath: string;
+}>;
+
+/** What the ScheduledTasks status read reports for a task registered with the native launcher action. */
+function windowsNativeLauncherTaskStatusStdout(paths: WindowsNativeTaskPaths): Buffer {
+  const action = buildWindowsScheduledTaskLauncherAction({
+    launcherPath: paths.launcherPath,
+    definitionPath: paths.installedPath,
+    diagnosticLogPath: paths.launcherDiagnosticLogPath,
+  });
+  return Buffer.from(JSON.stringify({
+    exists: true,
+    enabled: true,
+    active: true,
+    stateLabel: 'running',
+    stateValue: 4,
+    lastRunTime: '',
+    lastTaskResult: 0,
+    taskToRun: `${action.executable} ${action.arguments}`,
+  }));
+}
 const SCOPED_ENV_KEYS = [
   'HAPPIER_DAEMON_SERVICE_PLATFORM',
   'HAPPIER_DAEMON_SERVICE_USER_HOME_DIR',
@@ -2049,6 +2089,9 @@ describe('runDaemonServiceCliCommand', () => {
             }
             if (command === 'powershell.exe' && args.some((arg) => arg.includes('.RegisterTask('))) {
               lifecycleEvents.push('registerTask');
+            }
+            if (isWindowsScheduledTaskStatusRead(command, args)) {
+              return { status: 0, stdout: windowsNativeLauncherTaskStatusStdout(paths), stderr: Buffer.from('') };
             }
             if (command !== 'schtasks') {
               return { status: 0, stdout: Buffer.from(''), stderr: Buffer.from('') };

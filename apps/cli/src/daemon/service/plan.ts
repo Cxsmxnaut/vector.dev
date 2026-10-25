@@ -4,6 +4,7 @@ import { getReleaseRingCatalogEntry, type PublicReleaseRingId } from '@happier-d
 import { isServerIdFilesystemSafe } from '@/server/serverId';
 
 import { buildLaunchAgentPlistXml, buildLaunchdPath } from './darwin';
+import { resolveDaemonWindowsServiceLauncherInstallSpec } from './windowsServiceLauncher';
 import { buildServicePath, planServiceAction, renderSystemdServiceUnit, renderWindowsScheduledTaskWrapperPs1, type PlannedCopy } from '@happier-dev/cli-common/service';
 
 export type DaemonServicePlatform = 'darwin' | 'linux' | 'win32';
@@ -466,6 +467,7 @@ export function planDaemonServiceInstall(params: Readonly<{
       definitionPath: wrapperPath,
       definitionContents: wrapper,
       taskName,
+      windowsLauncher: resolveDaemonWindowsServiceLauncherInstallSpec(),
       // cli-common registers the current user's interactive task, with a scoped logon
       // trigger only at login. On-demand has no trigger; install still runs it now.
       persistent: autostart === 'at-login',

@@ -1,7 +1,10 @@
-import { existsSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { dirname, join, win32 } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { resolveSelfContainedCliRuntimeRootPath } from '../firstPartyRuntime/resolveSelfContainedCliRuntimeRoot.js';
 
 export const WINDOWS_SERVICE_LAUNCHER_BUILD_VERSION = '1';
 export const WINDOWS_SERVICE_LAUNCHER_FILE_NAME = 'happier-service-launcher.exe';
@@ -12,8 +15,17 @@ export type WindowsServiceLauncherInstallSpec = Readonly<{
   version: string;
 }>;
 
-export function resolvePackagedWindowsServiceLauncherInstallSpec(): WindowsServiceLauncherInstallSpec {
-  const executableSidecar = join(dirname(process.execPath), WINDOWS_SERVICE_LAUNCHER_FILE_NAME);
+/**
+ * Self-contained binaries (including the `<home>/bin` CLI shortcuts) carry the launcher in their
+ * runtime root; npm and source checkouts carry it in this package's native asset directory.
+ */
+export function resolvePackagedWindowsServiceLauncherInstallSpec(
+  params: Readonly<{ execPath?: string }> = {},
+): WindowsServiceLauncherInstallSpec {
+  const runtimeRoot = resolveSelfContainedCliRuntimeRootPath(params.execPath ?? process.execPath);
+  if (runtimeRoot) {
+    return resolveWindowsServiceLauncherInstallSpec(join(runtimeRoot, WINDOWS_SERVICE_LAUNCHER_FILE_NAME));
+  }
   const packageAsset = join(
     dirname(fileURLToPath(import.meta.url)),
     '..',
@@ -24,10 +36,23 @@ export function resolvePackagedWindowsServiceLauncherInstallSpec(): WindowsServi
     'windows-x64',
     WINDOWS_SERVICE_LAUNCHER_FILE_NAME,
   );
-  return {
-    sourcePath: existsSync(executableSidecar) ? executableSidecar : packageAsset,
-    version: WINDOWS_SERVICE_LAUNCHER_BUILD_VERSION,
-  };
+  return resolveWindowsServiceLauncherInstallSpec(packageAsset);
+}
+
+/**
+ * The staged directory is keyed by the launcher bytes: a running launcher cannot be replaced
+ * in place, and release builds from different toolchains are not byte-identical.
+ * An unreadable source keeps the bare build version; staging then fails closed on the copy.
+ */
+export function resolveWindowsServiceLauncherInstallSpec(sourcePath: string): WindowsServiceLauncherInstallSpec {
+  let bytes: Buffer;
+  try {
+    bytes = readFileSync(sourcePath);
+  } catch {
+    return { sourcePath, version: WINDOWS_SERVICE_LAUNCHER_BUILD_VERSION };
+  }
+  const digest = createHash('sha256').update(bytes).digest('hex').slice(0, 16);
+  return { sourcePath, version: `${WINDOWS_SERVICE_LAUNCHER_BUILD_VERSION}-${digest}` };
 }
 
 export function resolveInstalledWindowsServiceLauncherPaths(params: Readonly<{
