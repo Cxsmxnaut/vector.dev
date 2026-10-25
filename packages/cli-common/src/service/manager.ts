@@ -527,7 +527,7 @@ export async function prepareServicePlanCopies(
     const bytes = copy.validation === 'windows-service-launcher-x64-v1'
       ? await readValidatedWindowsServiceLauncher(copy.sourcePath)
       : await readFile(copy.sourcePath);
-    assertCopyDestinationAccepts(copy.destinationPath, await readFile(copy.destinationPath).catch(() => null), bytes);
+    assertCopyDestinationAccepts(copy.destinationPath, await readCopyDestination(copy.destinationPath), bytes);
     return { copy, bytes };
   }));
 }
@@ -741,6 +741,16 @@ async function writeAtomicTextFile(path: string, contents: string, mode: number)
   }
 }
 
+/** Only a missing destination is absent; any other read failure (a directory, denied access) rejects. */
+async function readCopyDestination(path: string): Promise<Buffer | null> {
+  try {
+    return await readFile(path);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException | null)?.code === 'ENOENT') return null;
+    throw error;
+  }
+}
+
 function assertCopyDestinationAccepts(path: string, current: Buffer | null, bytes: Buffer): void {
   if (current && !current.equals(bytes)) {
     throw new Error(`[service] refusing to replace a different versioned Windows service launcher: ${path}`);
@@ -748,7 +758,7 @@ function assertCopyDestinationAccepts(path: string, current: Buffer | null, byte
 }
 
 async function writeAtomicBinaryFile(path: string, bytes: Buffer): Promise<void> {
-  const current = await readFile(path).catch(() => null);
+  const current = await readCopyDestination(path);
   assertCopyDestinationAccepts(path, current, bytes);
   if (current) return;
   const dir = dirname(path);

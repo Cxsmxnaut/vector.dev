@@ -926,6 +926,55 @@ describe('installDaemonService conflict handling', () => {
     expect(applyDaemonServiceInstallPlanMock).not.toHaveBeenCalled();
   });
 
+  it('rejects an unreadable launcher destination before removing a competing service', async () => {
+    const homeDir = mkdtempSync(join(tmpdir(), 'happier-installer-launcher-destination-dir-'));
+    const sourcePath = join(homeDir, 'package', 'happier-service-launcher.exe');
+    const destinationPath = join(homeDir, '.happier', 'services', 'happier-daemon.default', 'launcher-1-abc', 'happier-service-launcher.exe');
+    mkdirSync(dirname(sourcePath), { recursive: true });
+    writeFileSync(sourcePath, createWindowsServiceLauncherPeFixture());
+    // A directory occupies the destination: it cannot be read as the launcher nor replaced by it.
+    mkdirSync(destinationPath, { recursive: true });
+    planDaemonServiceInstallMock.mockReturnValueOnce({
+      platform: 'win32',
+      files: [{ path: join(homeDir, '.happier', 'services', 'happier-daemon.default.ps1'), content: 'expected wrapper', mode: 0o644 }],
+      copies: [{ sourcePath, destinationPath, validation: 'windows-service-launcher-x64-v1' }],
+      commands: [],
+    });
+    discoverInstalledDaemonServiceEntriesMock.mockResolvedValueOnce([
+      {
+        serverId: 'default',
+        name: 'Default background service',
+        installed: true,
+        path: join(homeDir, 'other-home', 'services', 'happier-daemon.default.ps1'),
+        platform: 'win32',
+        mode: 'user',
+        happierHomeDir: join(homeDir, 'other-home'),
+        releaseChannel: 'stable',
+        label: 'Happier\\happier-daemon.default',
+        targetMode: 'default-following',
+      },
+    ]);
+    const beforeApply = vi.fn(async () => undefined);
+
+    const { installDaemonService } = await import('./installer');
+
+    await expect(installDaemonService({
+      platform: 'win32',
+      userHomeDir: homeDir,
+      happierHomeDir: join(homeDir, '.happier'),
+      channel: 'publicdev',
+      targetMode: 'default-following',
+      instanceId: 'default',
+      strategy: 'replace-all',
+      runCommands: false,
+      beforeApply,
+    })).rejects.toMatchObject({ code: 'EISDIR' });
+
+    expect(planDaemonServiceUninstallMock).not.toHaveBeenCalled();
+    expect(beforeApply).not.toHaveBeenCalled();
+    expect(applyDaemonServiceInstallPlanMock).not.toHaveBeenCalled();
+  });
+
   it('rejects an invalid packaged launcher before stopping the current owner', async () => {
     const homeDir = mkdtempSync(join(tmpdir(), 'happier-installer-launcher-preflight-'));
     const installedPath = join(homeDir, '.happier', 'services', 'happier-daemon.default.ps1');
