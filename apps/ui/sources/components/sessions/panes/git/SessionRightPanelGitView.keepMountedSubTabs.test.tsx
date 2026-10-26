@@ -5,8 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('socket.io-client', async (importOriginal) =>
     (await import('@/dev/testkit/harness/serverAccountConnectionHarness')).createSocketIoClientBoundary(importOriginal));
 import { createScmCapabilities, type ScmWorkingSnapshot } from '@happier-dev/protocol/scm';
-import { RPC_METHODS } from '@happier-dev/protocol/rpc';
-import { createMachineFixture, createSessionFixture, flushHookEffects, renderScreen } from '@/dev/testkit';
+import { createMachineFixture, createSessionFixture, renderScreen } from '@/dev/testkit';
 import { storage } from '@/sync/domains/state/storageStore';
 import { installSessionDetailsPanelCommonModuleMocks } from '../sessionDetailsPanelTestHelpers';
 import { installSessionPaneRuntimeTestHarness } from '../sessionPaneRuntimeTestHarness';

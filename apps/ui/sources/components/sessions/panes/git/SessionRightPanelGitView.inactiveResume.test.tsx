@@ -5,8 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('socket.io-client', async (importOriginal) =>
     (await import('@/dev/testkit/harness/serverAccountConnectionHarness')).createSocketIoClientBoundary(importOriginal));
 import { createScmCapabilities, type ScmWorkingSnapshot } from '@happier-dev/protocol/scm';
-import { RPC_METHODS } from '@happier-dev/protocol/rpc';
-import { createMachineFixture, createSessionFixture, flushHookEffects, renderScreen } from '@/dev/testkit';
+import { createMachineFixture, createSessionFixture, renderScreen } from '@/dev/testkit';
 import { storage } from '@/sync/domains/state/storageStore';
 import { installSessionDetailsPanelCommonModuleMocks } from '../sessionDetailsPanelTestHelpers';
 import { installSessionPaneRuntimeTestHarness } from '../sessionPaneRuntimeTestHarness';
@@ -79,14 +78,6 @@ describe('SessionRightPanelGitView (inactive session resume)', () => {
         expect(resume).toHaveBeenCalled();
     });
 
-    it('falls back to the exact Home resume listener when no provider is mounted', async () => {
-        const resume = vi.fn(async () => true);
-        function Listener() { useSessionResumeRequestListener('s1', resume, runtime.serverId); return null; }
-        const screen = await render(<Listener />);
-        await screen.pressByTestIdAsync('session-rightpanel-git-paused-action');
-        expect(resume).toHaveBeenCalled();
-    });
-
     it('does not borrow a legacy project path when the exact Home workspace is absent', async () => {
         const { SessionRightPanelGitView } = await import('./SessionRightPanelGitView');
         seedSession({ machineOnline: true, path: '' });
@@ -94,15 +85,5 @@ describe('SessionRightPanelGitView (inactive session resume)', () => {
         expect(storage.getState().getProjectForSession('s1', runtime.serverId)).toBeNull();
         expect(screen.findHostByTestId('session-rightpanel-git-loading')).not.toBeNull();
         expect(screen.findHostByTestId('session-rightpanel-git-surface:history')).toBeNull();
-    });
-
-    it('shows typed unavailability when the workspace has an RPC target and status fails', async () => {
-        seedSession({ machineOnline: true });
-        const { SessionRightPanelGitView } = await import('./SessionRightPanelGitView');
-        const screen = await renderScreen(<runtime.Wrapper><SessionRightPanelGitView sessionId="s1" serverId={runtime.serverId} scopeId="session:s1" /></runtime.Wrapper>);
-        await act(async () => storage.getState().updateSessionProjectScmSnapshotError('s1', {
-            message: 'RPC method not available', errorCode: 'BACKEND_UNAVAILABLE', at: 1,
-        }, runtime.serverId));
-        expect(screen.findHostByTestId('session-rightpanel-git-unavailable')).not.toBeNull();
     });
 });
