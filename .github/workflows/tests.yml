@@ -215,8 +215,11 @@ on:
 
 concurrency:
   group: tests-${{ github.workflow }}-${{ github.ref }}
-  # Push runs retain the complete exact-SHA verdict; superseded PR runs may stop.
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  # dev/preview/main push runs retain the complete exact-SHA verdict that
+  # nightly and release source validation consume (verify-existing-ci.mjs).
+  # No automation consumes a v0.3 push verdict, so a newer v0.3 push stops the
+  # superseded run and the newest commit is tested; superseded PR runs stop too.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref_name == 'v0.3') }}
 
 env:
   # Speed up CI: UI postinstall vendors large web-only assets (Monaco/Kokoro/Skia web).
