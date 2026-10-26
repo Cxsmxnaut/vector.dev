@@ -4,7 +4,7 @@ import {
   MachineProvisionerBootstrapCarrierV1Schema, MachineProvisionerCheckResultV1Schema,
   MachineProvisionerObservationV1Schema, MachineProvisionerOptionsResultV1Schema,
   MachineProvisionerPowerResultV1Schema, MachineProvisionerNativeExecResultV1Schema, MachineProvisionerPutFileResultV1Schema,
-  type MachineProvisionerAuthorDefinitionV1,
+  observeMachineProvisionerNativeRead, type MachineProvisionerAuthorDefinitionV1, type MachineProvisionerOptionsResultV1,
 } from '@happier-dev/plugin-sdk/machine-provisioners';
 import { ACCOUNT_ID, ACCOUNT_PURPOSE, connectedAccountRuntime, nativeFetch, readAccountScope } from './account.js';
 import { createVercelNativeClient } from './machine/nativeClient.js';
@@ -76,25 +76,31 @@ export const PLUGIN = definePlugin({
         { path: 'timeoutMs', title: label('timeout'), widget: 'integer', required: true, defaultValue: 300000, description: label('timeoutDescription') },
         { path: 'snapshotExpirationMs', title: label('snapshotExpiration'), widget: 'integer', required: true, defaultValue: 0, description: label('retentionDescription') },
       ] },
-      async run(input, context) {
+      async run(input, context): Promise<MachineProvisionerOptionsResultV1> {
         const client = await runtime(context);
         const [check, limits] = await Promise.all([client.check(), client.limits()]);
         context.signal.throwIfAborted();
-        if (!check.available) return { choices: [], code: 'provider_unavailable' as const,
+        const dimensions = { size: [], image: [], location: [], network: [], duration: [] };
+        if (!check.available) return { dimensions, code: 'provider_unavailable',
           ...(check.nativeCause ? { nativeCause: check.nativeCause } : {}) };
-        if (limits.kind !== 'available') return { choices: [], code: 'provider_unavailable' as const,
+        if (limits.kind !== 'available') return { dimensions, code: 'provider_unavailable',
           ...(limits.nativeCause ? { nativeCause: limits.nativeCause } : {}) };
         const parsed = VercelLaunchSchema.safeParse(input);
-        if (!parsed.success) return { choices: [] };
+        if (!parsed.success) return { dimensions };
         const launch = parsed.data;
-        return { choices: [{ id: 'reviewed', title: 'Vercel Sandbox', launch,
-          available: launch.vcpus <= limits.vcpus && launch.timeoutMs <= limits.timeoutMs,
-          nativeFacts: {
-            image: { id: launch.image, title: launch.image },
-            size: { id: String(launch.vcpus), title: String(launch.vcpus) + ' vCPU', cpuCores: launch.vcpus, memoryBytes: launch.vcpus * 2048 * 1024 * 1024 },
-            location: { id: launch.region, title: launch.region },
-            duration: { id: String(launch.timeoutMs), title: String(launch.timeoutMs / 1000) + ' s', afterMs: launch.timeoutMs },
-          } }] };
+        const image = { id: launch.image, title: launch.image };
+        const size = { id: String(launch.vcpus), title: String(launch.vcpus) + ' vCPU', cpuCores: launch.vcpus, memoryBytes: launch.vcpus * 2048 * 1024 * 1024 };
+        const location = { id: launch.region, title: launch.region };
+        const duration = { id: String(launch.timeoutMs), title: String(launch.timeoutMs / 1000) + ' s', afterMs: launch.timeoutMs };
+        // This is the reviewed native form draft, not a Cartesian catalog. The
+        // public selection projector owns selection completeness and launch.
+        return { base: { launch, available: launch.vcpus <= limits.vcpus && launch.timeoutMs <= limits.timeoutMs },
+          dimensions: { ...dimensions,
+            image: [{ id: image.id, title: image.title, assignments: [], nativeFacts: { image } }],
+            size: [{ id: size.id, title: size.title, assignments: [], nativeFacts: { size } }],
+            location: [{ id: location.id, title: location.title, assignments: [], nativeFacts: { location } }],
+            duration: [{ id: duration.id, title: duration.title, assignments: [], nativeFacts: { duration } }],
+          } };
       } },
     acquire: { ...defaults, title: label('confirmTitle'), confirmation, dangerLevel: 'writesRemote',
       inputSchema: ROLE_SCHEMAS.acquireInput, resultSchema: RECONCILIATION.result,
@@ -133,7 +139,7 @@ export const PLUGIN = definePlugin({
       resultSchema: MachineProvisionerObservationV1Schema,
       async run(input, context) {
         try { return await (await runtime(context)).inspect(input.resource); }
-        catch (error) { return { observedAt: context.invokedAtMs, availability: 'unavailable', reason: errorCode(error) }; }
+        catch (error) { return observeMachineProvisionerNativeRead(context.invokedAtMs, { kind: 'unknown', reason: errorCode(error) }); }
       } },
     power: { ...defaults, title: label('confirmTitle'), confirmation, dangerLevel: 'writesRemote',
       inputSchema: ROLE_SCHEMAS.powerInput, resultSchema: MachineProvisionerPowerResultV1Schema,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createVercelNativeClient } from './nativeClient.js';
-import { reference, type VercelOperation } from './schemas.js';
+import { RECONCILIATION, reference, type VercelOperation } from './schemas.js';
 
 const scope = { teamId: 'team_one', projectId: 'prj_one' };
 const launch = { image: 'vercel/sandbox/universal:latest', region: 'iad1', vcpus: 2, timeoutMs: 300000, snapshotExpirationMs: 0 };
@@ -56,6 +56,10 @@ describe('Vercel retained REST resource', () => {
     const { client } = fixture(url => url.pathname === '/v2/sandboxes/snapshots' ? json(emptyPage) : json({}, 404));
     expect(await client.inspect(resource)).toMatchObject({ availability: 'absent', storage: 'lost' });
   });
+  it('does not infer full absence from an arbitrary snapshot-list 404', async () => {
+    const { client } = fixture(() => json({}, 404));
+    expect(await client.inspect(resource)).toEqual({ observedAt: 2000, availability: 'unavailable', reason: 'vercel_snapshot_cleanup_unqualified' });
+  });
   it('preserves trailing spaces in the actually observed guest home', async () => {
     const home = '/home/custom guest ';
     const { client } = fixture((url, init) => {
@@ -84,6 +88,30 @@ describe('Vercel retained REST resource', () => {
     expect(JSON.parse(String(create!.init!.body))).toMatchObject({ persistent: true, snapshotExpiration: 0,
       keepLastSnapshots: { count: 1, deleteEvicted: true, expiration: 0 }, architecture: 'amd64' });
     expect(JSON.stringify(pending)).not.toContain('private');
+  });
+  it.each(['malformed-session', 'missing-session'])('retains returned creation identity before %s readiness and refuses a reused name on recovery', async ancillary => {
+    let created = false, ready = false, createdAt = resource.createdAt;
+    const { client, calls } = fixture((url, init) => {
+      if (url.pathname.startsWith('/v2/teams/')) return json({ id: scope.teamId, billing: { plan: 'hobby' } });
+      if (init?.method === 'POST') created = true;
+      if (!created) return json({}, 404);
+      return json({ sandbox: { ...named(), createdAt, status: ready ? 'running' : null },
+        session: ready ? session : ancillary === 'missing-session' ? undefined : { ...session, id: null } });
+    });
+    const operation = { kind: 'acquire' as const, name: resource.name, managedId: resource.managedId, ...scope, createdAt: resource.createdAt };
+    const pending = { kind: 'pending', nativeOperationRef: reference(operation) };
+    const acquired = await client.acquire(launch, resource.managedId);
+    expect(acquired).toEqual(pending);
+    // Exercise the strict stored handle boundary, not just an in-memory value.
+    const stored = RECONCILIATION.result.parse(acquired);
+    expect(stored.kind).toBe('pending');
+    if (stored.kind !== 'pending') throw new Error('Expected pending custody');
+    expect(await client.recover(stored.nativeOperationRef.value)).toEqual(pending);
+    ready = true; createdAt = 9999;
+    expect(await client.recover(stored.nativeOperationRef.value)).toEqual(pending);
+    createdAt = resource.createdAt;
+    expect(await client.recover(stored.nativeOperationRef.value)).toEqual({ kind: 'bound', resource: reference(resource) });
+    expect(calls.filter(call => call.init?.method === 'POST')).toHaveLength(1);
   });
   it('observes timed-out retained stop without waking or doing guest IO', async () => {
     const { client, calls } = fixture(url => url.pathname.includes('/snapshots/')
@@ -124,7 +152,8 @@ describe('Vercel retained REST resource', () => {
     const { client } = fixture(() => json({}, 401));
     const operation: VercelOperation = { kind: 'acquire', name: resource.name, managedId: resource.managedId, ...scope };
     expect(await client.recover(operation)).toEqual({ kind: 'pending', nativeOperationRef: reference(operation) });
-    expect(await client.inspect(resource)).toMatchObject({ availability: 'unavailable', reason: 'credential_unavailable' });
+    expect(await client.inspect(resource)).toEqual({ observedAt: 2000, availability: 'unavailable', reason: 'credential_unavailable',
+      nativeCause: { httpStatusClass: '4xx' } });
   });
   it('keeps deletion incomplete while exact owned snapshot survives', async () => {
     const operation: VercelOperation = { kind: 'delete', resource, phase: 'delete', snapshotIds: [snapshot.id] };

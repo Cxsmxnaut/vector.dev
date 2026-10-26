@@ -7,16 +7,19 @@ import { describe, expect, it } from 'vitest';
 import { createPluginTestkit, type PluginTestServicesFixture } from '@happier-dev/plugin-sdk/testing';
 import type { HttpRequest } from '@happier-dev/plugin-sdk/http';
 import { parsePluginManifest } from '@happier-dev/plugin-sdk/manifest';
+import { MachineProvisionerOptionsResultV1Schema, projectMachineProvisionerSelectionV1 } from '@happier-dev/plugin-sdk/machine-provisioners';
 import { deliverManagedNativeFile } from '../../../../apps/cli/src/machines/managed/nativeFileDelivery';
 import { PLUGIN, PLUGIN_MANIFEST, MACHINE_PROVISIONER, ROLE_SCHEMAS } from './index.js';
-import { reference } from './machine/schemas.js';
+import { reference, VercelLaunchSchema } from './machine/schemas.js';
 
 const scope = { teamId: 'team_one', projectId: 'prj_one' };
 const resource = { ...scope, name: 'happier-managed-1', managedId: 'managed-1', createdAt: 1000 };
 const launch = { image: 'vercel/sandbox/universal:latest', region: 'iad1', vcpus: 2, timeoutMs: 300000, snapshotExpirationMs: 0 };
+const dimensions = { size: [], image: [], location: [], network: [], duration: [] };
+const selection = { size: '2', image: launch.image, location: 'iad1', duration: '300000' };
 type Command = { command: string; args: string[]; attachStdin?: boolean; timeout?: number };
 type Execution = { body: Command; stdin: Buffer[]; output?: { status: number; stdout: string; stderr: string }; sessionId: string };
-async function vendor(home?: string, status: { project?: number; team?: number } = {}) {
+async function vendor(home?: string, status: { project?: number; team?: number; accountFailure?: boolean } = {}) {
   const calls: HttpRequest[] = [];
   let currentSessionId = 'sbx_one', power = 'running', gone = false, snapshotGone = false;
   const commands = new Map<string, Execution>();
@@ -28,7 +31,12 @@ async function vendor(home?: string, status: { project?: number; team?: number }
     if (execution.output) return execution.output;
     if (!home) { execution.output = { status: 0, stdout: '', stderr: '' }; return execution.output; }
     try {
-      const output = execFileSync(execution.body.command, execution.body.args, {
+      // REST represents the explicitly requested Linux/AMD64 guest, not the
+      // executor CPU. Keep Home expansion and all filesystem/daemon IO real.
+      const args = execution.body.command === 'sh' && execution.body.args[0] === '-c'
+        && execution.body.args[1] === 'uname -s; uname -m; printf "%s\\n" "$HOME"'
+        ? ['-c', 'printf "%s\\n" Linux x86_64 "$HOME"'] : execution.body.args;
+      const output = execFileSync(execution.body.command, args, {
         input: Buffer.concat(execution.stdin), env: { ...process.env, HOME: home }, encoding: 'utf8',
       });
       execution.output = { status: 0, stdout: output, stderr: '' };
@@ -40,6 +48,7 @@ async function vendor(home?: string, status: { project?: number; team?: number }
   }
   const services = {
     connectedAccounts: { async materialize(_purpose: string, request: { kind: string }) {
+      if (status.accountFailure) throw Object.assign(new Error('private credential details'), { code: 'credential_unavailable' });
       return request.kind === 'environment'
         ? { kind: 'environment' as const, env: { VERCEL_TEAM_ID: scope.teamId, VERCEL_PROJECT_ID: scope.projectId } }
         : { kind: 'httpHeaders' as const, headers: { Authorization: 'Bearer private-controller-token' } };
@@ -98,11 +107,11 @@ describe('public Vercel provisioner composition', () => {
   it.each([{ project: 404 }, { team: 503 }])('distinguishes native options unavailability from an incomplete draft (%j)', async status => {
     const { kit } = await vendor(undefined, status);
     try {
-      expect(await kit.invokeAction('options', launch, { surface: 'plugin' })).toEqual({ choices: [], code: 'provider_unavailable',
+      expect(await kit.invokeAction('options', launch, { surface: 'plugin' })).toEqual({ dimensions, code: 'provider_unavailable',
         nativeCause: { httpStatusClass: status.project ? '4xx' : '5xx' } });
     } finally { await kit.dispose(); }
     const available = await vendor();
-    try { expect(await available.kit.invokeAction('options', {}, { surface: 'plugin' })).toEqual({ choices: [] }); }
+    try { expect(await available.kit.invokeAction('options', {}, { surface: 'plugin' })).toEqual({ dimensions }); }
     finally { await available.kit.dispose(); }
   });
   it('admits strict descriptor/roles and rejects unsupported Suspend and unknown launch fields', () => {
@@ -114,12 +123,30 @@ describe('public Vercel provisioner composition', () => {
     const { kit, calls } = await vendor();
     try {
       expect(await kit.invokeAction('check', {}, { surface: 'plugin' })).toMatchObject({ available: true });
-      expect(await kit.invokeAction('options', launch, { surface: 'plugin' })).toMatchObject({
-        choices: [{ launch, available: true, nativeFacts: { size: { cpuCores: 2, memoryBytes: 4294967296 } } }],
+      const options = MachineProvisionerOptionsResultV1Schema.parse(await kit.invokeAction('options', launch, { surface: 'plugin' }));
+      expect(options).not.toHaveProperty('choices');
+      expect(Object.fromEntries(Object.entries(options.dimensions).map(([key, values]) => [key, values.length])))
+        .toEqual({ size: 1, image: 1, location: 1, network: 0, duration: 1 });
+      const projection = projectMachineProvisionerSelectionV1({ options, selection, launchSchema: VercelLaunchSchema.jsonSchema });
+      expect(projection).toMatchObject({
+        kind: 'ready', launch, nativeFacts: { size: { cpuCores: 2, memoryBytes: 4294967296 } },
       });
+      if (projection.kind !== 'ready') throw new Error('Expected reviewed launch');
+      expect(ROLE_SCHEMAS.acquireInput.parse({ managedId: resource.managedId, launch: projection.launch }).launch).toEqual(launch);
+      expect(projectMachineProvisionerSelectionV1({ options, selection: {}, launchSchema: VercelLaunchSchema.jsonSchema }))
+        .toMatchObject({ kind: 'incomplete' });
       expect(calls).toHaveLength(3);
       expect(calls.every(call => call.method === 'GET' && !/cmd|fs/.test(new URL(call.url).pathname))).toBe(true);
       expect(calls.every(call => call.headers?.authorization === 'Bearer private-controller-token')).toBe(true);
+    } finally { await kit.dispose(); }
+  });
+  it('keeps plan-refused options unavailable through the canonical selection projector', async () => {
+    const { kit, calls } = await vendor();
+    try {
+      const options = MachineProvisionerOptionsResultV1Schema.parse(await kit.invokeAction('options', { ...launch, vcpus: 8 }, { surface: 'plugin' }));
+      expect(projectMachineProvisionerSelectionV1({ options, selection: { ...selection, size: '8' }, launchSchema: VercelLaunchSchema.jsonSchema }))
+        .toMatchObject({ kind: 'unavailable' });
+      expect(calls.every(call => call.method === 'GET')).toBe(true);
     } finally { await kit.dispose(); }
   });
   it('keeps timeout stops resumable through the activated inspector', async () => {
@@ -131,6 +158,15 @@ describe('public Vercel provisioner composition', () => {
       });
       expect(host.calls.every(call => call.method === 'GET' && new URL(call.url).searchParams.get('resume') !== 'true')).toBe(true);
     } finally { await host.kit.dispose(); }
+  });
+  it('projects an inspect credential exception as unknown without asserting absence', async () => {
+    const { kit, calls } = await vendor(undefined, { accountFailure: true });
+    try {
+      expect(await kit.invokeAction('inspect', { resource }, { surface: 'plugin' })).toMatchObject({
+        availability: 'unavailable', reason: 'credential_unavailable',
+      });
+      expect(calls).toEqual([]);
+    } finally { await kit.dispose(); }
   });
   it.skipIf(process.platform === 'win32')('probes actual home and restarts the installed daemon recipe on the same retained filesystem', async () => {
     const home = await mkdtemp(join(tmpdir(), 'vercel-guest-'));

@@ -19,7 +19,8 @@ export const VercelOptionsSchema = defineProtocolObject({ image: image.optional(
 export const VercelResourceSchema = defineProtocolObject({ name, createdAt: timestamp, managedId: text, teamId: text, projectId: text }, closed);
 export const VercelScopeSchema = defineProtocolObject({ teamId: text, projectId: text }, closed);
 export const VercelOperationSchema = defineProtocolUnion([
-  defineProtocolObject({ kind: defineProtocolLiteral('acquire'), name, managedId: text, teamId: text, projectId: text }, closed),
+  defineProtocolObject({ kind: defineProtocolLiteral('acquire'), name, managedId: text, teamId: text, projectId: text,
+    createdAt: timestamp.optional() }, closed),
   defineProtocolObject({ kind: defineProtocolLiteral('delete'), resource: VercelResourceSchema,
     phase: defineProtocolUnion([defineProtocolLiteral('stop'), defineProtocolLiteral('delete')]),
     snapshotIds: defineProtocolArray(text) }, closed),
