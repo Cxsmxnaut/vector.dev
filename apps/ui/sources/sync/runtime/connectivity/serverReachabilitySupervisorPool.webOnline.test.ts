@@ -14,7 +14,8 @@ describe('serverReachabilitySupervisorPool (web online events)', () => {
     });
 
     afterEach(async () => {
-        process.env.EXPO_PUBLIC_HAPPIER_SERVER_REACHABILITY_WAIT_TIMEOUT_MS = previousRetryMs;
+        if (previousRetryMs === undefined) delete process.env.EXPO_PUBLIC_HAPPIER_SERVER_REACHABILITY_WAIT_TIMEOUT_MS;
+        else process.env.EXPO_PUBLIC_HAPPIER_SERVER_REACHABILITY_WAIT_TIMEOUT_MS = previousRetryMs;
         fetchPort.resetRuntimeFetch();
         vi.useRealTimers();
         vi.restoreAllMocks();
@@ -42,7 +43,6 @@ describe('serverReachabilitySupervisorPool (web online events)', () => {
         fetchPort.setRuntimeFetch(runtimeFetchSpy);
 
         const {
-            invalidateAllServerReachabilitySupervisors,
             resetServerReachabilitySupervisors,
             startServerReachabilitySupervisor,
             subscribeServerReachabilityState,
@@ -64,14 +64,11 @@ describe('serverReachabilitySupervisorPool (web online events)', () => {
             return new Response(null, { status: 200, headers: new Headers() });
         });
 
-        // The module is expected to hook the browser 'online' event and call invalidateAllServerReachabilitySupervisors.
+        // Recovery must come from the browser 'online' handler alone; no direct invalidation call.
         expect(typeof handlers.online?.[0]).toBe('function');
         handlers.online?.forEach((handler) => handler());
 
-        // Also ensure the helper works in case the module chooses to delegate to the exported invalidation API.
-        await invalidateAllServerReachabilitySupervisors();
-
-        expect(lastPhase).toBe('online');
+        await vi.waitFor(() => expect(lastPhase).toBe('online'));
 
         unsubscribe();
         await resetServerReachabilitySupervisors();
