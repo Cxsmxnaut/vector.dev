@@ -120,6 +120,8 @@ export type DeepIndexDbHandle = Readonly<{
   /** Every Session id for which this deep index retains a chunk or embedding. */
   listIndexedSessionIds: () => readonly string[];
   hasSessionChunks: (args: Readonly<{ sessionId: string }>) => boolean;
+  /** Exact existence of chunks, embeddings or source progress removed for this Session. */
+  hasSessionIndexData: (sessionId: string) => boolean;
   hasSessionArtifactsOutsidePolicy: (args: Readonly<{ sessionId: string; policyKey: string }>) => boolean;
   pruneSessionArtifacts: (args: Readonly<{
     sessionId: string;
@@ -163,7 +165,7 @@ export type ExternalSourceState = Readonly<{
 export type DeepIndexReader = Pick<DeepIndexDbHandle,
   'getExternalSourceState' | 'listExternalSourceStates' | 'getExternalSourceItemCursor' |
   'loadEmbeddings' | 'listChunksWithoutEmbeddings' | 'getDeepIndexStats' | 'getDocumentFactCounts' |
-  'searchDocuments' | 'listIndexedSessionIds' | 'hasSessionChunks' | 'hasSessionArtifactsOutsidePolicy' |
+  'searchDocuments' | 'listIndexedSessionIds' | 'hasSessionChunks' | 'hasSessionIndexData' | 'hasSessionArtifactsOutsidePolicy' |
   'search' | 'close'>;
 
 function normalizeQuery(raw: string): string {
@@ -438,6 +440,7 @@ export function openDeepIndexReader(args: Readonly<{ dbPath: string }>): DeepInd
       searchDocuments: handle.searchDocuments,
       listIndexedSessionIds: handle.listIndexedSessionIds,
       hasSessionChunks: handle.hasSessionChunks,
+      hasSessionIndexData: handle.hasSessionIndexData,
       hasSessionArtifactsOutsidePolicy: handle.hasSessionArtifactsOutsidePolicy,
       search: handle.search,
       close: handle.close,
@@ -514,6 +517,11 @@ function createDeepIndexDbHandle(db: SqliteDatabaseSync): DeepIndexDbHandle {
   const deleteSessionChunksStmt = db.prepare(`DELETE FROM message_chunks WHERE sessionId = ?;`);
   const deleteSessionEmbeddingsStmt = db.prepare(`DELETE FROM chunk_embeddings WHERE sessionId = ?;`);
   const hasSessionChunksStmt = db.prepare('SELECT 1 FROM message_chunks WHERE sessionId = ? LIMIT 1;');
+  const hasSessionIndexDataStmt = db.prepare(`
+    SELECT EXISTS(SELECT 1 FROM message_chunks WHERE sessionId = ?)
+      OR EXISTS(SELECT 1 FROM chunk_embeddings WHERE sessionId = ?)
+      OR EXISTS(SELECT 1 FROM external_source_state WHERE sessionId = ?) AS present;
+  `);
   const listIndexedSessionIdsStmt = db.prepare(`
     SELECT sessionId FROM message_chunks
     UNION
@@ -914,6 +922,10 @@ function createDeepIndexDbHandle(db: SqliteDatabaseSync): DeepIndexDbHandle {
       return doomed.length > 0;
     },
     hasSessionChunks: ({ sessionId }) => Boolean(hasSessionChunksStmt.get(sessionId)),
+    hasSessionIndexData: sessionId => {
+      const row = hasSessionIndexDataStmt.get(sessionId, sessionId, sessionId) as { present: number };
+      return row.present === 1;
+    },
     listIndexedSessionIds: () => {
       const rows = listIndexedSessionIdsStmt.all() as Array<{ sessionId?: unknown }>;
       const out: string[] = [];
