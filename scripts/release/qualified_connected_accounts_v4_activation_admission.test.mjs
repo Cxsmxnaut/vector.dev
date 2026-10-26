@@ -89,7 +89,7 @@ test('qualified V4 activation admission pins current envelope reader, exact kind
           absent: false,
         },
         {
-          path: 'packages/protocol/src/sessions/metadata/sessionMetadataEnvelopesV1.ts',
+          path: 'packages/protocol/src/sessions/metadata/sessionMetadataSchemasV1.ts',
           content: 'export const SESSION_METADATA_LAYOUT_VERSION_V1 = 1 as const;',
           absent: false,
         },
