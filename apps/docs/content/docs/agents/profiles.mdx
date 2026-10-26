@@ -156,19 +156,21 @@ Required config environment variables must already exist in the shell environmen
 
 ### Bind a saved secret on iOS
 
-The profile editor exposes the binding on the variable's card, after you add the variable. The initial **Add Variable** form only asks for its name and value.
+In **unreleased development source**, **Add Variable** uses the same full editor as an existing variable, so you can configure its saved secret before adding it to the profile draft.
 
-1. Save the credential in **Settings → Secrets**.
+1. Save the credential in **Settings → Secrets**, or create it from the picker below.
 2. Open **Settings → Profiles** and add or edit a profile.
-3. Under **Environment Variables**, tap **Add Variable**, enter the variable name (for example, `OPENAI_API_KEY`), leave **Value** empty, and tap **Save**. This adds the variable to the profile draft.
-4. On the new variable's card, turn on **Use secret vault**. This also turns on **Required** and replaces the value input with a **Default secret** picker.
-5. Tap **Default secret** and select your saved secret. The card shows the secret's name rather than its value.
-6. Save the profile using the checkmark in the screen header. When editing a built-in profile, save it as a custom copy with a distinct name.
+3. Under **Environment Variables**, tap **Add Variable** and enter the variable name (for example, `OPENAI_API_KEY`).
+4. Turn on **Use secret vault**. This also turns on **Required** and replaces the value input with a **Default secret** picker.
+5. Tap **Default secret** and select or create a saved secret. The card shows the secret's name rather than its value.
+6. Tap **Save** to add the configured variable, then save the profile using the checkmark in the screen header. When editing a built-in profile, save it as a custom copy with a distinct name.
 7. Start a new session, select the daemon machine and this profile, and review the secret selection before starting.
+
+Canceling **Add Variable** discards its variable configuration and binding. A secret created in the picker remains saved in **Settings → Secrets**.
 
 These controls are also used by the Android and web profile editors. **Hide value in UI** only masks a value; use **Use secret vault** to bind a saved secret without storing its value in the profile. Changing a binding affects future starts, not sessions that are already running.
 
-If the controls are missing after adding the variable, include your app version and release channel when reporting it. Do not paste the credential into the profile value, an issue, or a session message.
+On builds where **Add Variable** only shows **Name** and **Value**, enter the name, leave the value empty, and save the variable first. Then configure **Use secret vault** and **Default secret** on its card before saving the profile. If those controls are still missing, include your app version and release channel when reporting it. Do not paste the credential into the profile value, an issue, or a session message.
 
 Profiles work best with saved secrets:
 
