@@ -328,7 +328,7 @@ describe('createExternalSessionTerminalFollowProjector', () => {
         return { projected: true as const };
       },
     });
-    const peerItem = (id: string, peer: unknown) => ({ id, localId: `${id}-fact`, timestampMs: 12, kind: 'agent' as const,
+    const peerItem = (id: string, peer: Readonly<Record<string, string | number | boolean | null>>) => ({ id, localId: `${id}-fact`, timestampMs: 12, kind: 'agent' as const,
       data: { role: 'agent', content: { type: 'acp', agentId: 'claude', data: { type: 'message', message: 'Tests are blocked.', peer } } } });
     await publish({ kind: 'data', phase: 'initial_replay', fromCursor: null, nextCursor: 'cursor-1',
       items: [peerItem('teammate', { name: 'pr4', handback: false }), peerItem('malformed', { name: 7 })] });

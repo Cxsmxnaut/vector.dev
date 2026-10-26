@@ -93,6 +93,13 @@ describe('Claude native transcript semantic projection', () => {
         data: { type: 'message', message: CLAUDE_HANDBACK_REPORT, peer: { name: 'general-purpose', handback: true } } } } }]);
   });
 
+  it('keeps a delivered message whose sender name exceeds the transcript limit, without the name', () => {
+    const row = claudeTeammateUserRow();
+    const named = { ...row, origin: { ...row.origin, name: 'n'.repeat(8_001) } };
+    expect(classifyClaudeNativeTranscriptRow(named)).toMatchObject({
+      content: { kind: 'peer_message', text: 'Tests are blocked.', peer: { name: null, handback: false } } });
+  });
+
   it('projects a native teammate message without its delivery sentence or harness trailer', () => {
     expect(classifyClaudeNativeTranscriptRow(claudeTeammateUserRow())).toMatchObject({
       content: { kind: 'peer_message', text: 'Tests are blocked.', peer: { name: 'pr4', handback: false } } });

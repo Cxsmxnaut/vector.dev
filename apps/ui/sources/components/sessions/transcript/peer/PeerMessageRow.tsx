@@ -10,8 +10,14 @@ export const PeerMessageRow = React.memo(function PeerMessageRow(props: {
     createdAt: number;
     peer: TranscriptPeerSenderV1;
     summary: string;
+    /** Changes when transcript find reveals a match in this message; each reveal opens the row. */
+    revealRequestId?: number | string;
     children: React.ReactNode;
 }) {
+    const [expanded, setExpanded] = React.useState(false);
+    React.useEffect(() => {
+        if (props.revealRequestId !== undefined) setExpanded(true);
+    }, [props.revealRequestId]);
     const name = props.peer.name ?? t('sessionInfo.peerUnnamedSender');
     return (
         <ThinkingTimelineRow
@@ -20,6 +26,8 @@ export const PeerMessageRow = React.memo(function PeerMessageRow(props: {
             label={props.peer.handback ? t('sessionInfo.peerReportFrom', { name }) : t('sessionInfo.peerMessageFrom', { name })}
             summary={props.summary}
             expandedByDefault={false}
+            expanded={expanded}
+            onExpandedChange={setExpanded}
             pulseEnabled={false}
             chrome="card"
             icon={props.peer.handback ? 'robot' : 'chat-circle'}

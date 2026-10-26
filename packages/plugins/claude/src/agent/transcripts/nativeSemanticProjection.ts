@@ -1,3 +1,4 @@
+import { readTranscriptPeerSenderV1 } from '@happier-dev/protocol/sessions/messages/transcriptPeerSenderV1';
 import { readClaudeProviderIdentityValue } from '../../protocol/providerIdentity.js';
 import { readSessionHookSidechainAgentId } from '../hooks/sidechain.js';
 import {
@@ -172,12 +173,11 @@ export function readClaudeNativePeerMessage(value: unknown): ClaudeNativePeerMes
   // Native peer origin carries the delivered body without its wrapper or harness guidance.
   const delivered = readString(nativePeer?.body) ?? crossSession?.[2] ?? agentMessage?.[2] ?? text;
   const handback = nativePeer?.handback === true;
+  const name = readString(nativePeer?.name) ?? readString(crossSessionAttributes?.get('from-name')) ?? null;
   return {
     text: handback && nativePeer ? readHandbackReport(nativePeer, delivered) : delivered,
-    peer: {
-      name: readString(nativePeer?.name) ?? readString(crossSessionAttributes?.get('from-name')) ?? null,
-      handback,
-    },
+    // A sender the transcript contract cannot carry is dropped; the delivered text still lands.
+    peer: readTranscriptPeerSenderV1({ name, handback }) ?? { name: null, handback },
   };
 }
 

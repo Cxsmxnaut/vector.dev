@@ -1456,6 +1456,7 @@ function AgentTextBlock(props: {
                   createdAt={props.message.createdAt}
                   peer={props.message.peer}
                   summary={deriveThinkingSummary(markdown)}
+                  revealRequestId={findRevealId}
                 >
                   <MarkdownView
                     markdown={markdown}

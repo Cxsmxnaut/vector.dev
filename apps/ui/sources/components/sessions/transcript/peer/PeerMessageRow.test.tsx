@@ -25,7 +25,19 @@ describe('PeerMessageRow', () => {
         expect(collapsed).toContain(label);
         expect(collapsed).toContain('Verdict: fixed.');
         expect(collapsed).not.toContain('FULL_BODY');
+        const header = () => screen.findHostByTestId('transcript-peer-message-header');
+        expect(header().props).toMatchObject({ accessibilityRole: 'button', accessibilityState: { expanded: false } });
         await screen.pressByTestIdAsync('transcript-peer-message-header');
+        expect(collectHostText(screen.tree).join(' ')).toContain('FULL_BODY');
+        expect(header().props.accessibilityState).toEqual({ expanded: true });
+    });
+
+    it('opens when transcript find reveals a match inside the delivered body', async () => {
+        const screen = await renderScreen(
+            <PeerMessageRow id="m1" createdAt={1} peer={{ name: 'pr4', handback: false }} summary="Verdict: fixed." revealRequestId={1}>
+                <Text>FULL_BODY</Text>
+            </PeerMessageRow>,
+        );
         expect(collectHostText(screen.tree).join(' ')).toContain('FULL_BODY');
     });
 });

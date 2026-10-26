@@ -39,6 +39,8 @@ export const ThinkingTimelineRow = React.memo(function ThinkingTimelineRow(props
         <View style={[styles.container, chrome === 'plain' ? styles.containerPlain : styles.containerCard]}>
             <Pressable
                 testID={props.headerTestID ?? 'transcript-thinking-header'}
+                accessibilityRole="button"
+                accessibilityState={{ expanded }}
                 onPress={() => setExpanded(!expanded)}
                 style={({ pressed }) => [styles.header, pressed && styles.headerPressed]}
             >
