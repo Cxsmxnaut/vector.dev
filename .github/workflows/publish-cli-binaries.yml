@@ -339,7 +339,7 @@ jobs:
       - name: Upload exact launcher artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: windows-service-launcher-${{ needs.prepare.outputs.source_sha }}
+          name: cli-windows-service-launcher-${{ needs.prepare.outputs.source_sha }}
           path: packages/cli-common/native/windows/bin/windows-x64/happier-service-launcher.exe
           if-no-files-found: error
           retention-days: 2
@@ -370,7 +370,7 @@ jobs:
       - name: Download exact Windows service launcher
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          name: windows-service-launcher-${{ needs.prepare.outputs.source_sha }}
+          name: cli-windows-service-launcher-${{ needs.prepare.outputs.source_sha }}
           path: packages/cli-common/native/windows/bin/windows-x64
       - name: Setup Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
