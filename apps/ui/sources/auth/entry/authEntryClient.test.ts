@@ -12,10 +12,12 @@ const { TokenStorage } = await import('@/auth/storage/tokenStorage');
 const { upsertServerProfile } = await import('@/sync/domains/server/serverProfiles');
 const { upsertAndActivateServer } = await import('@/sync/domains/server/serverRuntime');
 const { fetchAuthEntry, fetchHomeAuthEntry } = await import('./authEntryClient');
+const { resetServerReachabilitySupervisors } = await import('@/sync/runtime/connectivity/serverReachabilitySupervisorPool');
 
 type SentRequest = Readonly<{ url: string; method: string; body: unknown; authorization: string | null }>;
 const sent: SentRequest[] = [];
 let answer: (url: URL) => Response = () => new Response('{}', { status: 404 });
+let reachabilityAnswers = true;
 
 function unavailableProjection(scope: Readonly<{ kind: string }>) {
     return Response.json({ v: 1, state: 'unavailable', scope, reason: 'entry_not_available', autoRedirect: null });
@@ -28,6 +30,7 @@ function entryRequests(): SentRequest[] {
 beforeEach(async () => {
     sent.length = 0;
     answer = () => new Response('{}', { status: 404 });
+    reachabilityAnswers = true;
     setRuntimeFetch(async (input, init) => {
         const url = new URL(String(input));
         sent.push({
@@ -38,7 +41,9 @@ beforeEach(async () => {
         });
         if (url.pathname === '/v1/auth/entry') return answer(url);
         // A Plain Account Home: the request authority observes its Account encryption currentness.
-        if (url.pathname === '/health' || url.pathname === '/v1/auth/ping') return Response.json({ ok: true });
+        if (url.pathname === '/health' || url.pathname === '/v1/auth/ping') {
+            return reachabilityAnswers ? Response.json({ ok: true }) : await new Promise<Response>(() => {});
+        }
         if (url.pathname === '/v1/account/encryption') return Response.json({ mode: 'plain', updatedAt: 1 });
         if (url.pathname === '/v1/account/encryption/currentness') return Response.json(createPlainAccountEncryptionCurrentnessFixture());
         return new Response('{}', { status: 404 });
@@ -87,6 +92,16 @@ describe('fetchHomeAuthEntry', () => {
     it('reports endpoint absence separately so released Home fallback stays bounded', async () => {
         answer = () => new Response('', { status: 404 });
         await expect(fetchHomeAuthEntry()).resolves.toEqual({ kind: 'unsupported' });
+    });
+
+    it('asks for the projection without waiting on focused-Home reachability supervision', async () => {
+        // The sign-in screen needs the entry projection while the Home's reachability probes are still unanswered.
+        await resetServerReachabilitySupervisors();
+        reachabilityAnswers = false;
+        answer = () => unavailableProjection({ kind: 'home' });
+
+        await expect(fetchHomeAuthEntry()).resolves.toMatchObject({ kind: 'ready' });
+        expect(sent.map(({ url }) => new URL(url).pathname)).toEqual(['/v1/auth/entry']);
     });
 
     it('forwards a Home email hint to the existing entry authority without choosing a provider locally', async () => {

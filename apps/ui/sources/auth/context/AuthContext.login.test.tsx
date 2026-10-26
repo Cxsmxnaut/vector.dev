@@ -473,6 +473,26 @@ describe('AuthContext.login', () => {
         }
     });
 
+    it('retires the focused Sync identity before logout resolves', async () => {
+        const { home } = await prepareHomes('home');
+        await focusHome(home);
+        const homeCredentials = { token: buildTokenWithSub('home-a') };
+        await storeCredentials(home, homeCredentials);
+        await connection.switchConnectionToActiveServer();
+        expect(sync.getCredentials()).toEqual(homeCredentials);
+        const screen = await mountAuth(homeCredentials);
+        let syncCredentialsWhenLogoutResolved: unknown = 'unobserved';
+        try {
+            await act(async () => {
+                await getCurrentAuth()!.logout();
+                syncCredentialsWhenLogoutResolved = sync.getCredentials();
+            });
+            expect(syncCredentialsWhenLogoutResolved).toBeNull();
+        } finally {
+            await screen.unmount();
+        }
+    });
+
     it('keeps the newly focused Home and Account Service credentials when an earlier Home logout resumes', async () => {
         const { a: homeA, b: homeB } = await prepareHomes('a', 'b');
         const homeACredentials = { token: buildTokenWithSub('home-a') };
