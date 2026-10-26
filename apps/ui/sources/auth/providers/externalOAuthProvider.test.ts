@@ -436,15 +436,32 @@ describe('createExternalOAuthProvider', () => {
     );
 
     it.each([
-        { label: 'empty replacement token', body: { success: true, token: '' } },
-        { label: 'blank replacement token', body: { success: true, token: '   ' } },
-    ])('rejects successful finalize responses with incomplete credential material ($label)', async ({ body }) => {
-        stubFetch(async () => ({ ok: true, status: 200, body }));
+        { label: 'empty replacement token', response: { ok: true, status: 200, body: { success: true, token: '' } } },
+        { label: 'blank replacement token', response: { ok: true, status: 200, body: { success: true, token: '   ' } } },
+        { label: 'unexpected server status', response: { ok: false, status: 500, body: { error: 'internal' } } },
+    ])('fails a server-answered finalize without re-sending the one-shot grant ($label)', async ({ response }) => {
+        const fetchMock = stubFetch(async () => response);
 
         const provider = createProvider();
         await expect(
             provider.finalizeConnect({ token: 't', secret: 's' }, { pending: 'pending-1', username: 'octocat' }),
         ).rejects.toThrow('Failed to finalize');
+        expect(fetchMock.mock.calls.filter(([input]) => String(input).endsWith('/finalize'))).toHaveLength(1);
+    });
+
+    it('retries a finalize the server never answered', async () => {
+        let attempts = 0;
+        const fetchMock = stubFetch(async () => {
+            attempts += 1;
+            if (attempts === 1) throw new TypeError('Failed to fetch');
+            return { ok: true, status: 200, body: { success: true } };
+        });
+
+        const provider = createProvider();
+        await expect(
+            provider.finalizeConnect({ token: 't', secret: 's' }, { pending: 'pending-1', username: 'octocat' }),
+        ).resolves.toEqual({});
+        expect(fetchMock.mock.calls.filter(([input]) => String(input).endsWith('/finalize'))).toHaveLength(2);
     });
 
     it.each([
@@ -466,5 +483,16 @@ describe('createExternalOAuthProvider', () => {
                 message: error,
             } satisfies Partial<HappyError>),
         );
+    });
+
+    it.each([
+        { label: 'malformed success body', response: { ok: true, status: 200, body: { success: false } } },
+        { label: 'unexpected server status', response: { ok: false, status: 500, body: { error: 'internal' } } },
+    ])('fails a server-answered disconnect without re-sending it ($label)', async ({ response }) => {
+        const fetchMock = stubFetch(async () => response);
+
+        const provider = createProvider();
+        await expect(provider.disconnect({ token: 't', secret: 's' })).rejects.toThrow('Failed to disconnect');
+        expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'DELETE')).toHaveLength(1);
     });
 });

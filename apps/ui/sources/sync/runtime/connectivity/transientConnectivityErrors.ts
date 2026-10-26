@@ -11,6 +11,18 @@ export class RetryableServerResponseError extends Error {
     }
 }
 
+/** A server answer to a request that must not be re-sent: it may already have taken effect. */
+export class NonRetryableServerResponseError extends Error {
+    readonly status: number;
+    readonly retryable = false;
+
+    constructor(status: number, message: string) {
+        super(message);
+        this.name = 'NonRetryableServerResponseError';
+        this.status = status;
+    }
+}
+
 export function isTransientConnectivityError(error: unknown): boolean {
     if (isTerminalAuthError(error)) {
         return false;
