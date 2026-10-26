@@ -43,10 +43,6 @@ function readScmAutoRefreshProjectMinIntervalMs(): number {
     return Math.min(MAX_SCM_AUTO_REFRESH_PROJECT_MIN_INTERVAL_MS, parsed);
 }
 
-export { ATTRIBUTION_INVALIDATION_WINDOW_MS, shouldAttributeChangedPaths } from './sync/attribution';
-export { isSessionPathWithinRepoRoot } from './sync/paths';
-export { collectChangedPaths } from './sync/snapshotDiff';
-
 export class ScmStatusSync {
     // Map project keys to sync instances
     private projectSyncMap = new Map<string, InvalidateSync>();
@@ -233,11 +229,7 @@ export class ScmStatusSync {
         snapshot: ScmWorkingSnapshot,
     ): void {
         const state = storage.getState();
-        const existingSnapshot =
-            typeof state.getSessionProjectScmSnapshot === 'function'
-                ? state.getSessionProjectScmSnapshot(sessionId)
-                : null;
-        if (existingSnapshot) return;
+        if (state.getSessionProjectScmSnapshot(sessionId)) return;
         this.publishSnapshotToSession(state, sessionId, snapshot);
     }
 
@@ -587,7 +579,7 @@ export class ScmStatusSync {
             const signature = buildSnapshotSignature(snapshot);
             const previousSignature = this.projectSnapshotSignature.get(activeProjectKey);
             const signatureChanged = signature !== previousSignature;
-            const scopedSessionIdsMissingSnapshot = signatureChanged || typeof state.getSessionProjectScmSnapshot !== 'function'
+            const scopedSessionIdsMissingSnapshot = signatureChanged
                 ? []
                 : scopeSessionIds.filter((scopedSessionId) => state.getSessionProjectScmSnapshot(scopedSessionId) == null);
             const publishSessionIds = signatureChanged ? scopeSessionIds : scopedSessionIdsMissingSnapshot;

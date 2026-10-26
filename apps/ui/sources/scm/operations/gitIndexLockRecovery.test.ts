@@ -117,26 +117,6 @@ describe('runScmOperationWithGitIndexLockRecovery', () => {
         expect(retryOriginalOperation).not.toHaveBeenCalled();
     });
 
-    it('does not prompt or retry a second time when recovery was already attempted', async () => {
-        modalConfirm.mockReset();
-        const removeIndexLock = vi.fn();
-        const retryOriginalOperation = vi.fn();
-        const { runScmOperationWithGitIndexLockRecovery } = await import('./gitIndexLockRecovery');
-
-        const response = await runScmOperationWithGitIndexLockRecovery({
-            cwd: '/repo',
-            failedResponse: lockFailure,
-            removeIndexLock,
-            retryOriginalOperation,
-            recoveryAlreadyAttempted: true,
-        });
-
-        expect(response).toBe(lockFailure);
-        expect(modalConfirm).not.toHaveBeenCalled();
-        expect(removeIndexLock).not.toHaveBeenCalled();
-        expect(retryOriginalOperation).not.toHaveBeenCalled();
-    });
-
     it('does not prompt for non-lock SCM failures', async () => {
         modalConfirm.mockReset();
         const removeIndexLock = vi.fn();

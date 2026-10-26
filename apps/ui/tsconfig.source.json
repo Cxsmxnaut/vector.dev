@@ -3263,7 +3263,6 @@
     "sources/scm/backends/sapling/settingsPlugin.ts",
     "sources/scm/operations/scmOperationsTestHelpers.ts",
     "sources/scm/repository/repositoryScmTestHelpers.ts",
-    "sources/scm/scmSafety.ts",
     "sources/scm/scmUserFacingErrors.ts",
     "sources/scm/settings/scmBackendSettingsPlugin.ts",
     "sources/scm/settings/scmBackendSettingsRegistry.ts",
