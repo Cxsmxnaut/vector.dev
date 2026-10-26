@@ -45,7 +45,10 @@ A hand-back from an async Agent launch the task projector has already correlated
 waits for Claude's terminal task notification or task-status evidence. That outcome
 puts the report on the Agent card while preserving success, failure or cancellation;
 the report alone does not settle the task. A stopped `SendMessage` response keeps
-its own tool result alongside the child's outcome. Hand-backs without a known launch
+its own tool result alongside the child's outcome. Native system and queued
+representations of that outcome settle the current execution once. A native task
+start reopens correlation when Claude resumes the same task and tool. Hand-backs without
+an active launch correlation
 (after a resume, a CLI restart, terminal settlement or in stateless history paging)
 stay standalone peer cards.
 

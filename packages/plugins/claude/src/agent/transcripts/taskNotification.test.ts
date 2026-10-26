@@ -50,12 +50,15 @@ describe('Claude task notification projector (subagent hand-backs)', () => {
     projector.project(claudeAsyncAgentLaunchAck({ toolUseId: 'toolu_a1' }));
     projector.project(claudeHandbackUserRow({ withReportText: true }));
     const response = { success: false, message: "Agent a1 was stopped by the user and won't be resumed." };
-    const projected = projector.project({ type: 'user', uuid: 'failed-send', toolUseResult: response,
-      message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'send-message', content: response.message, is_error: true }] } });
+    const stoppedSend = { type: 'user', uuid: 'failed-send', toolUseResult: response,
+      message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'send-message', content: response.message, is_error: true }] } };
+    const projected = projector.project(stoppedSend);
     expect(extractToolResultBlocksFromSdkMessage(projected?.message)).toEqual([
       { toolUseId: 'send-message', output: { content: response.message, tool_use_result: response }, isError: true },
       { toolUseId: 'toolu_a1', output: { status: 'cancelled', result: CLAUDE_HANDBACK_REPORT }, isError: true },
     ]);
+    // A later native representation must leave SendMessage's own failure visible.
+    expect(projector.project({ ...stoppedSend, uuid: 'another-stopped-send' })).toBeNull();
   });
 
   it('leaves an unlinked hand-back to the peer message projection and keeps an ordinary completion', () => {
@@ -83,10 +86,34 @@ describe('Claude task notification projector (subagent hand-backs)', () => {
     const projector = createClaudeTaskNotificationToolResultProjector();
     projector.project(claudeAsyncAgentLaunchAck({ toolUseId: 'toolu_a1' }));
     projector.project(claudeHandbackUserRow({ withReportText: true }));
+    projector.project(claudeHandbackPointerNotification({ toolUseId: 'toolu_a1' }));
     projector.project({ type: 'user', uuid: 'resume', toolUseResult: { resumedAgentId: 'a1' },
       message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'toolu_send', content: 'resumed' }] } });
     projector.project(claudeAsyncAgentLaunchAck({ toolUseId: 'toolu_a1_resumed', uuid: 'ack-2' }));
     expect(projector.project(claudeHandbackPointerNotification({ toolUseId: 'toolu_a1_resumed', uuid: 'pointer-2' }))).toMatchObject({
       message: { message: { content: [{ type: 'tool_result', tool_use_id: 'toolu_a1_resumed' }] } } });
+  });
+
+  it.each([
+    ['a different launch', claudeAsyncAgentLaunchAck({ toolUseId: 'new-tool', uuid: 'new-ack' }), 'new-tool'],
+    ['a native execution restart with the same tool', {
+      type: 'system', subtype: 'task_started', uuid: 'native-restart', task_id: 'a1', tool_use_id: 'toolu_a1', run_id: 'new-native-run',
+    }, 'toolu_a1'],
+  ] as const)('keeps repeated ACKs and unrelated completions settled, but admits %s', (_label, nextLaunch, nextToolUseId) => {
+    const projector = createClaudeTaskNotificationToolResultProjector();
+    projector.project(claudeAsyncAgentLaunchAck({ toolUseId: 'toolu_a1' }));
+    projector.project(claudeHandbackUserRow({ withReportText: true }));
+    projector.project(claudeHandbackPointerNotification({ toolUseId: 'toolu_a1' }));
+    projector.project(claudeAsyncAgentLaunchAck({ toolUseId: 'toolu_a1', uuid: 'duplicate-ack' }));
+    expect(projector.project(claudeHandbackUserRow({ withReportText: true, uuid: 'late-handback' }))).toBeNull();
+    expect(projector.project(claudeHandbackPointerNotification({ toolUseId: 'other-tool' }))).toMatchObject({
+      message: { message: { content: [{ tool_use_id: 'other-tool' }] } },
+    });
+    expect(projector.project(claudeHandbackPointerNotification({ toolUseId: 'toolu_a1', uuid: 'second-terminal' }))).toEqual({ message: null });
+    projector.project(nextLaunch);
+    expect(projector.project(claudeHandbackUserRow({ withReportText: true, uuid: 'new-report' }))).toEqual({ message: null });
+    expect(projector.project(claudeHandbackPointerNotification({ toolUseId: nextToolUseId, uuid: 'new-terminal' }))).toMatchObject({
+      message: { message: { content: [{ ...reportResult, tool_use_id: nextToolUseId }] } },
+    });
   });
 });

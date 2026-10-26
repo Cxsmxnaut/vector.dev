@@ -248,23 +248,33 @@ export function projectClaudeTaskLifecycleToolResult(value: unknown, correlatedT
 
 /** Conversation correlation only; activity admission remains with the native lifecycle owner. */
 export function createClaudeTaskNotificationToolResultProjector() {
-  const tasks = new Map<string, { toolUseId?: string; sidechainId?: string; unroutedNotification?: unknown; report?: string }>();
+  const tasks = new Map<string, { toolUseId?: string; sidechainId?: string; unroutedNotification?: unknown; report?: string; settled?: true }>();
   return {
     clear: () => tasks.clear(),
     project(value: unknown, observedSidechain?: Readonly<{ sidechainId: string }>): Readonly<{ message: RawJSONLines | null }> | null {
       const row = readRecord(value);
       const fact = readClaudeTaskLifecycleEnvelope(value);
-      if (!row || (row.isSidechain === true && !observedSidechain) || !fact) return null;
-      if (observedSidechain && readString(row.sidechainId) && readString(row.sidechainId) !== observedSidechain.sidechainId) return null;
+      if (!row || !fact) return null;
+      if ((row.isSidechain === true && !observedSidechain)
+        || (observedSidechain && readString(row.sidechainId) && readString(row.sidechainId) !== observedSidechain.sidechainId)) {
+        return fact.subtype === 'task_notification' ? { message: null } : null;
+      }
       const task = fact.taskId ? tasks.get(fact.taskId) ?? {} : null;
       if (fact.subtype === 'agent-resume' && task) {
         delete task.unroutedNotification;
         delete task.report;
+        delete task.settled;
         delete task.toolUseId;
         delete task.sidechainId;
         return null;
       }
       if ((fact.subtype === 'async-launch' || fact.subtype === 'task_started') && fact.taskId && fact.toolUseId && task) {
+        // Native starts identify a new execution, including automatic wakes that
+        // reuse the prior tool ID without a separate SendMessage response.
+        if (fact.subtype === 'task_started' || task.toolUseId !== fact.toolUseId) {
+          delete task.report;
+          delete task.settled;
+        }
         task.toolUseId = fact.toolUseId;
         task.sidechainId = observedSidechain?.sidechainId;
         tasks.set(fact.taskId, task);
@@ -272,11 +282,14 @@ export function createClaudeTaskNotificationToolResultProjector() {
         delete task.unroutedNotification;
         if (!pending) return null;
         const message = projectClaudeTaskLifecycleToolResult(pending, fact.toolUseId, observedSidechain, task.report);
-        if (message) tasks.delete(fact.taskId);
+        if (message) {
+          task.settled = true;
+          delete task.report;
+        }
         return { message };
       }
       if (fact.subtype === 'handback') {
-        const report = task?.toolUseId ? readClaudeNativePeerMessage(row)?.text : null;
+        const report = task?.toolUseId && !task.settled ? readClaudeNativePeerMessage(row)?.text : null;
         if (!task?.toolUseId || !report || (fact.toolUseId && fact.toolUseId !== task.toolUseId)) return null;
         // A report is not terminal evidence. The existing correlation retains it
         // until Claude supplies the actual success, failure or cancellation.
@@ -285,6 +298,12 @@ export function createClaudeTaskNotificationToolResultProjector() {
       }
       if (!isClaudeTaskLifecycleResultEnvelope(fact)) return null;
       const correlatedTask = task && (!fact.toolUseId || fact.toolUseId === task.toolUseId) ? task : null;
+      if (correlatedTask?.settled && ['complete', 'failed', 'cancelled'].includes(fact.status)) {
+        // Claude emits a system terminal edge and a queued XML representation
+        // for the same invocation. Only the first settles its conversation tool.
+        // A SendMessage response still owns its separate, visible tool result.
+        return row.type === 'user' && fact.subtype === 'task_status' ? null : { message: null };
+      }
       const scope = observedSidechain ?? (task?.sidechainId
         && (!fact.toolUseId || fact.toolUseId === task.toolUseId) ? { sidechainId: task.sidechainId } : undefined);
       const projected = projectClaudeTaskLifecycleToolResult(value, correlatedTask?.toolUseId, scope, correlatedTask?.report);
@@ -293,7 +312,10 @@ export function createClaudeTaskNotificationToolResultProjector() {
         task.unroutedNotification = value;
         tasks.set(fact.taskId, task);
       }
-      if (projected && fact.taskId && correlatedTask) tasks.delete(fact.taskId);
+      if (projected && fact.taskId && correlatedTask) {
+        correlatedTask.settled = true;
+        delete correlatedTask.report;
+      }
       // A SendMessage response remains visible when its child's launch is not known.
       return projected || row.type !== 'user' || fact.subtype === 'task_notification' ? { message: projected } : null;
     },

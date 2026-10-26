@@ -400,7 +400,7 @@ describe('bindClaudeAgentSdkFallbackSession', () => {
     } finally { subscription.dispose(); await session.dispose(); }
   });
 
-  it.each(['completed', 'failed'] as const)('settles a background Agent only on its %s notification and keeps later hand-backs standalone', async (status) => {
+  it.each(['completed', 'failed', 'stopped'] as const)('settles a background Agent only on its %s notification and keeps later hand-backs standalone', async (status) => {
     const exec = createSdkExecFixture();
     const ctx = createPluginContextFixture(createTerminalHostFixture().service, createEventsFixture().service, { exec: exec.service });
     const operations = createClaudeAgentSdkProviderOperations({ ctx, directory: '/tmp/claude-project', launchEnv: {},
@@ -422,7 +422,13 @@ describe('bindClaudeAgentSdkFallbackSession', () => {
       expect(events.filter(event => event.kind === 'transcript-message-committed' && event.peer)).toHaveLength(0);
       const notification = claudeHandbackPointerNotification({ toolUseId: 'toolu_a1' });
       notification.attachment.prompt = notification.attachment.prompt.replace('completed', status);
-      await exec.emit({ ...notification, session_id: sessionId });
+      // Claude 2.1.310 emits a native terminal edge, then forwards the queued
+      // XML pointer as a distinct replay-user-message for the same task/tool.
+      await exec.emit({ type: 'system', subtype: 'task_notification', task_id: 'a1', tool_use_id: 'toolu_a1',
+        status, summary: 'Native terminal summary', uuid: 'terminal-edge', session_id: sessionId });
+      await exec.emit({ type: 'user', uuid: 'terminal-pointer-user', session_id: sessionId, isReplay: true,
+        origin: { kind: 'task-notification', producer: 'session-task' },
+        message: { role: 'user', content: notification.attachment.prompt } });
       await exec.emit(claudeHandbackUserRow({ withReportText: false, taskId: 'unlinked', uuid: 'handback-unlinked', sessionId }));
       await vi.waitFor(() => expect(events).toEqual(expect.arrayContaining([
         expect.objectContaining({ kind: 'transcript-message-committed', role: 'assistant', text: CLAUDE_HANDBACK_REPORT,
@@ -430,8 +436,8 @@ describe('bindClaudeAgentSdkFallbackSession', () => {
       ])));
       const agentResults = events.filter(event => event.kind === 'tool-result' && event.toolCallId === 'toolu_a1');
       expect(agentResults.at(-1)).toMatchObject({ output: status === 'completed' ? CLAUDE_HANDBACK_REPORT
-        : expect.objectContaining({ tool_use_result: { status: 'failed', result: CLAUDE_HANDBACK_REPORT } }) });
-      expect(agentResults.at(-1)?.isError === true).toBe(status === 'failed');
+        : expect.objectContaining({ tool_use_result: { status: status === 'stopped' ? 'cancelled' : 'failed', result: CLAUDE_HANDBACK_REPORT } }) });
+      expect(agentResults.at(-1)?.isError === true).toBe(status !== 'completed');
       expect(agentResults.some(event => JSON.stringify(event).includes('report was delivered'))).toBe(false);
       expect(events.filter(event => event.kind === 'transcript-message-committed' && event.peer)).toHaveLength(1);
       await exec.emit(claudeHandbackUserRow({ withReportText: true, uuid: 'late-report', sessionId }));
