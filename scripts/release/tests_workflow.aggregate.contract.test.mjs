@@ -48,3 +48,25 @@ test('CLI matrix runs unit-only extras once while both unit and integration part
   assert.equal(packageJson.scripts?.['test:unit:local'], 'node scripts/runVitestShards.mjs --config vitest.config.ts --unit-checks');
   assert.equal(packageJson.scripts?.['test:unit:vitest:local'], 'node scripts/runVitestShards.mjs --config vitest.config.ts');
 });
+
+test('the v0.3 Gate runs the release-contracts lane commands on every Gate run', async () => {
+  const jobs = YAML.parse(await readFile(join(process.cwd(), '.github/workflows/tests.yml'), 'utf8')).jobs;
+  const ordinary = jobs['release-contracts'].steps.find((step) => step.name === 'Run release contract tests');
+  const compiler = jobs['gate-compiler'];
+  const gateStep = compiler.steps.find((step) => step.name === 'Run release and workflow contract tests');
+  assert.ok(ordinary && gateStep, 'both the ordinary lane and the v0.3 Gate must run the release contracts');
+  assert.equal(gateStep.run, ordinary.run, 'the v0.3 Gate must run exactly the ordinary release-contract commands');
+  // The step shares the compiler gate's prepared workspace and still reports when compiler diagnostics fail.
+  const install = compiler.steps.find((step) => step.uses === './.github/actions/install-pnpm-dependencies');
+  assert.ok(compiler.steps.indexOf(install) < compiler.steps.indexOf(gateStep));
+  assert.equal(gateStep.if, `\${{ !cancelled() && steps.${install.id}.outcome == 'success' }}`);
+  assert.equal(compiler.if, undefined, 'gate-compiler runs whenever the shared preparation succeeds');
+  // Governance validators run on v0.3 too, report-only until their known debt is cleared.
+  for (const command of ['pnpm run test:wiring', 'pnpm run test:policy']) {
+    const report = compiler.steps.find((step) => step.run === command);
+    assert.ok(report, `the v0.3 Gate must run ${command}`);
+    assert.equal(report['continue-on-error'], true, `${command} is report-only on v0.3`);
+    assert.equal(report.if, gateStep.if);
+  }
+  assert.ok(jobs.gate.needs.includes('gate-compiler'), 'the Gate aggregator requires the contract result');
+});

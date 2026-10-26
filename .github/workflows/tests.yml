@@ -446,8 +446,9 @@ jobs:
     name: Gate — UI compiler diagnostics
     needs: [gate-prepare]
     runs-on: ubuntu-latest
-    # Successful compiler plus preparation: 42m33s; more than twice that sample.
-    timeout-minutes: 90
+    # Successful compiler plus preparation: 42m33s; more than twice that sample,
+    # plus the 20-minute budget of the ordinary release-contracts lane it also runs.
+    timeout-minutes: 110
     permissions:
       contents: read
     steps:
@@ -466,6 +467,7 @@ jobs:
         with:
           node-version: ${{ needs.gate-prepare.outputs.node_version }}
       - uses: ./.github/actions/install-pnpm-dependencies
+        id: gate-compiler-install
         with:
           prepared-artifact: gate-prepared-workspace
       - name: Add swap headroom for the native compiler peak
@@ -505,6 +507,24 @@ jobs:
           if pnpm run typecheck:compiler --prepared-workspaces --compiler-partition=ui; then package_status=0; else package_status=$?; fi
           node scripts/ci/reportGateRegressions.mjs --kind=compiler --input="$HAPPIER_TYPECHECK_REPORT_DIR" \
             --baseline=scripts/ci/gate-triage-baseline.json --package-status="$package_status"
+      - name: Run release and workflow contract tests
+        # The same commands as the ordinary release-contracts lane, which v0.3 skips;
+        # they read workflows, release scripts and the prepared workspace packages.
+        if: ${{ !cancelled() && steps.gate-compiler-install.outcome == 'success' }}
+        run: |
+          set -euo pipefail
+          pnpm run test:release:contracts
+          node scripts/pipeline/run.mjs release-sync-installers --check
+      - name: Report test wiring findings
+        # Report-only until the known wiring debt is cleared; findings stay in the log.
+        if: ${{ !cancelled() && steps.gate-compiler-install.outcome == 'success' }}
+        continue-on-error: true
+        run: pnpm run test:wiring
+      - name: Report test policy findings
+        # Report-only until the known policy debt is cleared; findings stay in the log.
+        if: ${{ !cancelled() && steps.gate-compiler-install.outcome == 'success' }}
+        continue-on-error: true
+        run: pnpm run test:policy
       - name: Report host evidence after compiler termination
         if: ${{ always() }}
         run: |
