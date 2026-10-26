@@ -97,7 +97,6 @@ describe('useTranscriptLiveTailIntentHost commit timing', () => {
                 gesturePhase: 'settled',
                 sessionId,
             },
-            viewportEffects: [],
         } as const));
         const deps = {
             ...baseDeps,
@@ -219,7 +218,6 @@ describe('useTranscriptLiveTailIntentHost explicit-return distance refresh', () 
                         gesturePhase: 'settled',
                         sessionId,
                     },
-                    viewportEffects: [],
                 } as const)),
             },
         } as unknown as HostDeps;
@@ -331,7 +329,6 @@ describe('useTranscriptLiveTailIntentHost live-tail parking release', () => {
                     gesturePhase: 'settled',
                     sessionId,
                 },
-                viewportEffects: [],
             }));
         const apiRef = { current: null as Host | null };
         let tree!: renderer.ReactTestRenderer;

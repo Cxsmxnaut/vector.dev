@@ -36,7 +36,7 @@ function createStableMembers() {
         lastUserScrollIntentAtMsRef: createRef(Number.NEGATIVE_INFINITY),
         lifecycleHost: {
             clearNativeExplicitJumpConfirmation: vi.fn(),
-            getMountSettleSnapshot: vi.fn(() => ({ isMountSettleActive: false })),
+            getMountSettleSnapshot: vi.fn(() => ({ stableSettle: false })),
             observeNativeScrollConfirmation: vi.fn<BottomFollowHostDeps['lifecycleHost']['observeNativeScrollConfirmation']>(() => ({
                 consumed: false,
                 entrySettleEffects: [],
