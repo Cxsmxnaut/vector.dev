@@ -391,6 +391,18 @@ describe('sync/runtime/browserIroh/workerConnection', () => {
         expect(harness.closes).toEqual([]);
     });
 
+    it('reports the endpoint’s applied relay union on a lease acquired over the port', async () => {
+        const harness = createHarness();
+        const tab = harness.connectTab();
+        const lease = await tab.acquireLease([RELAY_A]);
+
+        const second = await tab.acquireLease([RELAY_B]);
+
+        expect(harness.binds()).toBe(1);
+        expect(second.endpointId).toBe(lease.endpointId);
+        expect(second.appliedRelayUrls).toEqual([RELAY_A, RELAY_B]);
+    });
+
     it('surfaces the relay-only requirement as a typed error', async () => {
         const harness = createHarness();
         const tab = harness.connectTab();

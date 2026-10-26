@@ -68,7 +68,10 @@ describe('serverReachabilitySupervisorPool (web online events)', () => {
         expect(typeof handlers.online?.[0]).toBe('function');
         handlers.online?.forEach((handler) => handler());
 
-        await vi.waitFor(() => expect(lastPhase).toBe('online'));
+        // Stay well inside the offline supervisor's own retry backoff (800 ms with
+        // Math.random pinned to 0), so only the handler's invalidation can recover it.
+        await vi.advanceTimersByTimeAsync(200);
+        expect(lastPhase).toBe('online');
 
         unsubscribe();
         await resetServerReachabilitySupervisors();
