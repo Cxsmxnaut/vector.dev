@@ -1183,7 +1183,7 @@ export function createClaudeAgentSdkTurnOperations(
                         observeNativeWorkflowHook(providerSessionId, payload, observedAt);
                     }
                     if (!bufferedNativeStart || ownerScope) observeProviderTaskActivity(payload, providerSessionId, ownerScope ?? undefined);
-                    await resumeIdentityOwner?.observeSessionHook(providerSessionId, payload);
+                    await resumeIdentityOwner?.observeSessionHook(providerSessionId, payload, ownerScope ? 'local_terminal' : 'sdk');
                     if (readString(payload.hook_event_name ?? payload.hookEventName ?? payload.eventName) === 'SessionStart') {
                         await bindOrderedSourceHistory(providerSessionId, payload);
                     }

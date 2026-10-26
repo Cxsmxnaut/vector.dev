@@ -279,6 +279,55 @@ describe('bindClaudeAgentSdkFallbackSession', () => {
     }
   });
 
+  it('preserves a locally typed terminal conversation when the first SDK turn takes over', async () => {
+    const exec = createSdkExecFixture();
+    const sessionHooks = createSessionHooksFixture();
+    const follows: TranscriptFileFollowInputV1[] = [];
+    const ctx = createPluginContextFixture(createTerminalHostFixture().service, createEventsFixture().service, {
+      exec: exec.service,
+      sessionHooks: sessionHooks.service,
+      transcripts: {
+        append: vi.fn(async () => undefined),
+        defineSource: vi.fn(async () => ({ id: 'local-terminal-proof', dispose: vi.fn(async () => undefined) })),
+        fileFollow: { follow: vi.fn(async (input: TranscriptFileFollowInputV1) => {
+          follows.push(input);
+          return { id: 'local-terminal-proof-follow', drainNow: async () => {}, close: async () => {} };
+        }) },
+      },
+    });
+    const operations = createClaudeAgentSdkTurnOperations({
+      nativeOperationsOnly: true, ctx, directory: '/tmp/claude-project', launchEnv: {},
+      permissionMode: 'default', happierSessionId: 'local-terminal-session', enableSessionResumability: true,
+    });
+    try {
+      const presentation = await operations.prepareTerminalPresentation();
+      await operations.observeTerminalExecution({ kind: 'started', plan: presentation.plan });
+      const hook = sessionHooks.service.startServer.mock.calls[0]?.[0].onSessionHook;
+      if (!hook) throw new Error('native session hook server did not start');
+      await hook('local-terminal-native', {
+        hook_event_name: 'SessionStart', session_id: 'local-terminal-native', source: 'startup',
+        transcript_path: '/tmp/claude-project/local-terminal-native.jsonl',
+      });
+      // This person typed into Claude's terminal; Happier did not inject a host prompt.
+      await hook('local-terminal-native', {
+        hook_event_name: 'UserPromptSubmit', session_id: 'local-terminal-native', prompt: 'Remember the local context',
+      });
+      const follow = follows[0];
+      if (!follow) throw new Error('missing local terminal transcript follow');
+      await follow.onLine({
+        line: JSON.stringify({ type: 'user', sessionId: 'local-terminal-native', timestamp: new Date().toISOString(),
+          message: { role: 'user', content: 'Remember the local context' } }),
+        sourcePath: follow.path, sequence: 1,
+      });
+      await operations.observeTerminalExecution({ kind: 'provider_stopped', plan: presentation.plan, exitCode: 0, signal: null });
+      await operations.sendTurnPrompt('Continue from the app');
+      const launchArgs = exec.spawnClient.mock.calls[0]?.[0].launch.args;
+      const resumeIndex = launchArgs?.indexOf('--resume') ?? -1;
+      expect(resumeIndex).toBeGreaterThanOrEqual(0);
+      expect(launchArgs?.[resumeIndex + 1]).toBe('local-terminal-native');
+    } finally { await operations.resetOrDisposeRuntime(); }
+  });
+
   it.each([undefined, 0])('witnesses native MCP inventory and deduplicated calls through successful SDK completion (queued count %s)', async queuedTurnCount => {
     const exec = createSdkExecFixture();
     const ctx = createPluginContextFixture(createTerminalHostFixture().service, createEventsFixture().service, { exec: exec.service });

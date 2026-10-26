@@ -11,6 +11,49 @@ import {
 import { createClaudeAgentSdkResumeIdentityOwner } from './resumeIdentity.js';
 
 describe('createClaudeAgentSdkResumeIdentityOwner', () => {
+    it.each([
+        { origin: 'sdk' as const, hookSessionId: 'native-current', sidechain: false, expectedPromotions: [] },
+        { origin: 'local_terminal' as const, hookSessionId: 'native-current', sidechain: false, expectedPromotions: ['native-current'] },
+        { origin: 'local_terminal' as const, hookSessionId: 'native-other', sidechain: false, expectedPromotions: [] },
+        { origin: 'local_terminal' as const, hookSessionId: 'native-current', sidechain: true, expectedPromotions: [] },
+    ])('admits unsubmitted $origin prompt proof only for the primary candidate ($hookSessionId, sidechain=$sidechain)', async ({ origin, hookSessionId, sidechain, expectedPromotions }) => {
+        const follows: TranscriptFileFollowInputV1[] = [];
+        const promotions: string[] = [];
+        const ctx = createPluginContextFixture(createTerminalHostFixture().service, createEventsFixture().service, {
+            transcripts: {
+                append: vi.fn(async () => undefined),
+                defineSource: vi.fn(async () => ({ id: 'unused', dispose: vi.fn(async () => undefined) })),
+                fileFollow: { follow: vi.fn(async (input: TranscriptFileFollowInputV1) => {
+                    follows.push(input);
+                    return { id: 'native-file', drainNow: async () => {}, close: async () => {} };
+                }) },
+            },
+        });
+        const owner = createClaudeAgentSdkResumeIdentityOwner({ ctx, nowMs: () => 10_000,
+            onProviderSessionId: () => {},
+            onTranscriptPromoted: async promotion => { promotions.push(promotion.providerSessionId); },
+        });
+        try {
+            await owner.observeSessionHook('native-current', { hook_event_name: 'SessionStart',
+                session_id: 'native-current', transcript_path: '/tmp/native-current.jsonl' }, origin);
+            const payload = { hook_event_name: 'UserPromptSubmit', session_id: hookSessionId,
+                prompt: 'Locally typed context', ...(sidechain ? { agent_id: 'child-agent' } : {}) };
+            await owner.observeSessionHook(hookSessionId, payload, origin);
+            expect(promotions).toEqual([]);
+            const follow = follows[0];
+            if (!follow) throw new Error('Missing authenticated transcript follow');
+            const row = { line: JSON.stringify({ type: 'user', sessionId: 'native-current',
+                timestamp: new Date(10_000).toISOString(),
+                message: { role: 'user', content: 'Locally typed context' } }),
+                sourcePath: follow.path, sequence: 1 };
+            await follow.onLine(row);
+            await owner.observeSessionHook(hookSessionId, payload, origin);
+            await follow.onLine(row);
+            expect(promotions).toEqual(expectedPromotions);
+            expect(follows).toHaveLength(1);
+        } finally { await owner.dispose(); }
+    });
+
     it('does not promote an accepted hook that precedes its authenticated transcript candidate', async () => {
         const follows: TranscriptFileFollowInputV1[] = [];
         const promotions: string[] = [];

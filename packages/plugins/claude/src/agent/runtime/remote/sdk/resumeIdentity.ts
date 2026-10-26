@@ -21,6 +21,8 @@ type TranscriptEvidence = Readonly<{
     timestampMs: number;
 }>;
 
+type SessionHookOrigin = 'sdk' | 'local_terminal';
+
 type ActiveTranscriptCandidate = {
     providerSessionId: string;
     transcriptPath: string;
@@ -43,6 +45,7 @@ export type ClaudeAgentSdkResumeIdentityOwner = Readonly<{
     observeSessionHook(
         providerSessionId: string,
         payload: Readonly<Record<string, unknown>>,
+        origin?: SessionHookOrigin,
     ): Promise<void>;
     validateSdkResultProviderSessionId(providerSessionId: unknown): ClaudeAgentSdkResumeIdentityMismatchError | null;
     readExplicitResumeFailure(): ClaudeAgentSdkResumeIdentityMismatchError | null;
@@ -385,6 +388,7 @@ export function createClaudeAgentSdkResumeIdentityOwner(params: Readonly<{
     async function observeAcceptedPrompt(
         reportedProviderSessionId: string,
         payload: Readonly<Record<string, unknown>>,
+        origin: SessionHookOrigin,
     ): Promise<void> {
         if (isSidechainSessionHook(payload)) return;
         const candidate = activeCandidate;
@@ -395,7 +399,13 @@ export function createClaudeAgentSdkResumeIdentityOwner(params: Readonly<{
         if (prompt === null) return;
         const acceptedAtMs = nowMs();
         prunePromptIntents(acceptedAtMs);
-        const intent = promptIntents.find((item) => item.acceptedAtMs === null && item.text === prompt);
+        let intent = promptIntents.find((item) => item.acceptedAtMs === null && item.text === prompt);
+        if (!intent && origin === 'local_terminal') {
+            // An owned terminal's authenticated submit hook is the person's input boundary;
+            // no host-injected prompt precedes it. The matching transcript row still proves persistence.
+            intent = { text: prompt, submittedAtMs: acceptedAtMs, acceptedAtMs: null, acceptedCandidate: null };
+            promptIntents.push(intent);
+        }
         if (!intent) return;
         intent.acceptedAtMs = acceptedAtMs;
         intent.acceptedCandidate = candidate;
@@ -420,14 +430,14 @@ export function createClaudeAgentSdkResumeIdentityOwner(params: Readonly<{
                 params.ctx.logger.debug('[ClaudeAgentSdk] transcript identity promotion failed', { error });
             });
         },
-        async observeSessionHook(providerSessionId, payload) {
+        async observeSessionHook(providerSessionId, payload, origin = 'sdk') {
             if (disposed) return;
             const eventName = readHookEventName(payload);
             let operation: Promise<void> | null = null;
             if (eventName === 'SessionStart') {
                 operation = observeSessionStart(providerSessionId, payload);
             } else if (eventName === 'UserPromptSubmit') {
-                operation = observeAcceptedPrompt(providerSessionId, payload);
+                operation = observeAcceptedPrompt(providerSessionId, payload, origin);
             }
             if (!operation) return;
             inFlightHookOperations.add(operation);
