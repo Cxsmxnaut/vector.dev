@@ -1,16 +1,17 @@
 import { z } from 'zod';
 import { isAskUserQuestionToolName, normalizeStructuredQuestionDescriptors, STRUCTURED_QUESTION_LIMITS } from '../tools/structuredQuestionAnswersV1.js';
 import { PUSH_NOTIFICATION_ACTION_IDS, PUSH_NOTIFICATION_CATEGORY_IDS } from './pushNotificationActions.js';
+import { lazySchema } from '../lazySchema.js';
 
 // Android supports at most three notification actions; every offered choice
 // keeps its numbered label in the complete notification body.
 export const NOTIFICATION_QUESTION_MAX_CHOICES = 3;
-const questionString = z.string().max(STRUCTURED_QUESTION_LIMITS.maxStringLength);
-export const NotificationQuestionAnswerV1Schema = z.discriminatedUnion('kind', [
+const questionString = lazySchema(() => z.string().max(STRUCTURED_QUESTION_LIMITS.maxStringLength));
+export const NotificationQuestionAnswerV1Schema = lazySchema(() => z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('choices'), questionKey: questionString.min(1),
     values: z.array(questionString).min(1).max(NOTIFICATION_QUESTION_MAX_CHOICES) }).strict(),
   z.object({ kind: z.literal('text'), questionKey: questionString.min(1), allowEmpty: z.boolean() }).strict(),
-]);
+]));
 export type NotificationQuestionAnswerV1 = z.infer<typeof NotificationQuestionAnswerV1Schema>;
 
 export function projectNotificationQuestion(toolName: string, toolInput: unknown): Readonly<{

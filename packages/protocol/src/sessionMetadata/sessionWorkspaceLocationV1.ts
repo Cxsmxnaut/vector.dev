@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { lazySchema } from '../lazySchema.js';
 
 export const SESSION_WORKSPACE_LOCATION_METADATA_KEY = 'sessionWorkspaceLocationV1' as const;
 
@@ -17,7 +18,7 @@ export function createSessionWorkspaceLocationV1Schema(zod: typeof z) {
   }).passthrough();
 }
 
-export const SessionWorkspaceLocationV1Schema = createSessionWorkspaceLocationV1Schema(z);
+export const SessionWorkspaceLocationV1Schema = lazySchema(() => createSessionWorkspaceLocationV1Schema(z));
 export type SessionWorkspaceLocationV1 = z.infer<typeof SessionWorkspaceLocationV1Schema>;
 
 export function buildSessionWorkspaceLocationV1(params: Readonly<{
