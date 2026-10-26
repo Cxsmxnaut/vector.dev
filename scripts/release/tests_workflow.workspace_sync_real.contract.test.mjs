@@ -319,7 +319,6 @@ test('the real workspace-sync lane selects itself from Lane 08 change surfaces',
     'apps/cli/src/settings/accountSettings/activeAccountSettingsSnapshot.ts',
     'apps/cli/src/settings/accountSettings/refreshAccountSettingsForMinimumVersion.ts',
     'apps/cli/src/settings/accountSettings/updateAccountSettingsV2WithRetry.ts',
-    'apps/cli/src/settings/accountSettings/workspaceRefsV1.ts',
     // Finite bootstrap deliberately stays on the native Machine transfer
     // owner; changes there must re-run the composed seed corridor.
     'apps/cli/src/machines/transfer/**',
