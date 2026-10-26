@@ -1,11 +1,15 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import { reloadConfiguration } from '@/configuration';
 import { createPluginManifestV2Fixture } from '@/plugins/testkit/manifestV2Fixture';
 import { createPluginRegistryStateStore } from '@/plugins/store/registry/currentState';
+import { createPluginStateStore } from '@/plugins/store/state.testkit';
+import { createEnvKeyScope } from '@/testkit/env/envScope';
+import { createTempDir, removeTempDir } from '@/testkit/fs/tempDir';
 import { inspectPluginSource } from './source';
 
 async function materializeInstallCandidate(
@@ -106,6 +110,37 @@ describe('inspectPluginSource', () => {
     } finally {
       await rm(workspaceRoot, { recursive: true, force: true });
       await rm(happyHomeDir, { recursive: true, force: true });
+    }
+  });
+
+  it('cleans up archive staging directories when extraction fails', async () => {
+    const home = await createTempDir('happier-plugin-install-');
+    const envScope = createEnvKeyScope(['HAPPIER_HOME_DIR', 'PATH']);
+    envScope.patch({ HAPPIER_HOME_DIR: home, PATH: process.env.PATH ?? '' });
+    reloadConfiguration();
+
+    const corruptArchivePath = join(home, 'corrupt-plugin.tar.gz');
+    await writeFile(corruptArchivePath, 'not a real archive', 'utf8');
+
+    try {
+      const result = await inspectPluginSource({
+        happyHomeDir: home,
+        locator: corruptArchivePath,
+        sourceKind: 'archive',
+        skipIfInstalled: true,
+      });
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.errorCode).toBe('plugin_install_failed');
+
+      const store = createPluginStateStore({ happyHomeDir: home });
+      const cacheEntries = await readdir(store.paths.cacheDir);
+      expect(cacheEntries.filter((entry) => entry.startsWith('plugin-install-'))).toHaveLength(0);
+    } finally {
+      envScope.restore();
+      reloadConfiguration();
+      await removeTempDir(home);
     }
   });
 });
