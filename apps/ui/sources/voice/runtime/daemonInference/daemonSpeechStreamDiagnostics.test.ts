@@ -3,6 +3,21 @@ import { describe, expect, it, vi } from 'vitest';
 import { createDaemonSpeechStreamDiagnostics } from './daemonSpeechStreamDiagnostics';
 
 describe('daemonSpeechStreamDiagnostics', () => {
+    it('logs only closed start failure facts and redacts an arbitrary error class', () => {
+        const warn = vi.fn();
+        const diagnostics = createDaemonSpeechStreamDiagnostics({ warn });
+        const failure = Object.assign(new TypeError('private transcript token=secret'), { code: 'internal_error' });
+        diagnostics.recordStartFailure(failure, { step: 'create_sender' });
+        const safe = { code: 'internal_error', message: 'redacted_start_failure', step: 'create_sender', errorClass: 'TypeError' };
+        expect(diagnostics.snapshot().lastStartFailure).toEqual(safe);
+        expect(warn).toHaveBeenLastCalledWith('[daemonVoiceInference] streaming STT start failed ' + JSON.stringify(safe));
+
+        failure.name = 'token-secret';
+        diagnostics.recordStartFailure(failure, { step: 'capture_start' });
+        expect(diagnostics.snapshot().lastStartFailure).toMatchObject({ step: 'capture_start', errorClass: 'unknown' });
+        expect(JSON.stringify(warn.mock.calls)).not.toContain('secret');
+    });
+
     it('counts explicit transport selections and logs compatibility at most once per session', () => {
         const warn = vi.fn();
         const diagnostics = createDaemonSpeechStreamDiagnostics({ warn, maxRememberedSessions: 2 });

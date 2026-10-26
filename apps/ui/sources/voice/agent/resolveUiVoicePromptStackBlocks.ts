@@ -20,6 +20,22 @@ import { resolveRoleSelectionV1 } from '@happier-dev/protocol/prompts/roles/reso
 import { renderSessionRoleBlockV1 } from '@happier-dev/protocol/prompts/roles/renderSessionRoleBlockV1';
 import { createRoleSourceReaderV1 } from '@happier-dev/protocol/prompts/roles/accountRoleActions';
 import { readUiPluginRoleSources } from '@/sync/ops/roles/roleSources';
+import { log } from '@/log';
+
+const PREPARATION_FAILURE_CODES = new Set([
+  'account-encryption-currentness-unavailable', 'account-encryption-mode-unavailable',
+  'account-encryption-mode-read-retired', 'action_account_scope_changed', 'content_unavailable',
+]);
+const PREPARATION_FAILURE_CLASSES = new Set(['Error', 'TypeError', 'HappyError', 'AccountStorageCurrentnessUnavailableError']);
+
+function recordPreparationRefusal(error: unknown, step: 'resolve_currentness' | 'prepare'): void {
+  const record = error && typeof error === 'object' ? error as Record<string, unknown> : null;
+  log.log('[voicePromptStack] preparation refused ' + JSON.stringify({
+    step,
+    code: typeof record?.code === 'string' && PREPARATION_FAILURE_CODES.has(record.code) ? record.code : null,
+    errorClass: typeof record?.name === 'string' && PREPARATION_FAILURE_CLASSES.has(record.name) ? record.name : 'unknown',
+  }));
+}
 
 export type UiVoicePromptStackInput = Omit<PromptStackSystemAppendInputV1, 'surface' | 'readArtifact'>
 & Partial<Pick<PromptStackSystemAppendInputV1, 'readArtifact'>> & Readonly<{
@@ -56,7 +72,10 @@ export async function resolveUiVoicePromptStackPreparation(args?: UiVoicePromptS
     } catch (error) {
       input.signal?.throwIfAborted();
       try { assertCurrent(); }
-      catch { throw new PromptStackPreparationError('unavailable'); }
+      catch (currentnessError) {
+        recordPreparationRefusal(currentnessError, 'resolve_currentness');
+        throw new PromptStackPreparationError('unavailable');
+      }
       throw error;
     }
   };
@@ -146,6 +165,7 @@ export async function resolveUiVoicePromptStackPreparation(args?: UiVoicePromptS
   } catch (error) {
     args?.signal?.throwIfAborted();
     if (error instanceof PromptStackPreparationError) throw error;
+    recordPreparationRefusal(error, 'prepare');
     throw new PromptStackPreparationError('unavailable');
   } finally { owned?.dispose(); }
 }
