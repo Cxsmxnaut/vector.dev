@@ -30,10 +30,11 @@ describe('PeerMessageRow', () => {
             if (!node) throw new Error('peer message header is not rendered');
             return node;
         };
-        expect(header().props).toMatchObject({ accessibilityRole: 'button', accessibilityState: { expanded: false } });
+        expect(header().props).toMatchObject({ accessibilityRole: 'button', accessibilityState: { expanded: false }, 'aria-expanded': false });
         await screen.pressByTestIdAsync('transcript-peer-message-header');
         expect(collectHostText(screen.tree).join(' ')).toContain('FULL_BODY');
         expect(header().props.accessibilityState).toEqual({ expanded: true });
+        expect(header().props['aria-expanded']).toBe(true);
     });
 
     it('opens when transcript find reveals a match inside the delivered body', async () => {

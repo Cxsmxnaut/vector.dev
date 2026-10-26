@@ -41,6 +41,7 @@ export const ThinkingTimelineRow = React.memo(function ThinkingTimelineRow(props
                 testID={props.headerTestID ?? 'transcript-thinking-header'}
                 accessibilityRole="button"
                 accessibilityState={{ expanded }}
+                aria-expanded={expanded}
                 onPress={() => setExpanded(!expanded)}
                 style={({ pressed }) => [styles.header, pressed && styles.headerPressed]}
             >
