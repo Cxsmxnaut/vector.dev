@@ -18,9 +18,19 @@ describe('resolvePointerClientPoint', () => {
             .toEqual({ x: 5, y: 7 });
     });
 
+    it('falls back to event.pageX/pageY', () => {
+        expect(resolvePointerClientPoint({ pageX: 77, pageY: 88 }))
+            .toEqual({ x: 77, y: 88 });
+    });
+
     it('supports touches[0].clientX/clientY', () => {
         expect(resolvePointerClientPoint({ touches: [{ clientX: 12, clientY: 34 }] }))
             .toEqual({ x: 12, y: 34 });
+    });
+
+    it('supports touches[0].pageX/pageY', () => {
+        expect(resolvePointerClientPoint({ touches: [{ pageX: 34, pageY: 56 }] }))
+            .toEqual({ x: 34, y: 56 });
     });
 
     it('returns null coordinates when no pointer coordinate is available', () => {
