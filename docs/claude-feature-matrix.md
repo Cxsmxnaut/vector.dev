@@ -67,10 +67,12 @@ composer history, rollback and voice replies do not treat them as human input. P
 input cannot acknowledge a pending human prompt.
 
 A hand-back whose sender matches an async Agent launch already correlated by the task
-projector becomes that tool call's result, so the report appears on the Agent card.
-Claude's following `completed` task notification only points back at the hand-back
-and is dropped. Hand-backs without a known launch (for example after a resume or a
-CLI restart) stay standalone peer rows.
+projector is retained until the native lifecycle supplies a terminal outcome (a task
+notification, task-status attachment, or authenticated stopped-agent SendMessage
+response). That outcome publishes the report on the Agent card with its actual
+success, failure or cancellation; report delivery alone cannot complete the task. Reports
+without an active correlated launch (including after settlement, resume or a CLI
+restart) stay standalone peer rows.
 
 The remote Agent SDK registers its live permission-mode control with the launcher's
 existing metadata consumer. Registration re-reads current permission intent, and

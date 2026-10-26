@@ -4,6 +4,14 @@ import { CLAUDE_PEER_TRAILER, claudeHandbackQueuedAttachment, claudeHandbackUser
 import { parseRawJsonLinesLine, parseRawJsonLinesObject } from './parseRawJsonLines';
 
 describe('parseRawJsonLines', () => {
+  it('projects native peer string input through the shared parser without repeating its sender on replay', () => {
+    const native = { type: 'user', uuid: 'plain-peer', origin: { kind: 'peer', from: 'a1', name: 'Sender' },
+      message: { role: 'user', content: 'Delivered' } };
+    const parsed = parseRawJsonLinesObject(native);
+    expect(parsed).toMatchObject({ origin: native.origin, message: { content: 'From Sender:\n\nDelivered' } });
+    expect(parseRawJsonLinesObject(parsed)).toEqual(parsed);
+  });
+
   it.each(['completed', 'failed', 'stopped'] as const)('retains released native task %s findings while normalizing its error status', status => {
     // cli-v0.2.16@b8d1c449c46ab4dfa8637db36b66f643d149e66d sessionScanner:452–472.
     const content = [{ type: 'text', text: 'Historical background findings' }];

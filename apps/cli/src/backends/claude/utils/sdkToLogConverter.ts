@@ -18,9 +18,9 @@ import { normalizeClaudeToolUseNamesInSdkMessage } from './normalizeClaudeToolUs
 import { providers } from '@happier-dev/agents'
 import { buildClaudeSdkResultUsageTelemetry } from './sdkResultUsageTelemetry'
 import { readNonBlankOpaqueIdentifier } from '@/utils/opaqueIdentifiers'
-import { createClaudeTaskNotificationToolResultProjector, readClaudeTaskLifecycleEnvelope } from '../taskNotifications/claudeTaskLifecycleEnvelope'
+import { createClaudeTaskNotificationToolResultProjector, isClaudeTaskLifecycleResultEnvelope, readClaudeTaskLifecycleEnvelope } from '../taskNotifications/claudeTaskLifecycleEnvelope'
 import { projectClaudePeerMessage } from '../attachments/claudePeerMessageProjection'
-import { formatClaudePeerMessageText } from '@happier-dev/protocol'
+import { embedClaudeToolResultMetadata } from './claudeToolResultMetadata'
 
 /**
  * Context for converting SDK messages to log format
@@ -122,7 +122,7 @@ export class SDKToLogConverter {
         const fact = readClaudeTaskLifecycleEnvelope(sdkMessage);
         const rawType = (sdkMessage as any)?.type;
         if (providers.claude.isClaudeInternalEventType(rawType) && rawType !== 'attachment'
-            && fact?.subtype !== 'task_notification') {
+            && !isClaudeTaskLifecycleResultEnvelope(fact)) {
             return null;
         }
 
@@ -155,10 +155,11 @@ export class SDKToLogConverter {
         if (peerMessage) {
             if (!isSidechain) this.lastMainUuid = uuid;
             // A linked subagent hand-back becomes its launching tool's result.
-            return this.taskNotificationProjector.project(peerMessage, sidechainId ? { sidechainId } : undefined) ?? peerMessage;
+            const projection = this.taskNotificationProjector.project(peerMessage, sidechainId ? { sidechainId } : undefined);
+            return projection ? projection.message : peerMessage;
         }
         const taskResult = this.taskNotificationProjector.project({ ...sdkMessage, ...baseFields }, sidechainId ? { sidechainId } : undefined);
-        if (taskResult || fact?.subtype === 'task_notification') return taskResult;
+        if (taskResult) return taskResult.message;
         if (providers.claude.isClaudeInternalEventType(rawType)) return null;
 
         let logMessage: RawJSONLines | null = null
@@ -168,34 +169,15 @@ export class SDKToLogConverter {
             case 'user': {
                 const userMsg = sdkMessage as SDKUserMessage
                 const toolUseResult = (sdkMessage as any)?.tool_use_result as unknown;
-                const peerOrigin = asRecord(userMsg.origin);
-                const peerName = typeof peerOrigin?.name === 'string' && peerOrigin.name.trim() ? peerOrigin.name.trim() : null;
-                const message = peerOrigin?.kind === 'peer' && typeof userMsg.message.content === 'string'
-                    ? { ...userMsg.message, content: formatClaudePeerMessageText(peerName, userMsg.message.content) }
-                    : userMsg.message;
                 logMessage = {
                     ...baseFields,
                     type: 'user',
-                    message,
+                    message: userMsg.message,
                     ...(userMsg.origin ? { origin: userMsg.origin } : {}),
                 }
 
                 if (toolUseResult !== undefined && Array.isArray(userMsg.message.content)) {
-                    const nextContent = userMsg.message.content.map((block: any) => {
-                        if (!block || typeof block !== 'object') return block;
-                        if (block.type !== 'tool_result' || typeof block.tool_use_id !== 'string') return block;
-                        const existing = block.content;
-                        if (existing && typeof existing === 'object' && !Array.isArray(existing) && (existing as any).tool_use_result !== undefined) {
-                            return block;
-                        }
-                        return {
-                            ...block,
-                            content: {
-                                content: existing,
-                                tool_use_result: toolUseResult,
-                            },
-                        };
-                    });
+                    const nextContent = embedClaudeToolResultMetadata(userMsg.message.content, toolUseResult);
                     (logMessage as any).message = { ...userMsg.message, content: nextContent };
                 }
 

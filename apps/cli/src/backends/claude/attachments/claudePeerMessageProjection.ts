@@ -1,4 +1,4 @@
-import { formatClaudePeerMessageText } from '@happier-dev/protocol';
+import { formatClaudePeerMessageText, readClaudePeerMessage } from '@happier-dev/protocol';
 
 import { RawJSONLinesSchema, type RawJSONLines } from '../types';
 import { parseClaudeQueuedCommandAttachment } from './claudeAttachmentTypes';
@@ -68,11 +68,12 @@ export function projectClaudePeerMessage(value: unknown): RawJSONLines | null {
   const nativeBody = nonBlank(nativePeer?.body);
   // A queued attachment proves delivery only for a native wrapper. Queue operations,
   // ordinary human prompts and unknown attachment kinds remain internal.
-  if (!wrapped && !nativeBody && peerTextBlocks === null) return null;
+  const plainPeer = peerInput ? readClaudePeerMessage(row) : null;
+  if (!wrapped && !nativeBody && peerTextBlocks === null && !plainPeer) return null;
   const from = nonBlank(nativePeer?.from) ?? wrapped?.from;
   if (!from) return null;
   const name = nonBlank(nativePeer?.name) ?? wrapped?.name ?? null;
-  const delivered = nativeBody ?? wrapped?.text ?? peerTextBlocks;
+  const delivered = nativeBody ?? wrapped?.text ?? peerTextBlocks ?? plainPeer?.text ?? null;
   if (delivered === null) return null;
   const body = nativePeer?.handback === true ? readHandbackReport(nativePeer, delivered) : delivered;
   const { attachment: _attachment, rendered: _rendered, isMeta: _isMeta,

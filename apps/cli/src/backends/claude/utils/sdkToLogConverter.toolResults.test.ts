@@ -29,22 +29,68 @@ describe('SDKToLogConverter tool result mode metadata', () => {
     expect(result.message.content).toBe('From Sender:\n\nDelivered');
   });
 
-  it('attaches a subagent hand-back report to its launching tool and absorbs the pointer notification', () => {
+  it.each(['completed', 'failed', 'stopped'] as const)('keeps a hand-back provisional until its task is %s', status => {
     const converter = createConverter();
     converter.convert({ type: 'user', uuid: 'ack-a1', tool_use_result: { status: 'async_launched', agentId: 'a1' },
       message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'toolu_a1', content: 'Async agent launched successfully.' }] } });
     // Native hand-back user rows carry transcript-only fields beyond the installed SDK declaration.
     const handback = converter.convert(claudeHandbackUserRow({ withReportText: true }) as unknown as SDKMessage);
-    expect(handback).toMatchObject({ uuid: 'handback', type: 'user', origin: { kind: 'peer', from: 'a1', handback: true },
-      message: { content: [{ type: 'tool_result', tool_use_id: 'toolu_a1', content: [{ type: 'text', text: CLAUDE_HANDBACK_REPORT }], is_error: false }] } });
-    expect(converter.convert({ type: 'system', subtype: 'task_notification', task_id: 'a1', status: 'completed',
-      summary: 'Agent "Diagnose" finished', output_file: '/tmp/a1.output', uuid: 'done-a1', session_id: conversionContext.sessionId })).toBeNull();
+    expect(handback).toBeNull();
+    expect(converter.convert({ type: 'system', subtype: 'task_notification', task_id: 'a1', status,
+      summary: 'Report was delivered as a message', output_file: '/tmp/a1.output', uuid: 'done-a1', session_id: conversionContext.sessionId }))
+      .toMatchObject({ type: 'user', origin: { kind: 'task-notification', status },
+        message: { content: [{ type: 'tool_result', tool_use_id: 'toolu_a1', content: [{ type: 'text', text: CLAUDE_HANDBACK_REPORT }], is_error: status !== 'completed' }] } });
+    const late = converter.convert(claudeHandbackUserRow({ withReportText: true, uuid: 'late-report' }) as unknown as SDKMessage);
+    expect(late).toMatchObject({ origin: { kind: 'peer' }, message: { content: `From general-purpose:\n\n${CLAUDE_HANDBACK_REPORT}` } });
   });
 
   it('keeps an unlinked subagent hand-back as a sender-labelled peer message', () => {
     const result = createConverter().convert(claudeHandbackUserRow({ withReportText: false }) as unknown as SDKMessage);
     expect(result).toMatchObject({ origin: { kind: 'peer', from: 'a1', name: 'general-purpose', handback: true },
       message: { content: `From general-purpose:\n\n${CLAUDE_HANDBACK_REPORT}` } });
+  });
+
+  it.each(['completed', 'failed', 'stopped'] as const)('settles a buffered hand-back on native task status %s', status => {
+    const converter = createConverter();
+    converter.convert({ type: 'user', uuid: 'ack-a1', tool_use_result: { status: 'async_launched', agentId: 'a1' },
+      message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'toolu_a1', content: 'Async agent launched successfully.' }] } });
+    expect(converter.convert(claudeHandbackUserRow({ withReportText: true }) as unknown as SDKMessage)).toBeNull();
+    expect(converter.convert({ type: 'attachment', uuid: 'status-a1', attachment: {
+      type: 'task_status', taskId: 'a1', taskType: 'local_agent', status,
+    } } as unknown as SDKMessage)).toMatchObject({ type: 'user', origin: { kind: 'task-notification', status },
+      message: { content: [{ type: 'tool_result', tool_use_id: 'toolu_a1',
+        content: [{ type: 'text', text: CLAUDE_HANDBACK_REPORT }], is_error: status !== 'completed' }] } });
+  });
+
+  it('settles a stopped child report while preserving the native SendMessage response', () => {
+    const converter = createConverter();
+    converter.convert({ type: 'user', uuid: 'ack-a1', tool_use_result: { status: 'async_launched', agentId: 'a1' },
+      message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'toolu_a1', content: 'Async agent launched successfully.' }] } });
+    expect(converter.convert(claudeHandbackUserRow({ withReportText: true }) as unknown as SDKMessage)).toBeNull();
+    const response = { success: false, message: "Agent a1 was stopped by the user and won't be resumed." };
+    const result = converter.convert({ type: 'user', uuid: 'send-stop', tool_use_result: response,
+      message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'send-tool', content: JSON.stringify(response) }] } });
+    if (result?.type !== 'user') throw new Error('Missing stopped child outcome');
+    expect(result.toolUseResult).toBeUndefined();
+    expect(result.message.content).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: 'tool_result', tool_use_id: 'send-tool',
+        content: { content: JSON.stringify(response), tool_use_result: response } }),
+      expect.objectContaining({ type: 'tool_result', tool_use_id: 'toolu_a1', is_error: true,
+        content: expect.objectContaining({ status: 'cancelled', result: CLAUDE_HANDBACK_REPORT }) }),
+    ]));
+  });
+
+  it('keeps a buffered report with its exact tool identity when a notification names another tool', () => {
+    const converter = createConverter();
+    converter.convert({ type: 'user', uuid: 'ack-a1', tool_use_result: { status: 'async_launched', agentId: 'a1' },
+      message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'toolu_a1', content: 'Async agent launched successfully.' }] } });
+    converter.convert(claudeHandbackUserRow({ withReportText: true }) as unknown as SDKMessage);
+    const notification = { type: 'system' as const, subtype: 'task_notification' as const, task_id: 'a1', status: 'completed' as const,
+      summary: 'Unrelated result', output_file: '/tmp/a1.output', session_id: conversionContext.sessionId };
+    expect(converter.convert({ ...notification, uuid: 'other-terminal', tool_use_id: 'other-tool' } as SDKMessage))
+      .toMatchObject({ message: { content: [{ tool_use_id: 'other-tool', content: [{ type: 'text', text: 'Unrelated result' }] }] } });
+    expect(converter.convert({ ...notification, uuid: 'matching-terminal', tool_use_id: 'toolu_a1' } as SDKMessage))
+      .toMatchObject({ message: { content: [{ tool_use_id: 'toolu_a1', content: [{ type: 'text', text: CLAUDE_HANDBACK_REPORT }] }] } });
   });
 
   it('projects native SDK peer text blocks as visible user content', () => {
