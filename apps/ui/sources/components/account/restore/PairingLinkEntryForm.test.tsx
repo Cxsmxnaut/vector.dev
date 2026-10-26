@@ -87,6 +87,9 @@ describe('PairingLinkEntryForm', () => {
         expect(tree.root.findByProps({ testID: 'restore-pairing-link-input' }).props.value)
             .toBe('  happier:///pair?v=2&payload=opaque  ');
         expect(inputFocusSpy).toHaveBeenCalled();
+        expect(tree.root.findAllByProps({ testID: 'restore-pairing-link-error' }).some(
+            (node) => node.props.accessibilityRole === 'alert',
+        )).toBe(true);
     });
 
     it('uses the supplied surface copy while keeping the restore defaults', async () => {
