@@ -110,6 +110,8 @@ export type ApprovalDecisionV1 = z.infer<typeof ApprovalDecisionV1Schema>;
 export const ApprovalDecisionV2Schema = lazyZodSchema(() => (<T extends z.ZodMiniObject>(schema: T) => z.core.clone(schema, { ...schema._zod.def, catchall: z.never() }) as z.ZodMiniObject<T['shape'], z.core.$strict>)(z.extend(ApprovalDecisionV1Schema, {
   authority: z.optional(z.literal('present_user')),
   decidingAccountId: z.optional(SessionMessageAccountActorV1Schema.shape.accountId),
+  /** Host-stamped delegated decision modality; absence preserves historical unknown. */
+  decidedVia: z.optional(z.literal('voice')),
   narrowedInput: zMini.optional(StrictJsonValueSchema),
 })));
 

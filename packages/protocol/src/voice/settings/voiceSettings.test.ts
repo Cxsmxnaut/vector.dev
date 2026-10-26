@@ -16,6 +16,15 @@ import { VoiceProviderSettingsEnvelopeV1Schema } from '../realtime/providerSetti
 describe('shared Voice settings owner', () => {
   const owner = createVoiceSettingsOwner({ bundledContributions: [] });
 
+  it('defaults Voice request decisions on and preserves an explicit opt-out', () => {
+    expect(owner.voiceSettingsParse({}).canApproveRequests).toBe(true);
+    for (const canApproveRequests of [true, false]) {
+      const stored = owner.voiceSettingsParse({ canApproveRequests });
+      expect(stored.canApproveRequests).toBe(canApproveRequests);
+      expect(owner.voiceSettingsParse(JSON.parse(JSON.stringify(stored))).canApproveRequests).toBe(canApproveRequests);
+    }
+  });
+
   it('defaults both neural speech roles to June Zipformer while retaining explicit pack choices', () => {
     const june = 'sherpa-onnx-streaming-zipformer-en-2023-06-26';
     const fresh = owner.voiceSettingsParse({});

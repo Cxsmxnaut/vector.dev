@@ -31,6 +31,28 @@ describe('verified invocation authority', () => {
     expect(resolveCredentialActionAdmissionV1({ spec: getActionSpec('approval.request.decide'), authority: 'account_automation', grant })).toEqual({ ok: true });
     expect(resolveCredentialActionAdmissionV1({ spec: getActionSpec('account.apiTokens.create'), authority: 'account_automation', grant })).toEqual({ ok: false, errorCode: 'present_user_required' });
   });
+  it('delegates only request decisions to the Account Voice host while its preference is enabled', () => {
+    for (const actionId of ['approval.request.decide', 'session.permission.respond', 'session.user_action.answer'] as const) {
+      expect(resolveInvocationAuthority({ credential: 'account', surface: 'voice', actionId,
+        voiceCanApproveRequests: true })).toBe('present_user');
+      for (const voiceCanApproveRequests of [false, undefined]) {
+        expect(resolveInvocationAuthority({ credential: 'account', surface: 'voice', actionId,
+          voiceCanApproveRequests })).toBe('account_automation');
+      }
+      for (const surface of ['agent', 'mcp', 'plugin', 'api', 'cli'] as const) {
+        expect(resolveInvocationAuthority({ credential: 'account', surface, actionId,
+          voiceCanApproveRequests: true })).toBe('account_automation');
+      }
+      for (const credential of ['agent', 'plugin', 'terminal', 'api_token', 'none'] as const) {
+        expect(resolveInvocationAuthority({ credential, surface: 'voice', actionId,
+          voiceCanApproveRequests: true })).toBe('account_automation');
+      }
+    }
+    for (const actionId of ['settings.set', 'session.stop', 'account.apiTokens.create'] as const) {
+      expect(resolveInvocationAuthority({ credential: 'account', surface: 'voice', actionId,
+        voiceCanApproveRequests: true })).toBe('account_automation');
+    }
+  });
   it('admits host agent permission answers without widening external credential authority', () => {
     const spec = getActionSpec('session.permission.respond');
     for (const surface of ['agent', 'mcp', 'api', 'cli', 'rpc', 'plugin', 'ui', 'voice'] as const) {

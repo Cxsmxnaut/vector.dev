@@ -74,6 +74,7 @@ export function projectApprovalRequestForPublicRead(request: ApprovalRequest | T
       ? { executionOriginV1: projectPublicApprovalExecutionOrigin(target.data.executionOriginV1) } : {}),
     ...(target.data.decision ? { decision: {
       kind: target.data.decision.kind, decidedAtMs: target.data.decision.decidedAtMs,
+      ...(target.data.decision.decidedVia === 'voice' ? { decidedVia: 'voice' } : {}),
     } } : {}),
     ...(target.data.execution ? { execution: projectApprovalExecutionForObservation(target.data) } : {}),
   };
@@ -99,6 +100,7 @@ export function projectApprovalRequestForPublicRead(request: ApprovalRequest | T
   if (builtIn.decision) disclosed.decision = {
     kind: builtIn.decision.kind, decidedAtMs: builtIn.decision.decidedAtMs,
     ...(builtIn.decision.authority === 'present_user' ? { authority: 'present_user' } : {}),
+    ...(builtIn.v === 2 && builtIn.decision.decidedVia === 'voice' ? { decidedVia: 'voice' } : {}),
     ...(builtIn.decision.narrowedInput === undefined ? {} : { narrowedInput: projectInput(builtIn.decision.narrowedInput) }),
   };
   if (builtIn.execution) disclosed.execution = projectApprovalExecutionForObservation(builtIn);

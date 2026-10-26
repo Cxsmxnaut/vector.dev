@@ -11230,15 +11230,16 @@ const ACTION_SPECS_WITHOUT_APPROVAL_SESSION_SUFFIX = Object.freeze(defineActionS
   },
   {
     id: 'session.permission.respond', approvalPolicy: { agentDefault: 'authority', requiredSurfaces: ['mcp'] }, approval: {result: 'optional',flow: 'deferred'},
+    prompting: { voiceHotPath: true },
     title: 'Respond to permission request',
     sideEffectClass: 'write',
     description: 'Approve or deny an active permission request in a session.',
     safety: 'safe',
     placements: [],
-    bindings: { rpcMethod: 'session.permission.respond' },
+    bindings: { voiceClientToolName: 'session_permission_respond', rpcMethod: 'session.permission.respond' },
     surfaces: {
       ui: true,
-      voice: false,
+      voice: true,
       agent: true,
       mcp: true,
       cli: true,
@@ -12929,6 +12930,7 @@ const ACTION_SPECS_WITHOUT_APPROVAL_SUFFIX = Object.freeze(defineActionSpecs([
   },
   {
     id: 'approval.request.decide', originalExecution: { accountRoot: 'allowed' }, approvalPolicy: { control: true }, approval: {result: 'none'},
+    prompting: { voiceHotPath: true },
     projectObservationOutput: (value) => {
       if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
       const { liveExecution: _liveExecution, ...observed } = value as Record<string, unknown>;
@@ -12938,10 +12940,10 @@ const ACTION_SPECS_WITHOUT_APPROVAL_SUFFIX = Object.freeze(defineActionSpecs([
     description: 'Approve, reject or cancel an open approval request. Cancellation settles without authorizing its effect.',
     safety: 'danger',
     placements: [],
-    bindings: { mcpToolName: 'approval_request_decide', rpcMethod: 'approval.request.decide' },
+    bindings: { voiceClientToolName: 'approval_request_decide', mcpToolName: 'approval_request_decide', rpcMethod: 'approval.request.decide' },
     surfaces: {
       ui: true,
-      voice: false,
+      voice: true,
       agent: true,
       mcp: true,
       cli: true,

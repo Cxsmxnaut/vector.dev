@@ -139,6 +139,7 @@ export {
 function createCanonicalVoiceSettingsSchema(createDefaultProviderEnvelopes: () => Record<string, VoiceProviderSettingsEnvelopeV1>) {
   return z.object({
   providerId: z._default(z.nullable(VoiceProviderIdSchema), null),
+  canApproveRequests: z._default(z.boolean(), true),
   assistantLanguage: z._default(z.nullable(z.string()), null),
   dictation: z.prefault(VoiceDictationSettingsSchema, {}),
   welcome: z.prefault(VoiceWelcomeSchema, {}),
@@ -617,6 +618,9 @@ function voiceSettingsParse(
     const providerId = VoiceProviderIdSchema.safeParse(legacyProviderId);
     if (providerId.success) base.providerId = providerId.data;
   }
+
+  const canApproveRequests = CanonicalVoiceSettingsSchema.shape.canApproveRequests.safeParse(raw.canApproveRequests);
+  if (canApproveRequests.success) base.canApproveRequests = canApproveRequests.data;
 
   const canonicalAssistantLanguage = z.nullable(z.string()).safeParse(raw.assistantLanguage);
   if (canonicalAssistantLanguage.success) base.assistantLanguage = canonicalAssistantLanguage.data;

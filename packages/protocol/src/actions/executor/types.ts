@@ -580,6 +580,8 @@ export type SessionPermissionRemoteActionArgs =
     }>;
 
 export type ActionExecutorContext = Readonly<{
+  /** Host-local live delegation check before a request decision is issued; never Action/RPC input. */
+  assertDecisionAuthorityCurrent?: () => void;
   /** Exact dependency census retained from this host's reviewed Delete click; never Action input or execution authority. */
   reviewedMachineReferences?: import('../../machines/machineReferenceCensusV1.js').MachineReferenceCensusV1;
   /** Host-private custody restored only from a validated, human-approved native review. */
@@ -735,6 +737,8 @@ export type ActionExecutorContext = Readonly<{
   requesterApprovalDecision?: Readonly<{
     sessionId: string;
     actor: import('../../sessions/permissions/v1.js').SessionPermissionAccountUserDecisionActorV1;
+    /** Host-derived display attribution lifted only after authenticated requester admission. Not authority. */
+    decisionSource?: 'voice';
     /** Reuses the authenticated Session admission owner before decision/claim/effect. */
     isCurrent: () => Promise<boolean>;
   }>;
@@ -2248,7 +2252,7 @@ export type ActionExecutorDeps = Readonly<{
   }>) => Promise<ApprovalQueueListResultV1>;
   approvalsCreate?: (args: Readonly<{ request: ApprovalRequest; serverId?: string | null }>) => Promise<{ artifactId: string }>;
   approvalsGet?: (args: Readonly<{ artifactId: string; serverId?: string | null }>) => Promise<ApprovalRequest | TargetActionApprovalRequestV1 | null>;
-  approvalsUpdate?: (args: Readonly<{ artifactId: string; request: ApprovalRequest; serverId?: string | null }>) => Promise<{ ok: true } | { ok: false; errorCode: string; error: string }>;
+  approvalsUpdate?: (args: Readonly<{ artifactId: string; request: ApprovalRequest; serverId?: string | null; context?: ActionExecutorContext }>) => Promise<{ ok: true } | { ok: false; errorCode: string; error: string }>;
   /** Code-only host diagnostic for best-effort retirement after an already-confirmed effect. */
   recordApprovalRetirementWarning?: (warning: Readonly<{ artifactId?: string; code: string }>) => void | Promise<void>;
   /** Host-owned Home identity preparation, demanded only when constructing an approval origin. Never serialized. */
