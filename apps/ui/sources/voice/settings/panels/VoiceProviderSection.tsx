@@ -6,7 +6,8 @@ import { Platform } from 'react-native';
 
 
 import { ItemGroup } from '@/components/ui/lists/ItemGroup';
-import { SettingAnchor } from '@/components/settings/shell/SettingRow';
+import { SettingAnchor, SettingRow } from '@/components/settings/shell/SettingRow';
+import { Switch } from '@/components/ui/forms/Switch';
 import { VOICE_CONVERSATIONS_SETTINGS } from '@/voice/settings/voiceSettingsDeclarations';
 import { useVoiceSettingsSearchPrerequisite } from '@/voice/settings/VoiceSettingsSearchPrerequisite';
 import { getVoiceContributedSettingRefs, useVoiceContributedSettingsDeclarations } from '@/voice/settings/useVoiceContributedSettingRefs';
@@ -1105,6 +1106,33 @@ export function useVoiceConversationsReadinessModel(props: {
       ? null
       : localConversationReadinessFacts.speechReadiness,
   };
+}
+
+/**
+ * Whether the Voice agent may answer a pending request for the person (A-VI04-2). It applies to every
+ * Voice service, so it is its own section at the end of the page rather than part of one service's
+ * pipeline sections.
+ */
+export function VoiceAgentApprovalsSection(props: Readonly<{ voice: VoiceSettings; setVoice: (next: VoiceSettings) => void }>) {
+  const { voice } = props;
+  return (
+    <ItemGroup
+      title={t('settingsVoice.pages.conversations.approvalsTitle')}
+      description={t('settingsVoice.pages.conversations.approvalsDescription')}
+    >
+      <SettingRow
+        setting={VOICE_CONVERSATIONS_SETTINGS.settings.canApproveRequests}
+        rightElement={(
+          <Switch
+            testID="settings.voice.canApproveRequests"
+            accessibilityLabel={t(VOICE_CONVERSATIONS_SETTINGS.settings.canApproveRequests.titleKey)}
+            value={voice.canApproveRequests}
+            onValueChange={(canApproveRequests) => props.setVoice({ ...voice, canApproveRequests })}
+          />
+        )}
+      />
+    </ItemGroup>
+  );
 }
 
 export function VoiceProviderSection(props: Parameters<typeof useVoiceConversationsReadinessModel>[0] & Readonly<{

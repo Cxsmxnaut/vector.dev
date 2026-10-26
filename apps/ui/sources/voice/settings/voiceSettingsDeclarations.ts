@@ -68,6 +68,12 @@ export const VOICE_CONVERSATIONS_SETTINGS = defineSettingsPage({
                 greeting: { storage: voiceGreetingBinding },
             },
         },
+        approvals: {
+            titleKey: 'settingsVoice.pages.conversations.approvalsTitle',
+            settings: {
+                canApproveRequests: { storage: voiceSettingBinding('canApproveRequests') },
+            },
+        },
         language: {
             titleKey: 'settingsVoice.languageTitle',
             settings: {
