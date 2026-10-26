@@ -26,7 +26,7 @@ function flattenStyle(style: unknown): Record<string, unknown> {
 
 function findRightEdgeFades(screen: Awaited<ReturnType<typeof renderScreen>>) {
     return screen.findAll((node) => {
-        if (node.type !== 'View') return false;
+        if ((node.type as string) !== 'View') return false;
         const style = flattenStyle(node.props.style);
         return style.position === 'absolute' && style.right === 0 && style.width === 24 && style.zIndex === 10;
     });

@@ -788,7 +788,7 @@ describe('MachinePathBrowserModal', () => {
                     onClose={vi.fn()}
                 />);
 
-        let confirmButton = await waitForTestId(screen, PATH_BROWSER_CONFIRM_TEST_ID);
+        let confirmButton: ReturnType<typeof screen.findByTestId> = await waitForTestId(screen, PATH_BROWSER_CONFIRM_TEST_ID);
         for (let index = 0; index < 8 && confirmButton?.props?.disabled !== false; index += 1) {
             await flushHookEffects({ cycles: 1, turns: 1 });
             confirmButton = screen.findByTestId(PATH_BROWSER_CONFIRM_TEST_ID);
@@ -816,7 +816,7 @@ describe('MachinePathBrowserModal', () => {
                     onResolve={vi.fn()}
                     onClose={vi.fn()}
                 />);
-        let confirmButton = await waitForTestId(screen, PATH_BROWSER_CONFIRM_TEST_ID);
+        let confirmButton: ReturnType<typeof screen.findByTestId> = await waitForTestId(screen, PATH_BROWSER_CONFIRM_TEST_ID);
         for (let index = 0; index < 8 && confirmButton?.props?.disabled !== false; index += 1) {
             await flushHookEffects({ cycles: 1, turns: 1 });
             confirmButton = screen.findByTestId(PATH_BROWSER_CONFIRM_TEST_ID);
