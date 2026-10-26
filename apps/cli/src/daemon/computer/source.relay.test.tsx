@@ -34,7 +34,7 @@ vi.mock('react-native', async () => {
   const { createReactNativeWebMock } = await import('../../../../ui/sources/dev/testkit/mocks/reactNative');
   return createReactNativeWebMock();
 });
-vi.mock('../../../../ui/node_modules/react-native-unistyles', async () => {
+vi.mock('react-native-unistyles', async () => {
   const { createUnistylesMock } = await import('../../../../ui/sources/dev/testkit/mocks/unistyles');
   return createUnistylesMock();
 });
