@@ -1742,7 +1742,7 @@ describe('VoiceExecutionTransport (streaming)', () => {
     );
   });
 
-  it('passes resume=true to stream_start when provider-resume is enabled for a persistent global agent', async () => {
+  it('admits provider-resume for a persistent global agent without giving ordinary streamed input recovery intent', async () => {
     useVoiceTargetStore.getState().setPrimaryActionSessionAddress({ serverId: connection.home.id, sessionId: 's1' });
 
     setControllerState(() => ({
@@ -1794,7 +1794,17 @@ describe('VoiceExecutionTransport (streaming)', () => {
 
     await controller.sendTurn(VOICE_AGENT_GLOBAL_SESSION_ID, 'hello');
 
-    expect(daemonStreamStart).toHaveBeenCalledWith(expect.objectContaining({ resume: true }));
+    expect(daemonStart).toHaveBeenCalledWith(expect.objectContaining({
+      sessionId: 'sys_voice',
+      resume: true,
+      retentionPolicy: 'resumable',
+    }));
+    expect(daemonStreamStart).toHaveBeenCalledWith(expect.objectContaining({
+      sessionId: 'sys_voice',
+      runId: 'm1',
+      message: 'hello',
+    }));
+    expect(daemonStreamStart.mock.calls[0]?.[0]).not.toHaveProperty('resume');
   });
 
   it('fails closed and does not pass resume=true to stream_start when runtime publication does not expose transcriptSource', async () => {
