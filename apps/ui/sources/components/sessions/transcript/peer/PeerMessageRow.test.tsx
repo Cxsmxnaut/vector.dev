@@ -25,7 +25,11 @@ describe('PeerMessageRow', () => {
         expect(collapsed).toContain(label);
         expect(collapsed).toContain('Verdict: fixed.');
         expect(collapsed).not.toContain('FULL_BODY');
-        const header = () => screen.findHostByTestId('transcript-peer-message-header');
+        const header = () => {
+            const node = screen.findHostByTestId('transcript-peer-message-header');
+            if (!node) throw new Error('peer message header is not rendered');
+            return node;
+        };
         expect(header().props).toMatchObject({ accessibilityRole: 'button', accessibilityState: { expanded: false } });
         await screen.pressByTestIdAsync('transcript-peer-message-header');
         expect(collectHostText(screen.tree).join(' ')).toContain('FULL_BODY');
