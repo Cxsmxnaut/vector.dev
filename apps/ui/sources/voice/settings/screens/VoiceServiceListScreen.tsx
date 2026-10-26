@@ -10,7 +10,7 @@ import { ItemList } from '@/components/ui/lists/ItemList';
 import { t } from '@/text';
 import { useVoiceExecutionMachineSelection } from '@/voice/credentials/useExecutionMachinePresentation';
 import { useVoiceConversationsReadinessModel } from '@/voice/settings/panels/VoiceProviderSection';
-import { useVoiceConversationsReadinessInputs } from '@/voice/settings/useVoiceConversationsReadinessInputs';
+import { useVoiceSettingsReadinessInputs } from '@/voice/settings/useVoiceSettingsReadinessInputs';
 import { useVoiceSettingsMutable } from '@/voice/settings/useVoiceSettingsMutable';
 
 /**
@@ -23,7 +23,7 @@ export function VoiceServiceListScreen() {
   const router = useRouter();
   const [voice, setVoice] = useVoiceSettingsMutable();
   const executionMachine = useVoiceExecutionMachineSelection();
-  const inputs = useVoiceConversationsReadinessInputs(voice, { probeMachine: false });
+  const inputs = useVoiceSettingsReadinessInputs(voice, { purpose: 'conversation', probeMachine: false });
   const model = useVoiceConversationsReadinessModel({
     voice,
     setVoice,

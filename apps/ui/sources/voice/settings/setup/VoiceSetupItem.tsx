@@ -35,7 +35,7 @@ import {
 import { findVoiceConversationSessionId } from '@/voice/persistence/voiceConversationSystemSessionLookup';
 import { useVoiceConversationsReadinessModel } from '@/voice/settings/panels/VoiceProviderSection';
 import { resolveVoiceProviderReadinessPresentation, translateVoiceReadiness } from '@/voice/settings/panels/voiceProviderReadinessPresentation';
-import { useVoiceConversationsReadinessInputs } from '@/voice/settings/useVoiceConversationsReadinessInputs';
+import { useVoiceSettingsReadinessInputs } from '@/voice/settings/useVoiceSettingsReadinessInputs';
 import { useVoiceSettingsMutable } from '@/voice/settings/useVoiceSettingsMutable';
 import { resolveVoiceSettingsRecoveryFocus } from '@/voice/settings/voiceSettingsRouteFocus';
 import { recoverVoiceSettingsReadiness } from '@/voice/settings/voiceSettingsRecovery';
@@ -60,7 +60,7 @@ export function useVoiceSetupBlock(input: Readonly<{ layout: 'card' | 'row'; spa
     const { executeValue } = useMountedActionExecution(accountScope, { openOnRequest: true });
     const [panelOpen, setPanelOpen] = React.useState(false);
     const [voiceSettings, setVoiceSettings] = useVoiceSettingsMutable();
-    const inputs = useVoiceConversationsReadinessInputs(voiceSettings, { probeMachine: panelOpen });
+    const inputs = useVoiceSettingsReadinessInputs(voiceSettings, { purpose: 'conversation', probeMachine: panelOpen });
     const readinessModel = useVoiceConversationsReadinessModel({
         voice: voiceSettings,
         setVoice: setVoiceSettings,

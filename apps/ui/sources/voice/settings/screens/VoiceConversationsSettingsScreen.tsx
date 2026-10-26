@@ -19,7 +19,7 @@ import {
   resolveVoiceSettingsRouteFocus,
 } from '@/voice/settings/voiceSettingsRouteFocus';
 import { useVoiceSettingsMutable } from '@/voice/settings/useVoiceSettingsMutable';
-import { useVoiceConversationsReadinessInputs } from '@/voice/settings/useVoiceConversationsReadinessInputs';
+import { useVoiceSettingsReadinessInputs } from '@/voice/settings/useVoiceSettingsReadinessInputs';
 
 export function VoiceConversationsSettingsScreen() {
   const routeParams = useLocalSearchParams<{ focus?: string | string[] }>();
@@ -54,7 +54,7 @@ export function VoiceConversationsSettingsScreen() {
     daemonModelCatalog,
     localAvailability,
     daemonRouteDiagnosticReason,
-  } = useVoiceConversationsReadinessInputs(voice, { probeMachine: true });
+  } = useVoiceSettingsReadinessInputs(voice, { purpose: 'conversation', probeMachine: true });
   const popoverBoundaryRef = React.useRef<any>(null);
 
   return (
