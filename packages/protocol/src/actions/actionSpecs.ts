@@ -5462,11 +5462,12 @@ const ACTION_SPECS_WITHOUT_APPROVAL_PREFIX_LEAD = Object.freeze(defineActionSpec
   })),
   ...SETTINGS_DECLARATION_ACTION_IDS_V1.map((id): PreNormalizedActionSpec => ({
     id, approval: { result: 'required' }, originalExecution: { accountRoot: 'allowed', terminalRoot: 'host' },
-    ...(id === 'settings.list' || id === 'settings.get' || id === 'settings.set' || id === 'settings.reset'
-      ? { toolExposure: { agent: 'direct' as const } }
-      : {}),
     // A present user's own Settings change applies directly; agent and automation callers keep the danger default.
     ...(id === 'settings.set' || id === 'settings.reset' ? { approvalPolicy: { uiConfirmation: 'direct' as const } } : {}),
+    // The operation schema stays behind realtime discovery; the native Agent
+    // and Local Voice instructions share its ordinary direct-tool exposure.
+    prompting: { voiceHotPath: id !== 'settings.invoke' },
+    toolExposure: { agent: 'direct' },
     ...(id === 'settings.invoke' ? { approvalPolicy: {
       uiConfirmation: 'direct' as const,
       uiConfirmationForInput: (input: unknown) => readBuiltInSettingsOperationApprovalPolicyV1(input).uiConfirmationRequired,
@@ -12874,6 +12875,7 @@ const ACTION_SPECS_WITHOUT_APPROVAL_SUFFIX = Object.freeze(defineActionSpecs([
   },
   {
     id: 'approval.request.get', approvalPolicy: { control: true }, approval: {result: 'required'},
+    prompting: { voiceHotPath: true },
     title: 'Get approval request',
     description: 'Fetch one approval request by approval artifact id.',
     safety: 'safe',

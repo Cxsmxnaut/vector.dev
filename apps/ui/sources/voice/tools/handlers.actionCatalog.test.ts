@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { answerDiscussionThreadForTests, createAccountTokenForTests, createHomeGovernanceHarness, installHomeGovernanceBoundaries } from '@/dev/testkit/harness/homeGovernanceHarness';
 import { restoreServerAccountForTest } from '@/dev/testkit/harness/serverAccountConnectionHarness';
+import { loadSyncSingletonForTests } from '@/dev/testkit/harness/syncSingletonLoader';
 import { ApprovalRequestSchema } from '@happier-dev/protocol/approvals/approvalRequestV1';
 import { captureDocPassageV1 } from '@happier-dev/protocol/artifacts/artifactPassageV1';
 import { describeApprovalActionFields } from '@happier-dev/protocol/actions/actionApprovalPresentation';
@@ -20,13 +21,16 @@ import {
   getActionSpec,
   type ActionDefinitionV1,
   type AccountSettingsStoredContentEnvelope,
+  parseVoiceToolResultsFollowUp,
 } from '@happier-dev/protocol';
+import { buildToolResultsFollowUpPrompt } from '@/voice/context/buildVoiceToolResultsFollowUp';
 import { SettingsDeclarationActionOutputSchemasV1 } from '@happier-dev/protocol/actions/settingsDeclarationActionFamily';
 import { isActionDirectToolExposedOn } from '@happier-dev/protocol/actions/actionToolExposure';
 import { settingsDefaults } from '@/sync/domains/settings/settings';
 
 const home = createHomeGovernanceHarness();
 installHomeGovernanceBoundaries(home);
+await loadSyncSingletonForTests();
 const { createVoiceToolHandlers, resolveVoiceToolEffectClass } = await import('./handlers');
 const { resolveVoiceActionExecution } = await import('./voiceActionExecution');
 const { createArtifactActionsClient } = await import('@/components/artifacts/artifactActionsClient');
@@ -35,7 +39,7 @@ const { createDefaultActionExecutor } = await import('@/sync/ops/actions/default
 describe('Voice Action reference catalog', () => {
   beforeEach(async () => { await home.reset(); });
   afterEach(async () => { await home.reset(); });
-  it('discovers a displayed Voice preference on the Global Home and changes it only after human approval', async () => {
+  it.each(['ui', 'voice', 'voice-disabled'] as const)('discovers a displayed Voice preference and settles its approval through %s', async decisionPath => {
     expect(isActionDirectToolExposedOn(getActionSpec('settings.list'), 'agent')).toBe(true);
     const serverId = await home.addHome({ name: 'Global Voice settings', serverUrl: 'https://global-voice-settings.test',
       accountId: 'alice', currentAccount: true });
@@ -43,7 +47,7 @@ describe('Voice Action reference catalog', () => {
     expect(tryWriteServerEnabledBitInPlace(features, 'voice', true)).toBe(true);
     home.answer(serverId, '/v1/features', { body: features });
     let content: Extract<AccountSettingsStoredContentEnvelope, { t: 'plain' }> = {
-      t: 'plain', v: { voice: settingsDefaults.voice, favoriteMachines: ['keep-neighbor'] },
+      t: 'plain', v: { voice: { ...settingsDefaults.voice, canApproveRequests: decisionPath !== 'voice-disabled' }, favoriteMachines: ['keep-neighbor'] },
     };
     let version = 1;
     home.answer(serverId, 'GET /v2/account/settings', { select: () => ({ body: { content, version } }) });
@@ -79,9 +83,51 @@ describe('Voice Action reference catalog', () => {
     expect(ApprovalRequestSchema.parse(JSON.parse(home.artifacts(serverId).readPlainBody(ask.id) ?? 'null')))
       .toMatchObject({ status: 'open', actionId: 'settings.set', requestedSurface: 'voice',
         executionOriginV1: { authority: 'account_automation' } });
-    const decided = await createDefaultActionExecutor().execute('approval.request.decide', {
-      artifactId: ask.id, decision: 'approve',
-    }, { surface: 'ui', serverId, authority: 'present_user', actionCaller: { kind: 'host' } });
+    // Discover the actual Account Ask through the same tools available to the
+    // Voice agent; native Session updates are not its source of truth.
+    const queue = JSON.parse(await handlers.approval_request_list!({ status: 'open' }));
+    expect(queue.ok).toBe(true);
+    expect(JSON.stringify(queue)).toContain(ask.id);
+    const request = JSON.parse(await handlers.approval_request_get!({ artifactId: ask.id }));
+    expect(JSON.stringify(request)).toContain('voiceConversations.minSpeechMs');
+    const { ok: queueOk, ...queueBody } = queue;
+    const { ok: requestOk, ...requestBody } = request;
+    expect(queueOk && requestOk).toBe(true);
+    const queueSchema = getActionSpec('approval.request.list').outputSchema;
+    const requestSchema = getActionSpec('approval.request.get').outputSchema;
+    if (!queueSchema || !requestSchema) throw new Error('Expected canonical approval output schemas');
+    expect(queueSchema.parse(queueBody)).toMatchObject({
+      items: [expect.objectContaining({ artifactId: ask.id, status: 'open', actionId: 'settings.set' })],
+    });
+    expect(requestSchema.parse(requestBody)).toMatchObject({
+      artifactId: ask.id, request: { status: 'open', actionArgs: { anchor: declaration.anchor, value: 1100 } },
+    });
+    const results = [{ t: 'approval_request_list', args: { status: 'open' }, result: queue },
+      { t: 'approval_request_get', args: { artifactId: ask.id }, result: request }];
+    const privacy = { shareFilePaths: false, shareSessionSummary: false, sharePermissionRequests: true };
+    const context = parseVoiceToolResultsFollowUp(buildToolResultsFollowUpPrompt(results, privacy));
+    expect(JSON.stringify(context)).toContain(ask.id);
+    expect(JSON.stringify(context)).toContain(requestBody.request.summary);
+    // Permission sharing admits the request presentation, not its raw effect
+    // operands or stored preview. The Voice policy forces tool-argument redaction.
+    expect(JSON.stringify(context)).not.toContain('"actionArgs"');
+    expect(JSON.stringify(context)).not.toContain('"preview"');
+    const withheld = buildToolResultsFollowUpPrompt(results, { ...privacy, sharePermissionRequests: false });
+    expect(withheld).not.toContain(ask.id);
+    expect(withheld).not.toContain(declaration.anchor);
+    if (decisionPath === 'voice-disabled') {
+      const { storage } = await import('@/sync/domains/state/storage');
+      storage.getState().applySettingsLocal({ voice: { ...storage.getState().settings.voice, canApproveRequests: false } });
+      const refused = JSON.parse(await handlers.approval_request_decide!({ artifactId: ask.id, decision: 'approve' }));
+      expect(refused).toMatchObject({ ok: false, errorCode: 'present_user_required' });
+      expect(ApprovalRequestSchema.parse(JSON.parse(home.artifacts(serverId).readPlainBody(ask.id) ?? 'null')).status).toBe('open');
+      expect(version).toBe(1);
+    }
+    const decided = decisionPath === 'voice'
+      ? JSON.parse(await handlers.approval_request_decide!({ artifactId: ask.id, decision: 'approve' }))
+      : await createDefaultActionExecutor().execute('approval.request.decide', {
+        artifactId: ask.id, decision: 'approve',
+      }, { surface: 'ui', serverId, authority: 'present_user', actionCaller: { kind: 'host' } });
     expect(decided).toMatchObject({ ok: true });
     expect(JSON.parse(await pending)).toMatchObject({ ok: true, value: 1100 });
     expect(JSON.parse(await handlers.settings_get!(input))).toMatchObject({ ok: true, value: 1100 });
@@ -112,7 +158,6 @@ describe('Voice Action reference catalog', () => {
       { actionId: 'workflow.run.invocations.complete_review', input: {
         runId: input.runId, invocation: { recordId: 'invocation-1' }, expectedContentRevision: '0', mode: 'use_result',
       } },
-      { actionId: 'approval.request.decide', input: { artifactId: 'approval-1', decision: 'approve' } },
     ] as const) {
       expect(getActionSpec(parameters.actionId)
         .inputSchema.safeParse(parameters.input).success).toBe(true);

@@ -232,7 +232,7 @@ export const VOICE_CONVERSATION_ACTION_SPECS = VOICE_CONVERSATION_ACTION_IDS.map
     'ui.voice_global.history.export': 'Export Voice History', 'ui.voice_global.history.clear': 'Clear Voice History',
   }[id],
   description: isVoiceHistoryActionId(id) ? VOICE_CONVERSATION_ACTION_SUMMARIES[id]
-    : 'Use the answering client’s existing Voice lifecycle, input, recovery and Inbox Brief owners. Mutations require the captured attempt identity; navigation cannot retarget them. Spoken requests cannot decide approvals.',
+    : 'Use the answering client’s existing Voice lifecycle, input, recovery and Inbox Brief owners. Mutations require the captured attempt identity; navigation cannot retarget them. Local Voice and host-tool realtime may decide pending requests when Voice agent can approve requests is enabled (the default); when off, a tap is required. Native Codex Realtime cannot decide: tap the request or switch to Local Voice. Confirm outcomes only from canonical request state.',
   safety: id === 'ui.voice_global.start' || id === 'ui.voice_global.recover' || id === 'ui.voice_global.hold_begin'
     || id === 'ui.voice_global.set_muted' || id === 'ui.voice_global.dictation.start'
     || id === 'ui.voice_global.setup.microphone.permission.request'

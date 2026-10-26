@@ -432,6 +432,7 @@ async function createElevenLabsToolHarness() {
       version: () => ({ apiVersion: PLUGIN_UI_HOST_API_VERSION_V1, wireVersion: PLUGIN_UI_HOST_API_WIRE_VERSION_V1, methods: [] }),
       context: async () => unavailableUi(), watchContext: unavailableUi,
       widgetArea: async () => unavailableUi(),
+      actionControl: async () => unavailableUi(),
       readEntityDragItem: async () => unavailableUi(),
       updateEntityDragDrop: async () => unavailableUi(),
       watchEntityDragDrop: async () => unavailableUi(),
@@ -1048,6 +1049,7 @@ describe('voice tool handlers', () => {
     expect(pendingEnqueue).not.toHaveBeenCalled();
     expect(invocations).toEqual([]);
     const { createDefaultActionExecutor } = await import('@/sync/ops/actions/defaultActionExecutor');
+    state.settings.voice.canApproveRequests = false;
     expect(await createDefaultActionExecutor().execute('approval.request.decide', {
       artifactId: result.artifactId, decision: 'approve',
     }, { surface: 'voice', serverId: homeA, authority: 'present_user' }))
@@ -1954,10 +1956,11 @@ describe('voice tool handlers', () => {
     }
   });
 
-  describe('question answers and person approval', () => {
+  describe('question answers with Voice request approval turned off', () => {
   beforeEach(() => {
-    // A prompt waiver must never turn spoken content into person authority.
+    // An Action waiver cannot override the person's Voice opt-out.
     // The default approval/replay path is composed in defaultActionExecutor.planMode.test.ts.
+    state.settings.voice.canApproveRequests = false;
     state.settings.actionsSettingsV1 = { v: 1, approvalWaivedSurfaces: { 'session.user_action.answer': ['voice'] } };
   });
 

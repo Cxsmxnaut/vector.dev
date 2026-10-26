@@ -39,6 +39,18 @@ function source(): VoiceBriefSource {
 }
 
 describe('Voice brief from the mounted Inbox', () => {
+    it.each([undefined, true, false])('carries current delegated-approval guidance with the native exception (enabled=%s)', (canApproveRequests) => {
+        const brief = buildVoiceBrief({ inbox: source(), settings: { voice: { canApproveRequests } } });
+        const guidance: unknown = JSON.parse(brief.context).approval;
+        expect(guidance).toEqual(expect.stringContaining(canApproveRequests === false ? 'Voice approvals are off' : 'Voice approvals are enabled'));
+        expect(guidance).toEqual(expect.stringContaining('Native Codex Realtime cannot decide requests'));
+        if (canApproveRequests === false) {
+            expect(guidance).toEqual(expect.stringContaining('A tap in the request UI is required'));
+            expect(guidance).not.toEqual(expect.stringContaining('Use the canonical request tools to approve or deny'));
+        } else {
+            expect(guidance).toEqual(expect.stringContaining('Use the canonical request tools to approve or deny'));
+        }
+    });
     it.each([
         { total: 2, working: 0, needsYou: 0, stalled: 2, finished: 0, attentionPrimary: null },
         { total: 2, working: 0, needsYou: 2, stalled: 0, finished: 0, attentionPrimary: null },

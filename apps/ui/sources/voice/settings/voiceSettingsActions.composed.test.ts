@@ -36,6 +36,36 @@ async function pressTtsSample(screen: Awaited<ReturnType<typeof renderScreen>>) 
 }
 
 describe('Voice declarations through the default Settings Action and Account persistence', () => {
+    it('persists the person-controlled Voice approval preference without replacing unrelated values', async () => {
+        const account = await createVoiceSettingsAccountTestHarness(settingsParse({ actionsSettingsV1: {
+            v: 1, actions: {}, approvalWaivedSurfaces: { 'settings.set': ['voice'] },
+        }, voice: {
+            assistantLanguage: 'fr', privacy: { shareToolNames: false },
+        } }));
+        onTestFinished(account.dispose);
+        const executor = createDefaultActionExecutor();
+        const context = { surface: 'ui' as const, authority: 'present_user' as const,
+            serverId: account.scope.serverId, expectedAccountId: account.scope.accountId };
+        const anchor = 'voiceConversations.canApproveRequests';
+        expect(await executor.execute('settings.get', { anchor }, context)).toMatchObject({
+            ok: true, result: { value: true },
+        });
+        expect(await executor.execute('settings.set', { anchor, value: false }, context)).toMatchObject({ ok: true });
+        expect(account.persistedSettings.voice).toMatchObject({ canApproveRequests: false,
+            assistantLanguage: 'fr', privacy: { shareToolNames: false } });
+        account.replaceVoice({ ...account.settings.voice, assistantLanguage: 'de' });
+        const before = account.persistedSettings;
+        const writes = account.writes.length;
+        expect(await executor.execute('settings.set', { anchor, value: 'false' }, context)).toMatchObject({ ok: false });
+        expect(await executor.execute('settings.set', { anchor, value: true }, {
+            ...context, surface: 'voice', authority: 'account_automation',
+        })).toMatchObject({ ok: false, errorCode: 'present_user_required' });
+        expect(account.writes).toHaveLength(writes);
+        expect(account.persistedSettings).toEqual(before);
+        expect(await executor.execute('settings.set', { anchor, value: true }, context)).toMatchObject({ ok: true });
+        expect(account.persistedSettings.voice).toMatchObject({ canApproveRequests: true,
+            assistantLanguage: 'de', privacy: { shareToolNames: false } });
+    });
     it('does not prime the browser audio graph for a refused TTS sample', async () => {
         speech.reset();
         const platform = speech.platform.value;

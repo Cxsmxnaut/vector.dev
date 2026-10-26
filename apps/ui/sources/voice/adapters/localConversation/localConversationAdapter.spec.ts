@@ -228,7 +228,8 @@ describe('local conversation voice adapter', () => {
       })).toBe(true);
       await briefAdmitted.promise;
       expect(admittedProviderText()).toContain('INBOX BRIEF');
-      expect(admittedProviderText()).toContain('Approvals are tap-only');
+      expect(admittedProviderText()).toContain('Voice approvals are enabled');
+      expect(admittedProviderText()).toContain('Native Codex Realtime cannot decide requests');
     } finally {
       await adapter.stop({ sessionId: VOICE_AGENT_GLOBAL_SESSION_ID });
       setVoiceSessionSnapshot(adapter.getSnapshot());
