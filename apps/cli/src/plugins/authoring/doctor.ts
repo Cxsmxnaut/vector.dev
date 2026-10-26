@@ -104,17 +104,15 @@ export type PluginAuthorDoctorResult =
 
 export async function runPluginAuthorDoctor(input: Readonly<{
   locator: string;
-  resolveEntry?: (locator: string) => Promise<PluginAuthorSourceEntry>;
   prepareDependencies?: (input: Readonly<{
     projectRoot: string;
   }>) => Promise<PluginAuthorDependencyPreparationResult>;
-  evaluate?: (input: Readonly<{ locator: string }>) => Promise<EvaluatedPluginAuthorSource>;
   nowMs?: () => number;
   slowEvaluationMs?: number;
 }>): Promise<PluginAuthorDoctorResult> {
   let entry: PluginAuthorSourceEntry;
   try {
-    entry = await (input.resolveEntry ?? resolvePluginAuthorSourceEntrypoint)(input.locator);
+    entry = await resolvePluginAuthorSourceEntrypoint(input.locator);
   } catch (error) {
     return Object.freeze({
       ok: false,
@@ -163,7 +161,7 @@ export async function runPluginAuthorDoctor(input: Readonly<{
   const startedAt = nowMs();
   let evaluated: EvaluatedPluginAuthorSource;
   try {
-    evaluated = await (input.evaluate ?? evaluatePluginAuthorSource)({ locator: input.locator });
+    evaluated = await evaluatePluginAuthorSource({ locator: input.locator });
   } catch (error) {
     return Object.freeze({
       ok: false,
