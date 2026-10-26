@@ -2428,7 +2428,6 @@
     "sources/sync/runtime/nativeSshTunnels/probe.test.ts",
     "sources/sync/runtime/nativeSshTunnels/runtime.test.ts",
     "sources/sync/runtime/nativeSshTunnels/supervisor.test.ts",
-    "sources/sync/runtime/nativeUpdate/logNativeUpdateFetchFailure.test.ts",
     "sources/sync/runtime/orchestration/appliedActiveServerRuntime.accountLifetime.test.ts",
     "sources/sync/runtime/orchestration/applyMessageCatchUpDecision.test.ts",
     "sources/sync/runtime/orchestration/authCredentialsInvalidation.test.ts",

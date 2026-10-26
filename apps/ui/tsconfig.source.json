@@ -3466,7 +3466,6 @@
     "sources/sync/runtime/files/saveFileBytes.ts",
     "sources/sync/runtime/nativeIrohTunnels/adapter.ts",
     "sources/sync/runtime/nativeLoopbackTunnels/index.ts",
-    "sources/sync/runtime/nativeUpdate/logNativeUpdateFetchFailure.ts",
     "sources/sync/runtime/orchestration/externalSessions/collectExternalSessionStatusDemandViewportEntries.ts",
     "sources/sync/runtime/orchestration/serverScopedRpc/normalizeServerId.ts",
     "sources/sync/runtime/orchestration/serverScopedRpc/serverScopedTransferRelaySocket.ts",
