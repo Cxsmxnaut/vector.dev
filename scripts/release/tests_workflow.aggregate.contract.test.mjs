@@ -9,13 +9,20 @@ function jobIds(raw) {
   return [...jobs.matchAll(/^  ([A-Za-z0-9_-]+):$/gm)].map((m) => m[1]).filter((id) => id !== 'ci_summary');
 }
 
+// The automatic v0.3 Gate runs exactly where ci_summary is skipped and has its own aggregator, `gate`.
+const isGateJob = (id) => id === 'gate' || id.startsWith('gate-');
+
 test('tests workflow summary covers every top-level CI lane', async () => {
   const raw = await readFile(join(process.cwd(), '.github/workflows/tests.yml'), 'utf8');
   const collector = await readFile(join(process.cwd(), 'scripts/release/ciSummaryCollector.mjs'), 'utf8');
   const summary = raw.match(/\n  ci_summary:[\s\S]*?\n  [A-Za-z0-9_-]+:/)?.[0] ?? raw.slice(raw.indexOf('\n  ci_summary:'));
   const needs = summary.match(/needs: \[([^\]]+)\]/)?.[1]?.split(',').map((id) => id.trim()).filter(Boolean) ?? [];
   assert.ok(needs.length > 0, 'ci_summary must declare its lane dependencies');
-  assert.deepEqual(new Set(needs), new Set(jobIds(raw)), 'ci_summary.needs must stay synchronized with every top-level CI lane');
+  assert.deepEqual(new Set(needs), new Set(jobIds(raw).filter((id) => !isGateJob(id))), 'ci_summary.needs must stay synchronized with every top-level CI lane');
+  const gateNeeds = YAML.parse(raw).jobs.gate.needs;
+  for (const id of jobIds(raw).filter((candidate) => isGateJob(candidate) && candidate !== 'gate')) {
+    assert.ok(gateNeeds.includes(id), `the v0.3 Gate aggregator must require ${id}`);
+  }
   assert.match(summary, /from '\.\/scripts\/release\/ciSummaryCollector\.mjs'/, 'workflow must reuse the canonical summary collector');
   assert.match(summary, /collectCiSummary\(\{ needs, requiredJobs: requiredLanes \}\)/, 'workflow must pass its observed jobs to the collector');
   assert.match(collector, /result !== 'success' && result !== 'skipped'/, 'collector must fail closed for every non-success non-required lane result');
