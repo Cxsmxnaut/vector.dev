@@ -27,6 +27,7 @@ const result = spawnSync('cl.exe', [
   '/SUBSYSTEM:WINDOWS',
   "/MANIFESTUAC:level='asInvoker' uiAccess='false'",
   'shell32.lib',
+  'pathcch.lib',
   `/OUT:${output}`,
 ], { cwd: repoRoot, stdio: 'inherit', windowsHide: true });
 

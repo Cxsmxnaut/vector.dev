@@ -2,6 +2,7 @@
 #define _UNICODE
 #include <windows.h>
 #include <shellapi.h>
+#include <pathcch.h>
 
 #include <cstdint>
 #include <string>
@@ -65,14 +66,26 @@ std::wstring QuoteArgument(const std::wstring& value) {
   return result;
 }
 
-bool IsAbsoluteLocalPath(const std::wstring& path) {
+bool IsAbsoluteFilePath(const std::wstring& path) {
   if (path.size() < 3) return false;
   for (const wchar_t ch : path) {
     if (ch < 0x20) return false;
   }
-  return ((path[0] >= L'A' && path[0] <= L'Z') || (path[0] >= L'a' && path[0] <= L'z'))
-    && path[1] == L':'
-    && (path[2] == L'\\' || path[2] == L'/');
+  size_t driveStart = 0;
+  if (path.starts_with(L"\\\\?\\")) {
+    if (path.size() >= 8 && CompareStringOrdinal(path.c_str(), 8, L"\\\\?\\UNC\\", 8, TRUE) == CSTR_EQUAL) {
+      return PathIsUNCEx(path.c_str(), nullptr);
+    }
+    driveStart = 4;
+  } else if (path.starts_with(L"\\\\.\\")) {
+    return false;
+  } else if (PathIsUNCEx(path.c_str(), nullptr)) {
+    return true;
+  }
+  return path.size() >= driveStart + 3
+    && ((path[driveStart] >= L'A' && path[driveStart] <= L'Z') || (path[driveStart] >= L'a' && path[driveStart] <= L'z'))
+    && path[driveStart + 1] == L':'
+    && (path[driveStart + 2] == L'\\' || path[driveStart + 2] == L'/');
 }
 
 std::string WideToUtf8(const std::wstring& value) {
@@ -173,8 +186,8 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
       return FailBeforeLog("unknown or duplicate option", kInvalidArguments);
     }
   }
-  if (!IsAbsoluteLocalPath(wrapper) || !IsAbsoluteLocalPath(diagnosticLog)) {
-    return FailBeforeLog("wrapper and diagnostic log must be absolute local paths", kInvalidArguments);
+  if (!IsAbsoluteFilePath(wrapper) || !IsAbsoluteFilePath(diagnosticLog)) {
+    return FailBeforeLog("wrapper and diagnostic log must be fully qualified file paths", kInvalidArguments);
   }
   Handle log(CreateFileW(diagnosticLog.c_str(), FILE_APPEND_DATA,
                          FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,

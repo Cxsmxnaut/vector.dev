@@ -85,6 +85,22 @@ exit 37
   $uncDiagnostics = Get-Content -LiteralPath (Join-Path $fixtureRoot 'unc.launcher.log') -Raw
   Assert-True ($uncDiagnostics -match 'child_exit=37') 'UNC service home did not retain wrapper exit diagnostics'
 
+  foreach ($extendedWrapper in @(('\\?\' + $exitWrapper), ('\\?\UNC\' + $uncWrapper.Substring(2)))) {
+    $extendedLog = Join-Path $fixtureRoot ('extended-' + [Guid]::NewGuid().ToString('N') + '.launcher.log')
+    $extendedRun = Start-Launcher $extendedWrapper ('\\?\' + $extendedLog)
+    $ownedProcessIds.Add($extendedRun.Id) | Out-Null
+    $extendedRun.WaitForExit(10000) | Out-Null
+    Assert-True ($extendedRun.HasExited -and $extendedRun.ExitCode -eq 37) "Expected extended-path wrapper exit 37, got $($extendedRun.ExitCode)"
+    $ownedProcessIds.Remove($extendedRun.Id) | Out-Null
+    Assert-True ((Get-Content -LiteralPath $extendedLog -Raw) -match 'child_exit=37') 'Extended-path service home omitted wrapper exit diagnostics'
+  }
+
+  foreach ($invalidWrapper in @('relative.ps1', 'C:relative.ps1', '\root-relative.ps1', '\\.\NUL', '\\?\GLOBALROOT\Device\NUL')) {
+    $invalidRun = Start-Launcher $invalidWrapper (Join-Path $fixtureRoot 'invalid.launcher.log')
+    $invalidRun.WaitForExit(10000) | Out-Null
+    Assert-True ($invalidRun.HasExited -and $invalidRun.ExitCode -eq 10) "Expected invalid file path exit 10, got $($invalidRun.ExitCode)"
+  }
+
   # A console-subsystem wrapper and its console descendant must run without a
   # console window. This is synthetic evidence only, not desktop flash/taskbar proof.
   $consoleProbePath = Join-Path $fixtureRoot 'console-window.txt'
