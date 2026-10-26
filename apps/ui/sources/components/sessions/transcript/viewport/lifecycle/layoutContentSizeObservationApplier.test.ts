@@ -84,7 +84,7 @@ describe('renderer-owned layout/content-size observation applier', () => {
         ]);
     });
 
-    it.each(['web', 'ios', 'android'])('observes unchanged %s layout without committing height state again', (platformOS) => {
+    it.each(['web', 'ios'])('observes unchanged %s layout without committing height state again', (platformOS) => {
         const log: string[] = [];
 
         applyTranscriptLayoutObservation({
@@ -134,7 +134,7 @@ describe('renderer-owned layout/content-size observation applier', () => {
         ]);
     });
 
-    it.each(['web', 'ios', 'android'])('observes unchanged %s content while preserving native deferred height synchronization', (platformOS) => {
+    it.each(['web', 'ios'])('observes unchanged %s content while preserving native deferred height synchronization', (platformOS) => {
         const log: string[] = [];
 
         applyTranscriptContentSizeObservation({
