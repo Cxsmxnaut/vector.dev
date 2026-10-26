@@ -196,6 +196,17 @@ describe('session resume and fork routing through the Home and Account boundary'
         expect(resumeRequests()).toEqual([expect.objectContaining({ serverUrl: home.serverUrl, token: home.token })]);
     });
 
+    it('reports local Resume target validation as INVALID_REQUEST without issuing a spawn', async () => {
+        const result = await ops.resumeSession(resumeOptions({
+            backendTarget: { kind: 'backend', backendId: 'custom-acp', sourceKind: 'built_in' },
+        }));
+        expect(result).toMatchObject({ type: 'error', errorCode: SPAWN_SESSION_ERROR_CODES.INVALID_REQUEST });
+        expect(result).toHaveProperty('errorMessage', expect.stringContaining('backendTarget must identify an executable Agent'));
+        expect(result).not.toHaveProperty('rpcErrorCode');
+        expect(resumeRequests()).toEqual([]);
+        expect(storage.getState().sessions['session-1'].resumingAt).toBeFalsy();
+    });
+
     it('does not issue a resume spawn when restoring an archived session fails', async () => {
         setSession('session-1', { archivedAt: 123 });
         unarchiveStatus = 403;

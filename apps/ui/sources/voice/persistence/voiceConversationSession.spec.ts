@@ -1556,7 +1556,7 @@ describe('ensureVoiceConversationSessionForVoiceHome', () => {
     const { ensureVoiceConversationSessionForVoiceHome } = await loadConversationSession();
 
     await expect(ensureVoiceConversationSessionForVoiceHome()).rejects.toMatchObject({
-      code: 'VOICE_CONVERSATION_TARGET_MISSING',
+      code: 'VOICE_AGENT_TARGET_MACHINE_OFFLINE',
     });
     expect(spawnResponse).not.toHaveBeenCalled();
   });
@@ -2748,6 +2748,14 @@ describe('ensureVoiceConversationSessionForSessionRoot', () => {
       serverId: homeId, sessionId: 'voice-offline',
     } }).then(() => null, (error: unknown) => error);
     expect(error).toMatchObject({ code: SPAWN_SESSION_ERROR_CODES.SPAWN_FAILED, message: SPAWN_SESSION_ERROR_CODES.SPAWN_FAILED });
+    // Diagnostics retain the launch owner's original failure privately; public
+    // recovery and ordinary serialization must keep the sanitized refusal.
+    expect(error).toMatchObject({ cause: { type: 'error', errorCode: SPAWN_SESSION_ERROR_CODES.SPAWN_FAILED,
+      errorMessage: 'private runtime detail' } });
+    expect(Object.getOwnPropertyDescriptor(error, 'cause')?.enumerable).toBe(false);
+    expect(JSON.stringify(error)).not.toContain('private runtime detail');
+    const { classifyVoiceMachineError } = await import('@/voice/runtime/machine/voiceMachineError');
+    expect(classifyVoiceMachineError(error)).toMatchObject({ kind: 'provider_error', reason: SPAWN_SESSION_ERROR_CODES.SPAWN_FAILED });
     expect(spawnResponse).not.toHaveBeenCalled();
   });
 

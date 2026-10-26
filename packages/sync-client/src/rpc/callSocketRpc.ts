@@ -220,10 +220,9 @@ export async function callSocketRpc<R>(params: Readonly<{
     // acknowledgement remains authoritative even if cancellation arrives later.
     return result as R;
   } catch (error) {
-    // The ACK owner observed this namespace close, not a relay refusal or a
-    // decoding failure after an ACK. Reads have no effect to reconcile: retire
-    // their in-flight wait so the existing reconnect owner can revalidate.
-    // Keep issued disposition; transport unavailability is not proof of notSent.
+    // A local socket loss interrupts a declared read, not a potentially applied
+    // mutation. Preserve issued disposition; unavailable never means notSent.
+    // A relay's uncertain ACK or a post-ACK decoding error is not this fact.
     if (!acknowledged && error instanceof SocketRpcDisconnectedError && isReadOnlyMachineRpcMethod(params.method)) {
       throw markRpcRequestDisposition(Object.assign(createRpcCallError({
         error: 'Socket disconnected before the read completed', errorCode: RPC_ERROR_CODES.TRANSPORT_UNAVAILABLE,

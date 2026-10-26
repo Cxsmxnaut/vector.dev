@@ -1,5 +1,6 @@
 import { captureActiveServerAccountScopeLifetime } from '@/sync/domains/scope/activeServerAccountScope';
 import { resolveVoiceAgentRunBackendId } from '@happier-dev/protocol/voice/voiceAgentRunMetadataV1';
+import { isExecutionRunTerminalStatus } from '@happier-dev/protocol/execution/runs/waitForTerminal';
 import type { VoiceAgentHandle } from '@/voice/agent/types';
 import { VOICE_AGENT_GLOBAL_SESSION_ID } from '@/voice/agent/voiceAgentGlobalSessionId';
 import { isVoiceAgentNotFoundError } from '@/voice/agent/voiceAgentErrorGuards';
@@ -13,7 +14,7 @@ import {
 import { normalizeNonEmptyString } from '@/voice/shared/normalizeNonEmptyString';
 import { createAbortRacer } from '@/voice/agent/voiceAgentAbort';
 import type { ServerAccountScopeLifetime } from '@/sync/domains/scope/serverAccountScope';
-import { createRpcCallError } from '@/sync/runtime/rpcErrors';
+import { createRpcCallError, readRpcErrorCode } from '@/sync/runtime/rpcErrors';
 import {
   clearVoiceAgentRunMetadata,
   persistVoiceAgentRunMetadata,
@@ -168,6 +169,21 @@ export function createVoiceRunRecovery(
         if (signal && !isVoiceAgentNotFoundError(error)) throw error;
         return undefined;
       };
+      const reconcileStopFailure = async (error: unknown, rpcSessionId: string, runId: string): Promise<void> => {
+        if (readRpcErrorCode(error) === 'execution_run_not_allowed') {
+          // Stop rejects an already-terminal Run. Only its current exact
+          // Account/Run observation, never the refusal code alone, settles
+          // this client's retirement barrier. Host resource cleanup remains
+          // with the execution owner.
+          const observed = await sessionExecutionRunGet(
+            rpcSessionId, { runId, includeStructured: false }, runOptions,
+          ).catch(() => null);
+          caller.throwIfAborted();
+          if (observed && 'run' in observed && observed.run.runId === runId
+            && isExecutionRunTerminalStatus(observed.run.status)) return;
+        }
+        cleanupFailure(error);
+      };
       const stopRun = async (
         rpcSessionId: string,
         runId: string,
@@ -178,11 +194,12 @@ export function createVoiceRunRecovery(
           runOptions,
         ).catch(cleanupFailure);
         if (stopped?.ok === false) {
-          cleanupFailure(
+          await reconcileStopFailure(
             createRpcCallError({
               error: stopped.error,
               errorCode: stopped.errorCode,
             }),
+            rpcSessionId, runId,
           );
         }
       };
@@ -212,7 +229,7 @@ export function createVoiceRunRecovery(
             signal,
           });
         } catch (error) {
-          cleanupFailure(error);
+          await reconcileStopFailure(error, handle.rpcSessionId, handle.voiceAgentId);
         }
       } else if (persistedRunMeta?.runId) {
         await stopRun(fallbackRpcSessionId, persistedRunMeta.runId);

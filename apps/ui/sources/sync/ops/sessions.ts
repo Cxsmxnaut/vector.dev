@@ -13,7 +13,7 @@ import { publishDisplayTitleToMetadata } from '@/sync/state/displayTitlePublish'
 import { getSyncSingleton } from '@/sync/runtime/getSyncSingleton';
 import { createRpcCallError, isRpcMethodNotAvailableError, readRpcErrorCode as readSessionRpcErrorCode } from '../runtime/rpcErrors';
 import { assertRpcResponseWithSuccess } from '../runtime/assertRpcResponseWithSuccess';
-import { buildResumeHappySessionRpcParams, type ResumeHappySessionRpcParams } from '../domains/session/resume/resumeSessionPayload';
+import { buildResumeHappySessionRpcParams, ResumeSessionInputValidationError, type ResumeHappySessionRpcParams } from '../domains/session/resume/resumeSessionPayload';
 import { resolveTerminalSpawnOptions } from '../domains/settings/terminalSettings';
 import { readAccountSettingsForScope } from '../domains/state/accountSettingsPersistence';
 import { readSpawnSessionRpcTimeoutMsFromEnv } from '../domains/session/spawn/spawnSessionRpcTimeout';
@@ -559,6 +559,13 @@ async function runResumeSession(
                 errorMessage:
                     `Daemon RPC is not available (RPC method not available). ` +
                     `The daemon may be stopped, still starting, or not connected to the server.`,
+            };
+        }
+        if (error instanceof ResumeSessionInputValidationError) {
+            return {
+                type: 'error',
+                errorCode: SPAWN_SESSION_ERROR_CODES.INVALID_REQUEST,
+                errorMessage: error.message,
             };
         }
         const rpcErrorCode = readRpcFailureCode(error);

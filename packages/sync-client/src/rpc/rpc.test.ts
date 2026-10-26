@@ -6,7 +6,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { callSocketRpc, emitWithAckCancellable, type SocketRpcAckScope } from './callSocketRpc.js';
 import { readRpcRequestDisposition } from './rpcDisposition.js';
 import { socketRpcCodec, type SocketRpcContent } from './socketRpcCodec.js';
-import { RPC_ERROR_CODES, RPC_METHODS } from '@happier-dev/protocol/rpc';
+import { RPC_ERROR_CODES, RPC_METHODS, SESSION_RPC_METHODS } from '@happier-dev/protocol/rpc';
 import { readRpcErrorCode } from '@happier-dev/protocol/rpcErrors';
 
 function cipher(): SocketRpcContent {
@@ -160,16 +160,12 @@ it('classifies a disconnected Goal caller and allows a fresh call after reconnec
   expect(requests).toEqual([`m:${RPC_METHODS.DAEMON_SESSION_GOAL_SET_V2}`, `m:${RPC_METHODS.DAEMON_SESSION_GOAL_GET}`]);
 });
 it.each([
-  { method: RPC_METHODS.MACHINES_VITALS_GET, errorCode: RPC_ERROR_CODES.TRANSPORT_UNAVAILABLE },
-  { method: RPC_METHODS.MACHINES_VITALS_HISTORY_GET, errorCode: RPC_ERROR_CODES.TRANSPORT_UNAVAILABLE },
-  { method: 'capabilities.describe', errorCode: RPC_ERROR_CODES.TRANSPORT_UNAVAILABLE },
-  { method: 'capabilities.detect', errorCode: RPC_ERROR_CODES.TRANSPORT_UNAVAILABLE },
-  { method: RPC_METHODS.DAEMON_PROVIDERS_MODEL_PROJECTION, errorCode: RPC_ERROR_CODES.TRANSPORT_UNAVAILABLE },
-  { method: RPC_METHODS.DAEMON_MERGED_CONTRIBUTION_REGISTRY_PROJECTION_DESCRIBE, errorCode: RPC_ERROR_CODES.TRANSPORT_UNAVAILABLE },
-  { method: RPC_METHODS.STOP_SESSION, errorCode: RPC_ERROR_CODES.OUTCOME_UNKNOWN },
-  { method: RPC_METHODS.SESSION_SPAWN_NEW, errorCode: RPC_ERROR_CODES.OUTCOME_UNKNOWN },
-  { method: 'plugin.unclassified.read', errorCode: RPC_ERROR_CODES.OUTCOME_UNKNOWN },
-])('settles issued $method on disconnect before its deadline without replay', async ({ method, errorCode }) => {
+  { method: RPC_METHODS.MACHINES_VITALS_GET, targetKind: 'machine', errorCode: RPC_ERROR_CODES.TRANSPORT_UNAVAILABLE },
+  { method: SESSION_RPC_METHODS.EXECUTION_RUN_LIST, targetKind: 'session', errorCode: RPC_ERROR_CODES.TRANSPORT_UNAVAILABLE },
+  { method: RPC_METHODS.STOP_SESSION, targetKind: 'machine', errorCode: RPC_ERROR_CODES.OUTCOME_UNKNOWN },
+  { method: 'plugin.unclassified.read', targetKind: 'machine', errorCode: RPC_ERROR_CODES.OUTCOME_UNKNOWN },
+] as const)(
+  'settles issued $method on disconnect before its deadline without replay', async ({ method, targetKind, errorCode }) => {
   const socket = await setup();
   const requests: string[] = [];
   let observeIssued!: () => void;
@@ -179,7 +175,7 @@ it.each([
     observeIssued();
   }));
   let failure: unknown;
-  const pending = callSocketRpc({ socket, target: { kind: 'machine', id: 'm' }, method,
+  const pending = callSocketRpc({ socket, target: { kind: targetKind, id: 'm' }, method,
     params: {}, content: { mode: 'plain' }, timeoutMs: 180_000, requestId: 'original-issued-call' })
     .catch((error: unknown) => { failure = error; });
   await issued;

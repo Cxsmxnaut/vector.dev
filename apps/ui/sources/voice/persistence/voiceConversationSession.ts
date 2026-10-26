@@ -51,7 +51,7 @@ import {
     voiceSettingsParse,
     type VoiceSettings,
 } from '@/sync/domains/settings/voiceSettings';
-import { resolveVoiceExecutionMachineIdFromState } from '@/voice/settings/executionMachine';
+import { resolveVoiceExecutionMachineIdFromState, resolveVoiceExecutionMachineSelectionFromState } from '@/voice/settings/executionMachine';
 import { stableJsonStringify } from '@/utils/json/stableJsonStringify';
 import { buildVoiceSpawnUserAttemptId } from '@/voice/shared/voiceSpawnAttempt';
 import { readVoiceSessionOwnerMetadataFromState } from '@/voice/shared/readVoiceSessionOwnerMetadata';
@@ -85,8 +85,6 @@ export {
     VOICE_CONVERSATION_SYSTEM_SESSION_KEY,
 } from './voiceConversationSystemSessionLookup';
 
-const VOICE_HOME_SPAWN_TARGET_WAIT_TIMEOUT_MS = 5_000;
-const VOICE_HOME_SPAWN_TARGET_WAIT_INTERVAL_MS = 100;
 const VOICE_CONVERSATION_METADATA_COMMIT_FAILED =
     'VOICE_CONVERSATION_METADATA_COMMIT_FAILED';
 const VOICE_CONVERSATION_CUSTODY_COMPLETION_FAILED =
@@ -544,16 +542,6 @@ async function resolveVoiceHomeConversationSessionRequirements(
     };
 }
 
-async function waitForVoiceHomeSpawnTarget(timeoutMs: number): Promise<{ machineId: string; directory: string } | null> {
-    const startedAt = Date.now();
-    let target = resolveVoiceHomeSpawnTarget(storage.getState());
-    while (!target && (Date.now() - startedAt) < timeoutMs) {
-        await new Promise((resolve) => setTimeout(resolve, VOICE_HOME_SPAWN_TARGET_WAIT_INTERVAL_MS));
-        target = resolveVoiceHomeSpawnTarget(storage.getState());
-    }
-    return target;
-}
-
 function toVoiceConversationSpawnError(spawned: unknown): Error {
     const spawnRecord = spawned && typeof spawned === 'object' && !Array.isArray(spawned)
         ? spawned as Readonly<Record<string, unknown>>
@@ -853,9 +841,13 @@ async function ensureVoiceConversationRuntime(params: Readonly<{
     });
     assertVoiceConversationAccountCurrent(params.accountLifetime);
     if (resumed.type !== 'success' || resumed.sessionId !== params.sessionId) {
-        throw toVoiceConversationSpawnError(resumed.type === 'error'
+        const failure = toVoiceConversationSpawnError(resumed.type === 'error'
             ? { ...resumed, errorMessage: resumed.errorCode }
             : { errorCode: 'VOICE_CONVERSATION_SPAWN_PENDING', errorMessage: 'voice_conversation_spawn_pending' });
+        // Keep the Resume owner's diagnostic without projecting private prose
+        // into Voice recovery, logs or serialized public failure state.
+        if (resumed.type === 'error') Object.defineProperty(failure, 'cause', { value: resumed, enumerable: false });
+        throw failure;
     }
 }
 
@@ -1073,9 +1065,19 @@ async function ensureVoiceConversationSessionForVoiceHomeUnguarded(
         throw Object.assign(new Error('The Voice Agent Account is unavailable.'), { code: 'VOICE_AGENT_SELECTION_UNAVAILABLE' });
     }
     assertVoiceConversationAccountCurrent(accountLifetime);
-    const target = await waitForVoiceHomeSpawnTarget(VOICE_HOME_SPAWN_TARGET_WAIT_TIMEOUT_MS);
+    // Start consumes the current prerequisite, rather than polling a missing
+    // target while presenting an active connection attempt. Selection already
+    // distinguishes an unobserved Machine from an unavailable one.
+    const target = resolveVoiceHomeSpawnTarget(storage.getState());
     assertVoiceConversationAccountCurrent(accountLifetime);
     if (!target) {
+        const selection = resolveVoiceExecutionMachineSelectionFromState(withCanonicalVoiceSettings(storage.getState()));
+        if (selection.kind === 'selected_unknown' || selection.kind === 'selected_unreachable') {
+            throw Object.assign(new Error('voice_execution_machine_unavailable'), {
+                code: selection.kind === 'selected_unknown'
+                    ? 'VOICE_AGENT_TARGET_MACHINE_UNOBSERVED' : 'VOICE_AGENT_TARGET_MACHINE_OFFLINE',
+            });
+        }
         throw Object.assign(new Error('voice_conversation_spawn_target_missing'), { code: 'VOICE_CONVERSATION_TARGET_MISSING' });
     }
 

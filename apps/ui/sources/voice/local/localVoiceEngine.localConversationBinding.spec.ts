@@ -154,6 +154,38 @@ describe('local voice engine local conversation binding', () => {
         expect(localVoiceSpeechOutputBoundary.getAudioSessionCoordinator().getSnapshot().leaseCount).toBe(0);
     }, 60_000);
 
+    it('settles Global Start with a typed machine refusal without a timer when device speech has no Agent machine', async () => {
+        await configureAgentMode();
+        const storage = await getStorage();
+        const voice = storage.getState().settings.voice;
+        const config = readLocalConversationVoiceSettings(voice);
+        storage.__setState({ settings: { ...storage.getState().settings, voice: { ...voice,
+            executionMachine: { mode: 'fixed', machineId: null },
+            providers: { ...voice.providers, local_conversation: { schemaVersion: 1, config: { ...config,
+                stt: { ...config.stt, provider: 'device' }, tts: { ...config.tts, provider: 'device' },
+            } } },
+        } } });
+        const { createVoiceSessionLifecycleController } = await import('@/voice/session/voiceSessionLifecycleController');
+        const lifecycle = createVoiceSessionLifecycleController();
+        lifecycle.setConfiguredProviderId('local_conversation');
+        const scheduled = vi.spyOn(globalThis, 'setTimeout');
+        let failure: unknown;
+        try {
+            await lifecycle.toggle(null).catch(error => { failure = error; });
+            expect(lifecycle.getSnapshot()).toMatchObject({
+                status: 'error', canStop: false,
+                errorCode: 'execution_machine_unavailable', errorRecoveryAction: 'select_execution_machine',
+            });
+            expect(failure).toMatchObject({ code: 'VOICE_CONVERSATION_TARGET_MISSING' });
+            expect(scheduled.mock.calls.filter(([, delay]) => delay === 100)).toHaveLength(0);
+            expect(machineRpcWithServerScope.mock.calls.filter(([request]) => request.method === RPC_METHODS.SESSION_SPAWN_NEW)).toEqual([]);
+            expect(localVoiceSpeechOutputBoundary.getAudioSessionCoordinator().getSnapshot().leaseCount).toBe(0);
+        } finally {
+            scheduled.mockRestore();
+            await lifecycle.dispose();
+        }
+    }, 60_000);
+
     it('publishes connecting for a targetless lifecycle start and admits its host-owned Voice Home creation', async () => {
         await configureAgentMode();
         const storage = await getStorage();
@@ -385,15 +417,22 @@ describe('local voice engine local conversation binding', () => {
             await Promise.race([outcome, resumeEntered.promise]);
             const preparing = lifecycle.getSnapshot();
             const leasesBeforeReady = localVoiceSpeechOutputBoundary.getAudioSessionCoordinator().getSnapshot().leaseCount;
+            const createsBeforeResumeReply = machineRpcWithServerScope.mock.calls
+                .filter(([request]) => request.method === RPC_METHODS.SESSION_SPAWN_NEW).length;
             resumeReady.resolve();
             const error = await outcome;
             expect(preparing).toMatchObject({ status: 'connecting', canStop: true });
             expect(leasesBeforeReady).toBe(0);
             if (unreachable) {
-                expect(error).toMatchObject({ code: RPC_ERROR_CODES.TRANSPORT_UNAVAILABLE });
+                // This boundary has already accepted the Resume request. A
+                // thrown Socket reply cannot prove the mutation did not run.
+                expect(error).toMatchObject({ code: RPC_ERROR_CODES.OUTCOME_UNKNOWN });
                 expect(lifecycle.getSnapshot()).toMatchObject({ canStop: false,
                     errorCode: 'provider_error', errorRecoveryAction: 'retry' });
                 expect(localVoiceSpeechOutputBoundary.getAudioSessionCoordinator().getSnapshot().leaseCount).toBe(0);
+                expect(machineRpcWithServerScope.mock.calls.filter(([request]) => request.method === RPC_METHODS.SESSION_SPAWN_NEW))
+                    .toHaveLength(createsBeforeResumeReply);
+                expect(storage.getState().sessions[carrier.id]?.archivedAt).toBeNull();
                 return;
             }
             expect(error).toBeNull();
