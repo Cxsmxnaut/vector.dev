@@ -324,9 +324,6 @@ export function registerMachineDirectSessionsRpcHandlers(params: Readonly<{
     } satisfies DirectSessionsAcpSessionListCapabilityResponse;
   });
 
-  // Clients poll the candidate list; an identical request that arrives while one
-  // is still scanning shares its result instead of stacking another full scan.
-  const inFlightCandidateLists = new Map<string, ReturnType<Awaited<ReturnType<typeof getDirectSessionProviderOps>>['listCandidates']>>();
   rpcHandlerManager.registerHandler(RPC_METHODS.DAEMON_DIRECT_SESSIONS_CANDIDATES_LIST, async (raw: unknown) => {
     const parsed = DirectSessionsCandidatesListRequestSchema.safeParse(raw);
     if (!parsed.success) return err('invalid_request') satisfies DirectSessionsCandidatesListResponse;
@@ -345,17 +342,7 @@ export function registerMachineDirectSessionsRpcHandlers(params: Readonly<{
     const startedAtMs = Date.now();
     const startMemory = process.memoryUsage();
     try {
-      const inFlightKey = JSON.stringify([providerId, source, cursor ?? null, limit, searchTerm ?? null, searchMode ?? null]);
-      let pending = inFlightCandidateLists.get(inFlightKey);
-      if (!pending) {
-        const started = (async () => await (await getDirectSessionProviderOps(providerId)).listCandidates({ source, cursor, limit, searchTerm, searchMode }))();
-        pending = started;
-        inFlightCandidateLists.set(inFlightKey, started);
-        void started.finally(() => {
-          if (inFlightCandidateLists.get(inFlightKey) === started) inFlightCandidateLists.delete(inFlightKey);
-        }).catch(() => undefined);
-      }
-      const res = await pending;
+      const res = await (await getDirectSessionProviderOps(providerId)).listCandidates({ source, cursor, limit, searchTerm, searchMode });
       logger.debug('[directSessions.rpc.candidates] list finished', {
         providerId,
         elapsedMs: Date.now() - startedAtMs,

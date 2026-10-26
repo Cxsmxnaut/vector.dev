@@ -222,6 +222,19 @@ describe('readClaudeSessionTitle', () => {
     await expect(readClaudeSessionTitle(filePath)).resolves.toBe('Renamed while reading');
   });
 
+  it('sees a rename appended after a record too large to read incrementally', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'happier-claude-title-oversized-'));
+    const filePath = join(root, 'session-one.jsonl');
+    await writeFile(filePath, jsonlLine({ type: 'ai-title', aiTitle: 'AI title' }), 'utf8');
+    await expect(readClaudeSessionTitle(filePath)).resolves.toBe('AI title');
+
+    await appendFile(filePath, [
+      jsonlLine({ type: 'progress', data: 'x'.repeat(9 * 1024 * 1024) }),
+      jsonlLine({ type: 'custom-title', customTitle: 'Renamed after a huge record' }),
+    ].join(''), 'utf8');
+    await expect(readClaudeSessionTitle(filePath)).resolves.toBe('Renamed after a huge record');
+  });
+
   it('rereads a transcript that was rewritten or replaced', async () => {
     const root = await mkdtemp(join(tmpdir(), 'happier-claude-title-rewrite-'));
     const filePath = join(root, 'session-one.jsonl');

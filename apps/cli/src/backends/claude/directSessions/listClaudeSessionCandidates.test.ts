@@ -2,15 +2,41 @@ import { mkdir, mkdtemp, writeFile, utimes } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+// Pass-through spy: counts per-session title reads without changing their behavior.
+vi.mock('./readClaudeSessionTitle', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./readClaudeSessionTitle')>();
+  return { ...actual, readClaudeSessionTitle: vi.fn(actual.readClaudeSessionTitle) };
+});
 
 import { listClaudeSessionCandidates } from './listClaudeSessionCandidates';
+import { readClaudeSessionTitle } from './readClaudeSessionTitle';
 
 function jsonlLine(value: unknown): string {
   return `${JSON.stringify(value)}\n`;
 }
 
 describe('listClaudeSessionCandidates', () => {
+  it('shares one in-flight listing for identical concurrent calls', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'happier-claude-direct-list-inflight-'));
+    const configDir = join(root, '.claude');
+    await mkdir(join(configDir, 'projects', 'proj-a'), { recursive: true });
+    await writeFile(join(configDir, 'projects', 'proj-a', 'sess-1.jsonl'), jsonlLine({ type: 'user', message: { content: 'hello' } }), 'utf8');
+    const titleReads = vi.mocked(readClaudeSessionTitle);
+    titleReads.mockClear();
+    const request = { source: { kind: 'claudeConfig', configDir, projectId: null }, limit: 10 } as const;
+
+    const [first, second] = await Promise.all([listClaudeSessionCandidates(request), listClaudeSessionCandidates({ ...request })]);
+    expect(first).toEqual(second);
+    expect(first.candidates.map((candidate) => candidate.remoteSessionId)).toEqual(['sess-1']);
+    expect(titleReads).toHaveBeenCalledTimes(1);
+
+    await listClaudeSessionCandidates({ ...request, limit: 5 });
+    await listClaudeSessionCandidates(request);
+    expect(titleReads).toHaveBeenCalledTimes(3);
+  });
+
   it('lists session jsonl files under ~/.claude/projects', async () => {
     const root = await mkdtemp(join(tmpdir(), 'happier-claude-direct-list-'));
     const configDir = join(root, '.claude');

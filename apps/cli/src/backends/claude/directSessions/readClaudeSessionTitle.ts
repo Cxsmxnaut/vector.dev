@@ -144,12 +144,16 @@ async function scanTailTitleState(filePath: string, fileSize: number): Promise<C
   return finish(true);
 }
 
-/** Folds records appended after the cached prefix; later records supersede earlier ones. */
+/**
+ * Folds records appended after the cached prefix; later records supersede earlier ones.
+ * Returns null when an appended record cannot be read within the allowance: the caller
+ * then falls back to the full backward scan, which still sees records after it.
+ */
 async function scanAppendedTitleState(
   filePath: string,
   state: ClaudeTailTitleState,
   fileSize: number,
-): Promise<ClaudeTailTitleState> {
+): Promise<ClaudeTailTitleState | null> {
   let { customTitleSeen, customTitle, aiTitle, aiTitleResolved } = state;
   let offsetBytes = state.scannedEndOffsetBytes;
   while (offsetBytes < fileSize) {
@@ -159,7 +163,7 @@ async function scanAppendedTitleState(
       maxBytes: TAIL_TITLE_APPEND_CHUNK_MAX_BYTES,
       maxItems: TAIL_TITLE_APPEND_CHUNK_MAX_BYTES,
     }));
-    if (!page) break;
+    if (!page) return null;
     for (const line of page.items) {
       const value = line.value;
       if (!value || typeof value !== 'object' || Array.isArray(value)) continue;
@@ -195,6 +199,7 @@ async function readCachedTailTitle(
   if (fileStat.size === cached.scannedEndOffsetBytes) return resolveTailTitle(cached);
 
   const next = await scanAppendedTitleState(filePath, cached, fileStat.size);
+  if (!next) return { resolved: false, title: null };
   const resolved = resolveTailTitle(next);
   if (resolved.resolved) {
     rememberTailTitleState(filePath, {
