@@ -37,6 +37,11 @@ describe('SurfaceFreshnessLine content', () => {
         });
         expect(retry).toHaveBeenCalledTimes(1);
     });
+
+    it('shows a working ring on the line while it reconnects', async () => {
+        const screen = await renderScreen(<SurfaceFreshnessLine testID="fresh" reason="Reconnecting to MacBook Pro…" busy />);
+        expect(screen.findByTestId('fresh-spinner')).not.toBeNull();
+    });
 });
 
 describe('SurfaceFreshnessLine recovery', () => {

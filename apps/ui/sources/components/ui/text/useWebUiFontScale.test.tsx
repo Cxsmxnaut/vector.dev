@@ -88,6 +88,7 @@ it('updates only new font rules, without idle frames or observing its own writes
         document.head.appendChild(added);
         await act(async () => { await Promise.resolve(); await Promise.resolve(); });
         expect(override()).toContain('font-size: calc(22px *');
+        expect(override().split('.unistyles_late ').length - 1, 'later publications do not re-append injected rules').toBe(1);
         await root.unmount();
         sheet.insertRule('.unistyles_remaining { letter-spacing: 2px; }');
         await act(async () => { await Promise.resolve(); });
