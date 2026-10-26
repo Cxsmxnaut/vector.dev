@@ -37,6 +37,12 @@ import {
 } from '../../../auth/services/cloud/refreshBridge.js';
 import { createSessionProviderInputOutcomeNormalizer } from '../../../../../../../../apps/cli/src/agent/runtime/session/input/providerInputOutcome.js';
 import { projectClaudeJsonlLineToDirectMessages } from '../../../transcripts/projection.js';
+import {
+  CLAUDE_HANDBACK_REPORT,
+  claudeAsyncAgentLaunchAck,
+  claudeHandbackPointerNotification,
+  claudeHandbackUserRow,
+} from '../../../transcripts/peerMessage.testkit.js';
 import { mergeProviderCatalogV1 } from '@happier-dev/protocol/providers/catalog/merge';
 import { resolveClaudeEffortForModel, resolveClaudeEffortLevelsForProviderModel } from '../../reasoningEffort.js';
 
@@ -486,13 +492,115 @@ describe('bindClaudeAgentSdkFallbackSession', () => {
       await exec.emit({ type: 'user', uuid: 'native-peer-delivery', session_id: 'native-peer-recipient',
         origin: { kind: 'peer', from: 'uds:/tmp/sender.sock', name: 'Sender' }, message: { role: 'user', content } });
       await vi.waitFor(() => expect(events).toEqual(expect.arrayContaining([
-        expect.objectContaining({ kind: 'transcript-message-committed', role: 'assistant', text: 'From Sender:\n\nDelivered' }),
+        expect.objectContaining({ kind: 'transcript-message-committed', role: 'assistant', text: 'Delivered',
+          peer: { name: 'Sender', handback: false } }),
       ])));
       await exec.emit({ type: 'result', subtype: 'success', is_error: false, result: 'Recipient response',
         uuid: 'peer-turn-result', session_id: 'native-peer-recipient', queued_turn_count: 0, usage: {}, modelUsage: {} });
       await vi.waitFor(() => expect(events).toEqual(expect.arrayContaining([
         expect.objectContaining({ kind: 'transcript-message-committed', role: 'assistant', text: 'Recipient response' }),
       ])));
+    } finally { subscription.dispose(); await session.dispose(); }
+  });
+
+  it.each(['completed', 'failed', 'stopped'] as const)('settles a background Agent only on its %s notification and keeps later hand-backs standalone', async (status) => {
+    const exec = createSdkExecFixture();
+    const ctx = createPluginContextFixture(createTerminalHostFixture().service, createEventsFixture().service, { exec: exec.service });
+    const operations = createClaudeAgentSdkProviderOperations({ ctx, directory: '/tmp/claude-project', launchEnv: {},
+      happierSessionId: 'sdk-handback', permissionMode: 'default', publishTranscriptMessages: true });
+    const context = { session: { services: { activeInput: { bind: () => ({ dispose() {} }) }, models: { bind: () => ({ dispose() {} }) } } } } as unknown as AgentSessionRuntimeContext;
+    const session = createClaudeNativeSessionRuntimeFromOperations(operations, { kind: 'create', sessionId: 'sdk-handback', cwd: '/tmp/claude-project' }, context);
+    const events: AgentSessionRuntimeEvent[] = [];
+    const subscription = session.watch(event => events.push(event));
+    const sessionId = 'native-handback';
+    try {
+      await operations.sendProviderTurnPrompt('delegate in the background');
+      await vi.waitFor(() => expect(exec.spawnClient).toHaveBeenCalledOnce());
+      await exec.emit({ type: 'system', subtype: 'init', session_id: sessionId });
+      await exec.emit({ type: 'assistant', uuid: 'launch', session_id: sessionId, message: { role: 'assistant',
+        content: [{ type: 'tool_use', id: 'toolu_a1', name: 'Agent', input: { description: 'Diagnose', run_in_background: true } }] } });
+      await exec.emit({ ...claudeAsyncAgentLaunchAck({ toolUseId: 'toolu_a1' }), session_id: sessionId });
+      await exec.emit(claudeHandbackUserRow({ withReportText: true, sessionId }));
+      await vi.waitFor(() => expect(events.filter(event => event.kind === 'tool-result' && event.toolCallId === 'toolu_a1')).toHaveLength(1));
+      expect(events.filter(event => event.kind === 'transcript-message-committed' && event.peer)).toHaveLength(0);
+      const notification = claudeHandbackPointerNotification({ toolUseId: 'toolu_a1' });
+      notification.attachment.prompt = notification.attachment.prompt.replace('completed', status);
+      // Claude 2.1.310 emits a native terminal edge, then forwards the queued
+      // XML pointer as a distinct replay-user-message for the same task/tool.
+      await exec.emit({ type: 'system', subtype: 'task_notification', task_id: 'a1', tool_use_id: 'toolu_a1',
+        status, summary: 'Native terminal summary', uuid: 'terminal-edge', session_id: sessionId });
+      await exec.emit({ type: 'user', uuid: 'terminal-pointer-user', session_id: sessionId, isReplay: true,
+        origin: { kind: 'task-notification', producer: 'session-task' },
+        message: { role: 'user', content: notification.attachment.prompt } });
+      await exec.emit(claudeHandbackUserRow({ withReportText: false, taskId: 'unlinked', uuid: 'handback-unlinked', sessionId }));
+      await vi.waitFor(() => expect(events).toEqual(expect.arrayContaining([
+        expect.objectContaining({ kind: 'transcript-message-committed', role: 'assistant', text: CLAUDE_HANDBACK_REPORT,
+          peer: { name: 'general-purpose', handback: true } }),
+      ])));
+      const agentResults = events.filter(event => event.kind === 'tool-result' && event.toolCallId === 'toolu_a1');
+      expect(agentResults.at(-1)).toMatchObject({ output: status === 'completed' ? CLAUDE_HANDBACK_REPORT
+        : expect.objectContaining({ tool_use_result: { status: status === 'stopped' ? 'cancelled' : 'failed', result: CLAUDE_HANDBACK_REPORT } }) });
+      expect(agentResults.at(-1)?.isError === true).toBe(status !== 'completed');
+      expect(agentResults.some(event => JSON.stringify(event).includes('report was delivered'))).toBe(false);
+      expect(events.filter(event => event.kind === 'transcript-message-committed' && event.peer)).toHaveLength(1);
+      await exec.emit(claudeHandbackUserRow({ withReportText: true, uuid: 'late-report', sessionId }));
+      await vi.waitFor(() => expect(events.filter(event => event.kind === 'transcript-message-committed' && event.peer)).toHaveLength(2));
+      expect(events.filter(event => event.kind === 'tool-result' && event.toolCallId === 'toolu_a1')).toHaveLength(2);
+    } finally { subscription.dispose(); await session.dispose(); }
+  });
+
+  it('projects ordered SDK initial replay task reports and unlinked hand-backs without replaying ordinary tool results', async () => {
+    const exec = createSdkExecFixture();
+    const hooks = createSessionHooksFixture();
+    let replayBaseline: (() => Promise<void>) | undefined;
+    const ctx = createPluginContextFixture(createTerminalHostFixture().service, createEventsFixture().service, {
+      exec: exec.service, sessionHooks: hooks.service,
+    });
+    vi.mocked(ctx.agentRuntime.transcripts.followSource).mockImplementation(async () => {
+      await replayBaseline?.();
+      return { dispose: vi.fn(async () => undefined) };
+    });
+    const operations = createClaudeAgentSdkProviderOperations({ ctx, directory: '/tmp/claude-project', launchEnv: {},
+      happierSessionId: 'sdk-replay-handback', permissionMode: 'default', publishTranscriptMessages: true, enableSessionWorkState: true });
+    const context = { session: { services: { activeInput: { bind: () => ({ dispose() {} }) }, models: { bind: () => ({ dispose() {} }) } } } } as unknown as AgentSessionRuntimeContext;
+    const session = createClaudeNativeSessionRuntimeFromOperations(operations, { kind: 'create', sessionId: 'sdk-replay-handback', cwd: '/tmp/claude-project' }, context);
+    const events: AgentSessionRuntimeEvent[] = [];
+    const subscription = session.watch(event => events.push(event));
+    const providerSessionId = 'native-replay-handback';
+    replayBaseline = async () => {
+      if (!session.observeSourceTranscript) throw new Error('missing source observer');
+      const rows = [
+        claudeAsyncAgentLaunchAck({ toolUseId: 'toolu_a1' }),
+        claudeHandbackUserRow({ withReportText: true }),
+        claudeHandbackPointerNotification({ toolUseId: 'toolu_a1' }),
+        claudeHandbackUserRow({ withReportText: true, taskId: 'unlinked', uuid: 'unlinked' }),
+        { type: 'system', subtype: 'task_notification', task_id: 'early', status: 'completed',
+          summary: 'Early findings', uuid: 'early-terminal', timestamp: '2026-09-30T00:00:00.000Z' },
+        { ...claudeAsyncAgentLaunchAck({ taskId: 'early', toolUseId: 'early-tool', uuid: 'late-ack' }),
+          timestamp: '2026-10-02T00:00:00.000Z' },
+      ];
+      for (const [index, row] of rows.entries()) {
+        await session.observeSourceTranscript({ providerSessionId, sourceId: `history:${index}`, phase: 'initial_replay',
+          row: { session_id: providerSessionId, timestamp: '2026-10-01T00:00:00.000Z', ...row } });
+        if (index === 1) expect(events.filter(event => event.kind === 'tool-result' || event.kind === 'transcript-message-committed')).toEqual([]);
+      }
+    };
+    try {
+      await operations.sendProviderTurnPrompt('resume');
+      await vi.waitFor(() => expect(exec.spawnClient).toHaveBeenCalledOnce());
+      const hook = hooks.service.startServer.mock.calls[0]?.[0].onSessionHook;
+      if (!hook) throw new Error('missing session hook');
+      await hook(providerSessionId, { hook_event_name: 'SessionStart', session_id: providerSessionId,
+        source: 'resume', transcript_path: '/tmp/native-replay-handback.jsonl' });
+      expect(ctx.agentRuntime.transcripts.followSource).toHaveBeenCalled();
+      expect(events.filter(event => event.kind === 'tool-result')).toEqual([
+        expect.objectContaining({ toolCallId: 'toolu_a1', output: CLAUDE_HANDBACK_REPORT, emittedAtMs: Date.parse('2026-10-01T00:00:00.000Z') }),
+        expect.objectContaining({ toolCallId: 'early-tool', output: 'Early findings', emittedAtMs: Date.parse('2026-09-30T00:00:00.000Z') }),
+      ]);
+      expect(events.filter(event => event.kind === 'transcript-message-committed')).toEqual([
+        expect.objectContaining({ role: 'assistant', text: CLAUDE_HANDBACK_REPORT, peer: { name: 'general-purpose', handback: true } }),
+      ]);
+      expect(events.find(event => event.kind === 'tool-result')).not.toHaveProperty('turnId', expect.any(String));
     } finally { subscription.dispose(); await session.dispose(); }
   });
 

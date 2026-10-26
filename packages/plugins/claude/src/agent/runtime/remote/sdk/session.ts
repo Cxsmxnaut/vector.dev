@@ -58,8 +58,9 @@ import type {
     SDKUserMessage,
 } from '../../../sdk/types.js';
 import { createClaudeTaskNotificationToolResultProjector, readClaudeTaskLifecycleEnvelope } from '../../../transcripts/taskNotification.js';
-import { readClaudeNativePeerMessageText } from '../../../transcripts/nativeSemanticProjection.js';
+import { readClaudeNativePeerMessage } from '../../../transcripts/nativeSemanticProjection.js';
 import { buildClaudeJsonlProviderFactLocalIdFromParts } from '../../../transcripts/providerFactIdentity.js';
+import { readClaudeJsonlRowTimestampMs } from '../../../transcripts/jsonlReplaySuppression.js';
 import { recordClaudeRuntimeProviderAccountUsageSnapshot } from '../../accountUsage.js';
 import { buildClaudeLiveContextUsageSnapshot } from '../../../usage/liveContextSnapshot.js';
 import { buildClaudeAssistantUsageObservation } from '../../../usage/buildAssistantObservation.js';
@@ -203,8 +204,8 @@ function isSdkSystemMessage(message: SDKMessage): message is SDKSystemMessage {
     return message.type === 'system';
 }
 
-function isSdkAssistantMessage(message: SDKMessage): message is SDKAssistantMessage {
-    return message.type === 'assistant'
+function isSdkAssistantMessage(message: unknown): message is SDKAssistantMessage {
+    return isRecord(message) && message.type === 'assistant'
         && typeof message.message === 'object'
         && message.message !== null
         && !Array.isArray(message.message);
@@ -378,11 +379,11 @@ function readAssistantText(message: SDKAssistantMessage): string | null {
     return text.length > 0 ? text : null;
 }
 
-function readMessageId(message: SDKMessage, fallback: string): string {
-    const record = message as Readonly<Record<string, unknown>>;
-    return readString(record.uuid)
-        ?? readString(record.id)
-        ?? readString(record.request_id)
+function readMessageId(message: unknown, fallback: string): string {
+    const record = isRecord(message) ? message : null;
+    return readString(record?.uuid)
+        ?? readString(record?.id)
+        ?? readString(record?.request_id)
         ?? fallback;
 }
 
@@ -590,12 +591,13 @@ function mapSdkRuntimeEvent(params: Readonly<{
 }
 
 function mapSdkTranscriptEvent(params: Readonly<{
-    message: SDKMessage;
+    message: unknown;
     sessionId: string;
     sequence: number;
     turnId: string | null;
 }>): ProviderEventMessage | null {
-    const text = readClaudeNativePeerMessageText(params.message)
+    const peerMessage = readClaudeNativePeerMessage(params.message);
+    const text = peerMessage?.text
         ?? (isSdkAssistantMessage(params.message) ? readAssistantText(params.message) : null);
     if (!text) return null;
     const record = params.message as Readonly<Record<string, unknown>>;
@@ -605,7 +607,7 @@ function mapSdkTranscriptEvent(params: Readonly<{
     const sourceLocalId = record.isSidechain !== true && !readSdkSidechainId(params.message)
         && record.isApiErrorMessage !== true
         ? buildClaudeJsonlProviderFactLocalIdFromParts({
-            type: params.message.type,
+            type: readString(record.type) ?? '',
             id: readString(record.uuid) ?? '',
         })
         : null;
@@ -622,6 +624,7 @@ function mapSdkTranscriptEvent(params: Readonly<{
         body: {
             type: 'message',
             message: text,
+            ...(peerMessage ? { peer: peerMessage.peer } : {}),
         },
         meta: {
             source: 'claude-agent-sdk',
@@ -688,13 +691,39 @@ function mapSdkResultUsageTranscriptEvent(params: Readonly<{
     });
 }
 
+function mapSdkToolResultRuntimeEvents(params: Readonly<{
+    message: unknown;
+    resultMessage: unknown;
+    sessionId: string;
+    turnId: string | null;
+    toolNameByCallId?: ReadonlyMap<string, string>;
+    emittedAtMs?: number;
+}>): ProviderEventMessage[] {
+    const result = isRecord(params.resultMessage) ? params.resultMessage : null;
+    const sidechainId = readSdkSidechainId(params.message) ?? readClaudeProviderIdentityValue(result?.sidechainId);
+    return extractToolResultBlocksFromSdkMessage(params.resultMessage).map(block => {
+        const toolName = params.toolNameByCallId?.get(block.toolUseId);
+        return ClaudeProviderEventSchema.parse({
+            sessionId: params.sessionId,
+            emittedAtMs: params.emittedAtMs ?? Date.now(),
+            kind: 'tool-result',
+            ...(sidechainId ? { sidechainId } : {}),
+            ...(params.turnId && !isReplayClaudeAgentSdkMessage(params.message) ? { turnId: params.turnId } : {}),
+            toolCallId: block.toolUseId,
+            output: block.output,
+            ...(block.isError === undefined ? {} : { isError: block.isError }),
+            ...(toolName ? { toolName } : {}),
+        });
+    });
+}
+
 function mapSdkToolRuntimeEvents(params: Readonly<{
     message: SDKMessage;
     sessionId: string;
     turnId: string | null;
     toolNameByCallId: Map<string, string>;
     taskNotificationProjector: ReturnType<typeof createClaudeTaskNotificationToolResultProjector>;
-}>): ProviderEventMessage[] {
+}>): Readonly<{ events: ProviderEventMessage[]; projectedTaskResult: boolean }> {
     const events: ProviderEventMessage[] = [];
     const sidechainId = readSdkSidechainId(params.message);
     for (const block of extractToolUseBlocksFromSdkMessage(params.message)) {
@@ -710,23 +739,15 @@ function mapSdkToolRuntimeEvents(params: Readonly<{
             toolInput: block.input,
         }));
     }
-    const projectedTaskResult = params.taskNotificationProjector.project(params.message, sidechainId ? { sidechainId } : undefined);
-    const resultSidechainId = sidechainId ?? readClaudeProviderIdentityValue(projectedTaskResult?.sidechainId);
-    for (const block of extractToolResultBlocksFromSdkMessage(projectedTaskResult ?? params.message)) {
-        const toolName = params.toolNameByCallId.get(block.toolUseId);
-        events.push(ClaudeProviderEventSchema.parse({
-            sessionId: params.sessionId,
-            emittedAtMs: Date.now(),
-            kind: 'tool-result',
-            ...(resultSidechainId ? { sidechainId: resultSidechainId } : {}),
-            ...(params.turnId && !isReplayClaudeAgentSdkMessage(params.message) ? { turnId: params.turnId } : {}),
-            toolCallId: block.toolUseId,
-            output: block.output,
-            ...(block.isError === undefined ? {} : { isError: block.isError }),
-            ...(toolName ? { toolName } : {}),
-        }));
-    }
-    return events;
+    const taskProjection = params.taskNotificationProjector.project(params.message, sidechainId ? { sidechainId } : undefined);
+    events.push(...mapSdkToolResultRuntimeEvents({
+        message: params.message,
+        resultMessage: taskProjection ? taskProjection.message : params.message,
+        sessionId: params.sessionId,
+        turnId: params.turnId,
+        toolNameByCallId: params.toolNameByCallId,
+    }));
+    return { events, projectedTaskResult: taskProjection !== null };
 }
 
 export type ClaudeAgentSdkTurnOperationsParams = Readonly<{
@@ -1897,7 +1918,19 @@ export function createClaudeAgentSdkTurnOperations(
                     });
                     publishRuntimeEvent(runtimeEvent);
                 }
-                if (params.publishTranscriptMessages === true || params.publishSdkMessages === true) {
+                // The task projector decides first: a correlated hand-back waits for its terminal
+                // notification instead of becoming peer text. Publication order stays text before tool events.
+                const toolRuntimeEvents = params.publishSdkMessages === true || params.publishTranscriptMessages === true
+                    ? mapSdkToolRuntimeEvents({
+                        message,
+                        sessionId: readRuntimeEventSessionId(),
+                        turnId: readForegroundTurnId(),
+                        toolNameByCallId,
+                        taskNotificationProjector,
+                    })
+                    : null;
+                if ((params.publishTranscriptMessages === true || params.publishSdkMessages === true)
+                    && toolRuntimeEvents?.projectedTaskResult !== true) {
                     const transcriptEvent = mapSdkTranscriptEvent({
                         message,
                         sessionId: readString(params.happierSessionId) ?? providerSessionId ?? 'claude-agent-sdk',
@@ -1924,16 +1957,8 @@ export function createClaudeAgentSdkTurnOperations(
                         usage: usage ?? {},
                     }));
                 }
-                if (params.publishSdkMessages === true || params.publishTranscriptMessages === true) {
-                    for (const runtimeEvent of mapSdkToolRuntimeEvents({
-                        message,
-                        sessionId: readRuntimeEventSessionId(),
-                        turnId: readForegroundTurnId(),
-                        toolNameByCallId,
-                        taskNotificationProjector,
-                    })) {
-                        publishRuntimeEvent(runtimeEvent);
-                    }
+                for (const runtimeEvent of toolRuntimeEvents?.events ?? []) {
+                    publishRuntimeEvent(runtimeEvent);
                 }
                 if (completedBackgroundTasks) {
                     completeProviderBackgroundObservation(turnQuery);
@@ -2274,7 +2299,21 @@ export function createClaudeAgentSdkTurnOperations(
         async observeSourceTranscript(input) {
             if (runtimeDisposed || input.phase !== 'initial_replay'
                 || input.providerSessionId !== orderedSourceBinding?.providerSessionId) return;
-            taskNotificationProjector.project(input.row);
+            const projection = taskNotificationProjector.project(input.row);
+            const replayRow = projection?.message ?? input.row;
+            const emittedAtMs = isRecord(replayRow) ? readClaudeJsonlRowTimestampMs(replayRow) ?? Date.now() : Date.now();
+            const publishTranscript = params.publishTranscriptMessages === true || params.publishSdkMessages === true;
+            if (publishTranscript && projection?.message) {
+                for (const event of mapSdkToolResultRuntimeEvents({
+                    message: input.row, resultMessage: projection.message,
+                    sessionId: readRuntimeEventSessionId(), turnId: null, emittedAtMs,
+                })) publishRuntimeEvent(event);
+            } else if (publishTranscript && !projection && readClaudeNativePeerMessage(input.row)?.peer.handback) {
+                const event = mapSdkTranscriptEvent({
+                    message: input.row, sessionId: readRuntimeEventSessionId(), sequence: 0, turnId: null,
+                });
+                if (event) publishRuntimeEvent({ ...event, emittedAtMs });
+            }
             workflowRuntime?.observeTranscriptMessage(input.row, { historicalReplay: true });
         },
         subscribeCanonicalAgentSessionEvents: runtimeActivityPublisher.subscribe,

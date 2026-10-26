@@ -1,3 +1,4 @@
+import { readTranscriptPeerSenderV1 } from '@happier-dev/protocol/sessions/messages/transcriptPeerSenderV1';
 import { readClaudeProviderIdentityValue } from '../../protocol/providerIdentity.js';
 import { readSessionHookSidechainAgentId } from '../hooks/sidechain.js';
 import {
@@ -25,7 +26,7 @@ const CLAUDE_SYNTHETIC_NO_RESPONSE_TEXT = 'No response requested.';
 export type ClaudeNativeTranscriptContent =
   | Readonly<{ kind: 'none' }>
   | Readonly<{ kind: 'message'; text: string | null }>
-  | Readonly<{ kind: 'peer_message'; text: string }>
+  | Readonly<{ kind: 'peer_message'; text: string; peer: ClaudeNativePeerSender }>
   | Readonly<{ kind: 'compact_summary'; text: string }>
   | Readonly<{ kind: 'slash_command'; text: string }>
   | Readonly<{ kind: 'local_command_output'; text: string }>
@@ -115,15 +116,47 @@ function readString(value: unknown): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
 }
 
+/** Sender of a delivered teammate, cross-session or subagent hand-back message. */
+export type ClaudeNativePeerSender = Readonly<{ name: string | null; handback: boolean }>;
+
+export type ClaudeNativePeerMessage = Readonly<{ text: string; peer: ClaudeNativePeerSender }>;
+
+function readTagAttributes(source: string): Map<string, string> {
+  const attributes = new Map<string, string>();
+  for (const match of source.matchAll(/([\w-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g)) {
+    attributes.set(match[1], match[2] ?? match[3]);
+  }
+  return attributes;
+}
+
+// Claude 2.1.296+ wraps teammate and subagent deliveries in <agent-message>, preceded by a
+// delivery sentence and followed by harness guidance on user rows. Only native peer origin
+// may admit this unanchored wrapper; copied text without that provenance stays ordinary input.
+const AGENT_MESSAGE_WRAPPER = /<agent-message\b((?:"[^"]*"|'[^']*'|[^'">])*)>\n?([\s\S]*?)\n?<\/agent-message>/i;
+const CROSS_SESSION_WRAPPER = /^\s*<cross-session-message\b((?:"[^"]*"|'[^']*'|[^'">])*)>([\s\S]*?)<\/cross-session-message>\s*$/i;
+const HANDBACK_FRAME = /^\[Subagent hand-back\][^\n]*\n/;
+
+/** Hand-backs prefix a provenance frame and indent every report line; 2.1.304 also sends the bare report. */
+function readHandbackReport(origin: Record<string, unknown>, body: string): string {
+  const reportText = readString(origin.handbackReportText);
+  if (reportText) return reportText;
+  const frame = HANDBACK_FRAME.exec(body);
+  if (!frame) return body;
+  return body.slice(frame[0].length).split('\n')
+    .map(line => line.startsWith('  ') ? line.slice(2) : line.trimEnd()).join('\n').trim();
+}
+
 /** Delivered native peer content only; copied human text and enqueue records are not delivery evidence. */
-export function readClaudeNativePeerMessageText(value: unknown): string | null {
+export function readClaudeNativePeerMessage(value: unknown): ClaudeNativePeerMessage | null {
   if (!isRecord(value)) return null;
   const attachment = value.type === 'attachment' && isRecord(value.attachment)
     && value.attachment.type === 'queued_command' ? value.attachment : null;
   const origin = isRecord(value.origin) ? value.origin
     : attachment && isRecord(attachment.origin) ? attachment.origin : null;
   if (attachment && origin && origin.kind !== 'peer') return null;
-  const peerUser = value.type === 'user' && origin?.kind === 'peer';
+  const nativePeer = origin?.kind === 'peer' ? origin : null;
+  const peerUser = value.type === 'user' && nativePeer !== null;
+  if (!attachment && !peerUser) return null;
   const content = peerUser && isRecord(value.message) ? value.message.content : null;
   const text = attachment && typeof attachment.prompt === 'string' ? attachment.prompt
     : typeof content === 'string' ? content
@@ -131,16 +164,21 @@ export function readClaudeNativePeerMessageText(value: unknown): string | null {
       && content.every((part) => isRecord(part) && part.type === 'text' && typeof part.text === 'string')
       ? content.map((part) => part.text).join('\n') : null;
   if (text === null) return null;
-  const wrapper = /^\s*<cross-session-message\b((?:"[^"]*"|'[^']*'|[^'">])*)>([\s\S]*?)<\/cross-session-message>\s*$/i.exec(text);
-  const attributes = new Map<string, string>();
-  if (wrapper) {
-    for (const match of wrapper[1].matchAll(/([\w-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g)) {
-      attributes.set(match[1], match[2] ?? match[3]);
-    }
-  }
-  if (!peerUser && (!wrapper || !readString(attributes.get('from')))) return null;
-  const name = readString(origin?.name) ?? readString(attributes.get('from-name')) ?? 'Peer';
-  return `From ${name}:\n\n${wrapper ? wrapper[2] : text}`;
+  const crossSession = CROSS_SESSION_WRAPPER.exec(text);
+  const crossSessionAttributes = crossSession ? readTagAttributes(crossSession[1]) : null;
+  const agentMessage = !crossSession && nativePeer ? AGENT_MESSAGE_WRAPPER.exec(text) : null;
+  const wrapperFrom = crossSessionAttributes?.get('from') ?? (agentMessage ? readTagAttributes(agentMessage[1]).get('from') : undefined);
+  // A queued attachment proves delivery only for a native wrapper naming its sender.
+  if (!peerUser && !readString(wrapperFrom)) return null;
+  // Native peer origin carries the delivered body without its wrapper or harness guidance.
+  const delivered = readString(nativePeer?.body) ?? crossSession?.[2] ?? agentMessage?.[2] ?? text;
+  const handback = nativePeer?.handback === true;
+  const name = readString(nativePeer?.name) ?? readString(crossSessionAttributes?.get('from-name')) ?? null;
+  return {
+    text: handback && nativePeer ? readHandbackReport(nativePeer, delivered) : delivered,
+    // A sender the transcript contract cannot carry is dropped; the delivered text still lands.
+    peer: readTranscriptPeerSenderV1({ name, handback }) ?? { name: null, handback },
+  };
 }
 
 function readTimestampMs(value: unknown): number | null {
@@ -336,12 +374,12 @@ export function classifyClaudeNativeTranscriptRow(
   const rawTypeValue = isRecord(rawObject) ? rawObject.type : null;
   const rawType = typeof rawTypeValue === 'string' ? rawTypeValue : null;
 
-  const peerText = readClaudeNativePeerMessageText(rawObject);
-  const peerRow = peerText === null ? null : parseRawJsonLinesObject(rawObject);
-  if (peerText !== null && peerRow) {
+  const peerMessage = readClaudeNativePeerMessage(rawObject);
+  const peerRow = peerMessage === null ? null : parseRawJsonLinesObject(rawObject);
+  if (peerMessage !== null && peerRow) {
     return {
       ...createBaseClassification({ rawObject, rawType, row: peerRow, visibility: 'visible',
-        messageRole: 'agent', content: { kind: 'peer_message', text: peerText } }),
+        messageRole: 'agent', content: { kind: 'peer_message', text: peerMessage.text, peer: peerMessage.peer } }),
       knownNonTranscriptRecord: false,
     };
   }

@@ -3214,6 +3214,11 @@ export {
   type RuntimeConfigOutcomeTimingV1,
   type RuntimeConfigOutcomeChangeKeyV1,
 } from './sessions/messages/transcriptRawRecordV1.js';
+export {
+  TranscriptPeerSenderV1Schema,
+  readTranscriptPeerSenderV1,
+  type TranscriptPeerSenderV1,
+} from './sessions/messages/transcriptPeerSenderV1.js';
 export { coerceSessionUserPromptV1 } from './sessions/messages/coerceSessionUserPromptV1.js';
 export {
   SESSION_ATTACH_METADATA_IDENTITY_POLICIES,
