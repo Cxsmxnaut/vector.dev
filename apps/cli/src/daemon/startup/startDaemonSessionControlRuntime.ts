@@ -562,7 +562,7 @@ import {
   recordTrackedRunnerAgentSessionOpenAttestation,
 } from '../agentRuntime/runnerAgentSessionOpenAttestation';
 import { authorizeRunnerAgentNewTurn, authorizeRunnerAgentTurnAdmission } from '../agentRuntime/runnerAgentTurnAdmission';
-import { createRunnerAgentDaemonFacetService } from '../agentRuntime/runnerAgentDaemonFacetService';
+import { attestRetainedAgentForVoice, createRunnerAgentDaemonFacetService } from '../agentRuntime/runnerAgentDaemonFacetService';
 import {
   createRunnerDaemonPluginServicesHost,
   createRunnerDaemonPluginServicesPreparationError,
@@ -10071,18 +10071,6 @@ export async function startDaemonSessionControlRuntime(
       await lease.release();
     }
   };
-  const attestRetainedAgentForVoice = async (retainedAgent: unknown) => {
-    try {
-      return await verifyRunnerAgentBindingAgainstGeneration({
-        paths: resolvePluginStorePaths({
-          happyHomeDir: configuration.happyHomeDir,
-        }),
-        binding: retainedAgent,
-      });
-    } catch {
-      return null;
-    }
-  };
   const runnerAgentDaemonFacetService = createRunnerAgentDaemonFacetService({
     externalSessionHostOperationOwner,
     machineId: params.machineId,
@@ -10178,9 +10166,13 @@ export async function startDaemonSessionControlRuntime(
         return null;
       }
     },
-    snapshotVoiceAuthority: async ({ retainedAgent }) => {
+    snapshotVoiceAuthority: async ({ retainedAgent, runner }) => {
       const verifiedRetainedAgent =
-        await attestRetainedAgentForVoice(retainedAgent);
+        await attestRetainedAgentForVoice({
+          paths: resolvePluginStorePaths({ happyHomeDir: configuration.happyHomeDir }),
+          retainedAgent,
+          runner,
+        });
       if (!verifiedRetainedAgent) return null;
       const lease = await acquireDaemonPluginRuntimeRegistryLease();
       try {
@@ -10231,12 +10223,17 @@ export async function startDaemonSessionControlRuntime(
     },
     waitVoiceAuthorityRetired: async ({
       retainedAgent,
+      runner,
       provider,
       providerGeneration,
       signal,
     }) => {
       const verifiedRetainedAgent =
-        await attestRetainedAgentForVoice(retainedAgent);
+        await attestRetainedAgentForVoice({
+          paths: resolvePluginStorePaths({ happyHomeDir: configuration.happyHomeDir }),
+          retainedAgent,
+          runner,
+        });
       if (!verifiedRetainedAgent) return;
       const lease = await acquireDaemonPluginRuntimeRegistryLease();
       let retirementSignal: AbortSignal | null = null;
