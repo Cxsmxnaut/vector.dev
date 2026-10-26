@@ -1,6 +1,6 @@
 {
   "machineVercel.kind": "ambiente isolado",
-  "machineVercel.description": "Os arquivos são mantidos entre execuções. A parada encerra os processos em execução e apaga sua memória.",
+  "machineVercel.description": "Ambientes isolados que mantêm os arquivos entre execuções.",
   "machineVercel.image": "Imagem",
   "machineVercel.region": "Região",
   "machineVercel.vcpus": "CPUs virtuais",
@@ -11,6 +11,9 @@
   "machineVercel.token": "Token de acesso",
   "machineVercel.teamId": "ID da equipe",
   "machineVercel.projectId": "ID do projeto",
+  "machineVercel.tokenDescription": "Crie um no Vercel, em Account Settings e depois em Tokens.",
+  "machineVercel.teamIdDescription": "Você o encontra no Vercel, em Team Settings.",
+  "machineVercel.projectIdDescription": "Você o encontra no Vercel, em Project Settings.",
   "machineVercel.account": "Conta Vercel",
   "machineVercel.checkStatus": "Conta conectada",
   "machineVercel.checkUnavailable": "Conta Vercel indisponível. Verifique o token, a equipe e o projeto.",

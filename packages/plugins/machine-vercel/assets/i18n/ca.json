@@ -1,6 +1,6 @@
 {
   "machineVercel.kind": "entorn aïllat",
-  "machineVercel.description": "Els fitxers es conserven entre execucions. Aturar-lo finalitza els processos i esborra la seva memòria.",
+  "machineVercel.description": "Entorns aïllats que conserven els fitxers entre execucions.",
   "machineVercel.image": "Imatge",
   "machineVercel.region": "Regió",
   "machineVercel.vcpus": "CPU virtuals",
@@ -11,6 +11,9 @@
   "machineVercel.token": "Token d’accés",
   "machineVercel.teamId": "ID de l’equip",
   "machineVercel.projectId": "ID del projecte",
+  "machineVercel.tokenDescription": "Crea’n un a Vercel, a Account Settings i després a Tokens.",
+  "machineVercel.teamIdDescription": "El trobaràs a Vercel, a Team Settings.",
+  "machineVercel.projectIdDescription": "El trobaràs a Vercel, a Project Settings.",
   "machineVercel.account": "Compte de Vercel",
   "machineVercel.checkStatus": "Compte connectat",
   "machineVercel.checkUnavailable": "El compte de Vercel no està disponible. Comprova el token, l’equip i el projecte.",

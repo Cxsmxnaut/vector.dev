@@ -1,6 +1,6 @@
 {
   "machineVercel.kind": "sandbox",
-  "machineVercel.description": "Files persist across runs. Stopping ends running processes and clears their memory.",
+  "machineVercel.description": "Sandboxes that keep their files between runs.",
   "machineVercel.image": "Image",
   "machineVercel.region": "Region",
   "machineVercel.vcpus": "vCPUs",
@@ -11,6 +11,9 @@
   "machineVercel.token": "Access token",
   "machineVercel.teamId": "Team ID",
   "machineVercel.projectId": "Project ID",
+  "machineVercel.tokenDescription": "Create one in Vercel, under Account settings, then Tokens.",
+  "machineVercel.teamIdDescription": "Find it in Vercel, under Team settings.",
+  "machineVercel.projectIdDescription": "Find it in Vercel, under Project settings.",
   "machineVercel.account": "Vercel account",
   "machineVercel.checkStatus": "Account connected",
   "machineVercel.checkUnavailable": "Vercel account unavailable. Check the token, team, and project.",

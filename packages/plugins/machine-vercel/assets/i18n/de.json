@@ -1,6 +1,6 @@
 {
   "machineVercel.kind": "Sandbox",
-  "machineVercel.description": "Dateien bleiben über mehrere Ausführungen erhalten. Beim Stoppen enden laufende Prozesse und ihr Arbeitsspeicher geht verloren.",
+  "machineVercel.description": "Sandboxes, die ihre Dateien zwischen Ausführungen behalten.",
   "machineVercel.image": "Abbild",
   "machineVercel.region": "Region",
   "machineVercel.vcpus": "Virtuelle CPUs",
@@ -11,6 +11,9 @@
   "machineVercel.token": "Zugriffstoken",
   "machineVercel.teamId": "Team-ID",
   "machineVercel.projectId": "Projekt-ID",
+  "machineVercel.tokenDescription": "Erstelle einen in Vercel unter Account Settings und dann Tokens.",
+  "machineVercel.teamIdDescription": "Du findest sie in Vercel unter Team Settings.",
+  "machineVercel.projectIdDescription": "Du findest sie in Vercel unter Project Settings.",
   "machineVercel.account": "Vercel-Konto",
   "machineVercel.checkStatus": "Konto verbunden",
   "machineVercel.checkUnavailable": "Vercel-Konto nicht verfügbar. Prüfe Token, Team und Projekt.",

@@ -1,6 +1,6 @@
 {
   "machineVercel.kind": "песочница",
-  "machineVercel.description": "Файлы сохраняются между запусками. При остановке работающие процессы завершаются, а их память теряется.",
+  "machineVercel.description": "Песочницы, которые сохраняют файлы между запусками.",
   "machineVercel.image": "Образ",
   "machineVercel.region": "Регион",
   "machineVercel.vcpus": "Виртуальные процессоры",
@@ -11,6 +11,9 @@
   "machineVercel.token": "Токен доступа",
   "machineVercel.teamId": "ID команды",
   "machineVercel.projectId": "ID проекта",
+  "machineVercel.tokenDescription": "Создайте его в Vercel: Account Settings, затем Tokens.",
+  "machineVercel.teamIdDescription": "Найдите его в Vercel: Team Settings.",
+  "machineVercel.projectIdDescription": "Найдите его в Vercel: Project Settings.",
   "machineVercel.account": "Аккаунт Vercel",
   "machineVercel.checkStatus": "Аккаунт подключён",
   "machineVercel.checkUnavailable": "Аккаунт Vercel недоступен. Проверьте токен, команду и проект.",

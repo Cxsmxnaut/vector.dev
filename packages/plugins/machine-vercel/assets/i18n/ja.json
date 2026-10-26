@@ -1,6 +1,6 @@
 {
   "machineVercel.kind": "サンドボックス",
-  "machineVercel.description": "ファイルは実行をまたいで保持されます。停止すると実行中のプロセスが終了し、そのメモリは失われます。",
+  "machineVercel.description": "実行をまたいでファイルが保持されるサンドボックスです。",
   "machineVercel.image": "イメージ",
   "machineVercel.region": "リージョン",
   "machineVercel.vcpus": "仮想 CPU 数",
@@ -11,6 +11,9 @@
   "machineVercel.token": "アクセストークン",
   "machineVercel.teamId": "チーム ID",
   "machineVercel.projectId": "プロジェクト ID",
+  "machineVercel.tokenDescription": "Vercel の Account Settings にある Tokens で作成します。",
+  "machineVercel.teamIdDescription": "Vercel の Team Settings で確認できます。",
+  "machineVercel.projectIdDescription": "Vercel の Project Settings で確認できます。",
   "machineVercel.account": "Vercel アカウント",
   "machineVercel.checkStatus": "アカウント接続済み",
   "machineVercel.checkUnavailable": "Vercel アカウントを利用できません。トークン、チーム、プロジェクトを確認してください。",

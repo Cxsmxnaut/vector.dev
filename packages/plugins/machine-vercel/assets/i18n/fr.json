@@ -1,6 +1,6 @@
 {
   "machineVercel.kind": "environnement isolé",
-  "machineVercel.description": "Les fichiers sont conservés entre les exécutions. L’arrêt met fin aux processus et efface leur mémoire.",
+  "machineVercel.description": "Des environnements isolés qui conservent leurs fichiers entre les exécutions.",
   "machineVercel.image": "Image",
   "machineVercel.region": "Région",
   "machineVercel.vcpus": "Processeurs virtuels",
@@ -11,6 +11,9 @@
   "machineVercel.token": "Jeton d’accès",
   "machineVercel.teamId": "ID de l’équipe",
   "machineVercel.projectId": "ID du projet",
+  "machineVercel.tokenDescription": "Créez-en un dans Vercel, sous Account Settings, puis Tokens.",
+  "machineVercel.teamIdDescription": "Vous le trouverez dans Vercel, sous Team Settings.",
+  "machineVercel.projectIdDescription": "Vous le trouverez dans Vercel, sous Project Settings.",
   "machineVercel.account": "Compte Vercel",
   "machineVercel.checkStatus": "Compte connecté",
   "machineVercel.checkUnavailable": "Compte Vercel indisponible. Vérifiez le jeton, l’équipe et le projet.",

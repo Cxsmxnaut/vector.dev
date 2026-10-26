@@ -2,7 +2,7 @@ import type { PluginLocalizedStringV2 } from '@happier-dev/plugin-sdk/manifest';
 
 const en = {
   "kind": "sandbox",
-  "description": "Files persist across runs. Stopping ends running processes and clears their memory.",
+  "description": "Sandboxes that keep their files between runs.",
   "image": "Image",
   "region": "Region",
   "vcpus": "vCPUs",
@@ -13,6 +13,9 @@ const en = {
   "token": "Access token",
   "teamId": "Team ID",
   "projectId": "Project ID",
+  "tokenDescription": "Create one in Vercel, under Account settings, then Tokens.",
+  "teamIdDescription": "Find it in Vercel, under Team settings.",
+  "projectIdDescription": "Find it in Vercel, under Project settings.",
   "account": "Vercel account",
   "checkStatus": "Account connected",
   "checkUnavailable": "Vercel account unavailable. Check the token, team, and project.",

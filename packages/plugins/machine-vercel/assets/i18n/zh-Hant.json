@@ -1,6 +1,6 @@
 {
   "machineVercel.kind": "沙箱",
-  "machineVercel.description": "檔案會在多次執行之間保留。停止後，正在執行的處理程序會結束，其記憶體狀態也會遺失。",
+  "machineVercel.description": "會在多次執行之間保留檔案的沙箱。",
   "machineVercel.image": "映像檔",
   "machineVercel.region": "區域",
   "machineVercel.vcpus": "虛擬 CPU 數",
@@ -11,6 +11,9 @@
   "machineVercel.token": "存取權杖",
   "machineVercel.teamId": "團隊 ID",
   "machineVercel.projectId": "專案 ID",
+  "machineVercel.tokenDescription": "在 Vercel 的 Account Settings 中的 Tokens 下建立。",
+  "machineVercel.teamIdDescription": "可在 Vercel 的 Team Settings 中找到。",
+  "machineVercel.projectIdDescription": "可在 Vercel 的 Project Settings 中找到。",
   "machineVercel.account": "Vercel 帳戶",
   "machineVercel.checkStatus": "帳戶已連線",
   "machineVercel.checkUnavailable": "Vercel 帳戶無法使用。請檢查權杖、團隊和專案。",

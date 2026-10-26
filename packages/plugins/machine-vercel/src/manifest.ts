@@ -21,7 +21,7 @@ const errorCode = (error: unknown) => error !== null && typeof error === 'object
   ? error.code : error instanceof Error && error.message === 'credential_unavailable' ? 'credential_unavailable' : 'vercel_unavailable';
 
 export const MACHINE_PROVISIONER = {
-  title: 'Vercel Sandbox', icon: 'cloud', resourceKind: 'vercel-sandbox', schemaVersion: 1,
+  title: 'Vercel', icon: 'cloud', resourceKind: 'vercel-sandbox', schemaVersion: 1,
   kindTitle: label('kind'), description: label('description'),
   launchSchema: VercelLaunchSchema.jsonSchema, resourceSchema: VercelResourceSchema.jsonSchema,
   resourceIdPath: 'name', platforms: ['darwin', 'linux', 'win32'], prerequisites: [],
@@ -46,13 +46,16 @@ export const PLUGIN = definePlugin({
       scope: { serviceRefs: [ACCOUNT_ID], operations: ['use'], materializationKinds: ['httpHeaders', 'environment'] } },
   ], optional: [] },
   connectedAccountDescriptors: { [ACCOUNT_ID]: {
-    declaration: { title: label('account'), authentication: { defaultModeId: 'token', modes: [{
+    declaration: { title: label('account'), ui: { category: 'cloud-machines' }, authentication: { defaultModeId: 'token', modes: [{
       id: 'token', title: label('token'), kind: 'manual', outcomeReconciliation: 'none', credentialOrigin: 'authentication',
       directExport: { contractVersion: CONNECTED_ACCOUNT_DIRECT_EXPORT_CONTRACT_V1 },
-      fields: [{ id: 'token', title: label('token'), schema: { type: 'string', minLength: 1 }, secret: true }],
+      fields: [{ id: 'token', title: label('token'), description: label('tokenDescription'), schema: { type: 'string', minLength: 1 }, secret: true }],
+      // A team contains its projects, so the team comes first.
       configuration: { scope: 'account', changeBehavior: 'reconnect', fields: [
-        { id: 'teamId', title: label('teamId'), schema: { type: 'string', minLength: 1 }, required: true, secret: false },
-        { id: 'projectId', title: label('projectId'), schema: { type: 'string', minLength: 1 }, required: true, secret: false },
+        { id: 'teamId', title: label('teamId'), description: label('teamIdDescription'), presentation: { placeholder: 'team_…', order: 1 },
+          schema: { type: 'string', minLength: 1 }, required: true, secret: false },
+        { id: 'projectId', title: label('projectId'), description: label('projectIdDescription'), presentation: { placeholder: 'prj_…', order: 2 },
+          schema: { type: 'string', minLength: 1 }, required: true, secret: false },
       ] },
     }] } }, runtime: connectedAccountRuntime,
   } },

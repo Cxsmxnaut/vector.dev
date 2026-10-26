@@ -1,6 +1,6 @@
 {
   "machineVercel.kind": "沙箱",
-  "machineVercel.description": "文件会在多次运行之间保留。停止后，正在运行的进程会结束，其内存状态也会丢失。",
+  "machineVercel.description": "会在多次运行之间保留文件的沙箱。",
   "machineVercel.image": "镜像",
   "machineVercel.region": "区域",
   "machineVercel.vcpus": "虚拟 CPU 数",
@@ -11,6 +11,9 @@
   "machineVercel.token": "访问令牌",
   "machineVercel.teamId": "团队 ID",
   "machineVercel.projectId": "项目 ID",
+  "machineVercel.tokenDescription": "在 Vercel 的 Account Settings 中的 Tokens 下创建。",
+  "machineVercel.teamIdDescription": "可在 Vercel 的 Team Settings 中找到。",
+  "machineVercel.projectIdDescription": "可在 Vercel 的 Project Settings 中找到。",
   "machineVercel.account": "Vercel 账户",
   "machineVercel.checkStatus": "账户已连接",
   "machineVercel.checkUnavailable": "Vercel 账户不可用。请检查令牌、团队和项目。",
