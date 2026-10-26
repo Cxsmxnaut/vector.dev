@@ -289,7 +289,8 @@ describe('RichMarkdownEditorPanel', () => {
         expect(onControllerChange).toHaveBeenLastCalledWith(null);
     });
 
-    it('passes through slash-menu and link-bubble controller methods to the surface', async () => {
+    it('shares one controller with the slash menu, link bubble and parent, forwarding subscriptions to the surface', async () => {
+        const onControllerChange = vi.fn();
         const editorRef = { current: null } as React.MutableRefObject<CodeEditorHandle | null>;
         await renderScreen(
             <RichMarkdownEditorPanel
@@ -297,15 +298,42 @@ describe('RichMarkdownEditorPanel', () => {
                 editorRef={editorRef}
                 value="# Doc"
                 onChange={vi.fn()}
+                onControllerChange={onControllerChange}
             />,
         );
 
-        expect(slashHookSpy.controller).not.toBeNull();
+        const controller = onControllerChange.mock.calls[0]?.[0] as MarkdownEditorController;
+        expect(controller).toBeTruthy();
+        expect(slashHookSpy.controller).toBe(controller);
+        expect(linkHookSpy.controller).toBe(controller);
+
+        const onTrigger = vi.fn();
+        const unsubscribeTrigger = controller.subscribeMenuTrigger!(onTrigger);
+        expect(editorSpy.menuTriggerCallbacks.has(onTrigger)).toBe(true);
+        unsubscribeTrigger();
+        expect(editorSpy.menuTriggerCallbacks.has(onTrigger)).toBe(false);
+
+        const onBubble = vi.fn();
+        const unsubscribeBubble = controller.subscribeLinkBubble!(onBubble);
+        expect(editorSpy.linkBubbleCallbacks.has(onBubble)).toBe(true);
+        unsubscribeBubble();
+        expect(editorSpy.linkBubbleCallbacks.has(onBubble)).toBe(false);
+    });
+
+    it('does not drive the slash menu while read-only but keeps the link bubble controller', async () => {
+        const editorRef = { current: null } as React.MutableRefObject<CodeEditorHandle | null>;
+        await renderScreen(
+            <RichMarkdownEditorPanel
+                resetKey="rk-1"
+                editorRef={editorRef}
+                value="# Doc"
+                onChange={vi.fn()}
+                readOnly
+            />,
+        );
+
+        expect(slashHookSpy.controller).toBeNull();
         expect(linkHookSpy.controller).not.toBeNull();
-        expect(typeof slashHookSpy.controller?.subscribeMenuTrigger).toBe('function');
-        expect(typeof slashHookSpy.controller?.runMenuCommand).toBe('function');
-        expect(typeof slashHookSpy.controller?.subscribeEditorViewportLayout).toBe('function');
-        expect(typeof linkHookSpy.controller?.subscribeLinkBubble).toBe('function');
     });
 
     it('renders the markdown slash menu and link bubble surfaces', async () => {
