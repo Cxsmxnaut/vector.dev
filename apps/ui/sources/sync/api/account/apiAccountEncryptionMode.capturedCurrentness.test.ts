@@ -1,6 +1,7 @@
 import { afterEach, beforeAll, expect, it, vi } from 'vitest';
 import { encodeBase64 } from '@/encryption/base64';
 import { upsertAndActivateServer } from '@/sync/domains/server/serverRuntime';
+import { TokenStorage } from '@/auth/storage/tokenStorage';
 import { fetchAccountEncryptionCurrentness } from './apiAccountEncryptionMode';
 import { createServerFetchAtEndpoint } from '@/sync/http/client';
 import type { Socket } from 'socket.io-client';
@@ -98,9 +99,16 @@ it.each(['matching', 'different', 'disconnected'] as const)('admits captured Act
     } finally { context.dispose(); }
 });
 
-it('keeps captured-Home readiness failure out of the selected Home recovery flow', async () => {
+it.each([
+    { name: 'a retained secret', credentials: { token: 'captured-token', secret: encodeBase64(new Uint8Array(32).fill(24), 'base64url') } },
+    { name: 'only the bearer', credentials: { token: 'captured-token' } },
+])('keeps captured-Home readiness failure with $name out of the selected Home recovery flow', async ({ credentials }) => {
     await upsertAndActivateServer({ serverUrl: 'https://selected-currentness.test' });
-    const credentials = { token: 'captured-token', secret: encodeBase64(new Uint8Array(32).fill(24), 'base64url') };
+    // The selected Home holds recoverable credentials; a captured request must not borrow them.
+    const selected = getActiveServerSnapshot();
+    await TokenStorage.setCredentialsForServerUrl(selected.serverUrl, { serverId: selected.serverId },
+        { token: 'selected-token', secret: encodeBase64(new Uint8Array(32).fill(25), 'base64url') });
+    const readCredentials = vi.spyOn(TokenStorage, 'getCredentialsForServerUrl');
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({ error: 'migration-required',
         recipientEnvelopeReadiness: { status: 'unavailable', reason: 'encryption_setup_required' },
     }), { status: 400 }));
@@ -112,6 +120,7 @@ it('keeps captured-Home readiness failure out of the selected Home recovery flow
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(new URL(String(fetchMock.mock.calls[0]?.[0])).origin).toBe('https://captured-currentness.test');
+    expect(readCredentials).not.toHaveBeenCalled();
 });
 
 it.each(['unchanged', 'intentional-disconnect', 'mode', 'fingerprint', 'update', 'malformed-update', 'scope-reset', 'credential-retired', 'home-retired', 'fresh-denied'] as const)(
