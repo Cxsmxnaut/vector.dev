@@ -14,6 +14,7 @@ import { ATTRIBUTION_INVALIDATION_WINDOW_MS, shouldAttributeChangedPaths } from 
 import { isSessionPathWithinRepoRoot } from './sync/paths';
 import { collectChangedPaths } from './sync/snapshotDiff';
 import { resolveWorkspaceTargetForSessionFromState } from '@/sync/domains/session/resolveWorkspaceTargetForSessionFromState';
+import { registerSuggestionFileSearchCacheClearer } from '@/sync/domains/input/suggestionFileCacheInvalidation';
 import {
     getCachedWorkspaceRepositoryDirectoryEntries,
     setCachedWorkspaceRepositoryDirectoryEntries,
@@ -139,12 +140,15 @@ describe('repository scope snapshot publication and reuse', () => {
         });
         const syncer = new ScmStatusSync();
         try {
+            // The other repository's Session holds a sync too, so only the project filter can keep its cache.
+            syncer.getSync(other.id, serverId);
             await syncer.getSync(refreshed.id, serverId).invalidateAndAwait();
             expect(storage.getState().getSessionProjectScmSnapshot(refreshed.id, serverId)?.repo.rootPath).toBe('/cache-repo');
             expect(getCachedWorkspaceRepositoryDirectoryEntries({ workspaceCacheKey: workspaceCacheKey(refreshed.id), directoryPath: '' })).toBeNull();
             expect(getCachedWorkspaceRepositoryDirectoryEntries({ workspaceCacheKey: workspaceCacheKey(other.id), directoryPath: '' })).toEqual(entries);
         } finally {
             syncer.stop(refreshed.id, serverId);
+            syncer.stop(other.id, serverId);
         }
     });
 
@@ -271,12 +275,15 @@ describe('active-Home refresh lifecycle through real repository publication', ()
             .mockResolvedValueOnce(snapshotReply('/dedupe-repo'))
             .mockResolvedValueOnce(snapshotReply('/dedupe-repo'))
             .mockResolvedValueOnce(snapshotReply('/dedupe-repo', 'feature'));
+        const clearedSearchCaches: Array<string | undefined> = [];
+        const unregisterClearer = registerSuggestionFileSearchCacheClearer((sessionId) => clearedSearchCaches.push(sessionId));
         const syncer = new ScmStatusSync();
         const sync = syncer.getSync('dedupe-session');
         try {
             await sync.invalidateAndAwait();
             const first = published('dedupe-session');
             expect(first?.branch.head).toBe('main');
+            expect(clearedSearchCaches).toEqual(['dedupe-session']);
 
             let notifications = 0;
             const unsubscribe = storage.subscribe(() => { notifications += 1; });
@@ -285,6 +292,8 @@ describe('active-Home refresh lifecycle through real repository publication', ()
                 await sync.invalidateAndAwait();
                 expect(notifications).toBe(0);
                 expect(published('dedupe-session')).toBe(first);
+                // An unchanged signature keeps the file-search caches.
+                expect(clearedSearchCaches).toEqual(['dedupe-session']);
 
                 await sync.invalidateAndAwait();
                 expect(notifications).toBeGreaterThan(0);
@@ -292,8 +301,10 @@ describe('active-Home refresh lifecycle through real repository publication', ()
                 unsubscribe();
             }
             expect(published('dedupe-session')?.branch.head).toBe('feature');
+            expect(clearedSearchCaches).toEqual(['dedupe-session', 'dedupe-session']);
             expect(snapshotRequests()).toHaveLength(3);
         } finally {
+            unregisterClearer();
             syncer.stop('dedupe-session');
         }
     });
