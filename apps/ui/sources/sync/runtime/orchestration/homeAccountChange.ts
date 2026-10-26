@@ -4,6 +4,7 @@ import {
     type HomeCredentialMutationEvent,
 } from '@/auth/storage/tokenStorage';
 import { resolveServerProfileScopeIdForIdentifier } from '@/sync/domains/server/serverProfiles';
+import { accountChangeKindsAffectWorkflowTriggers } from './changesPlanner';
 
 /**
  * Observers of the content-free Account-change wake this owner already receives
@@ -42,6 +43,8 @@ export type HomeAccountChangeEvent = Readonly<{
     accountSettingsAffects?: boolean;
     /** Machine-only focused pages are covered by the Usage store's material-input subscription. */
     usageQueryAffects?: boolean;
+    /** The canonical planner's private trigger-read decision; status is not definition content. */
+    workflowTriggersAffect?: boolean;
     /** An acknowledged local Artifact deletion; no private content or replay guarantee. */
     deletedArtifactIds?: readonly string[];
 }>;
@@ -56,6 +59,7 @@ type HomeAccountChangeDetails = Readonly<{
     profileCatalogAffects?: boolean;
     accountSettingsAffects?: boolean;
     usageQueryAffects?: boolean;
+    workflowTriggersAffect?: boolean;
     deletedArtifactIds?: readonly string[];
 }>;
 
@@ -160,6 +164,8 @@ export function publishHomeAccountChange(
             || details.changeKinds.length === 0
             || details.changeKinds.some(kind => kind === 'account' || !ChangeKindSchema.safeParse(kind).success)),
         ...(details?.usageQueryAffects !== undefined ? { usageQueryAffects: details.usageQueryAffects } : {}),
+        workflowTriggersAffect: details?.source === 'connected' || coarse
+            || (details?.workflowTriggersAffect ?? accountChangeKindsAffectWorkflowTriggers(changeKinds)),
         ...(details?.deletedArtifactIds ? { deletedArtifactIds: Object.freeze([...new Set(details.deletedArtifactIds)]) } : {}),
     });
     for (const [observer, includeCatchUpPending] of [...homeAccountChangeObservers]) {

@@ -177,6 +177,32 @@ function buildChange(params: {
 }
 
 describe('planSyncActionsFromChanges', () => {
+    it('publishes private trigger demand only for definition, source or access changes', () => {
+        const unrelated = [
+            buildChange({ cursor: 1, kind: 'machine', entityId: 'machine-one' }),
+            buildChange({ cursor: 2, kind: 'account', entityId: 'workflow-run:run-one' }),
+            buildChange({ cursor: 3, kind: 'account', entityId: PROVIDER_ACCOUNT_USAGE_ACCOUNT_CHANGE_ENTITY_ID_V1 }),
+            buildChange({ cursor: 4, kind: 'kv', entityId: 'self', hint: { keys: ['todo:one'] } }),
+            buildChange({ cursor: 5, kind: 'pluginDomain', entityId: 'pluginDomain/example.tasks/data-kv',
+                hint: { pluginDomain: 'dataKv', pluginId: 'example.tasks', keys: ['status'] } }),
+        ];
+        expect(changePlanner.plannedChangesAffectWorkflowTriggers(planSyncActionsFromChanges(unrelated))).toBe(false);
+        for (const changed of [
+            buildChange({ cursor: 6, kind: 'automation', entityId: 'automation-one' }),
+            buildChange({ cursor: 7, kind: 'artifact', entityId: 'workflow-one' }),
+            buildChange({ cursor: 8, kind: 'account', entityId: 'self' }),
+            buildChange({ cursor: 9, kind: 'machineRecipientAccess', entityId: 'machine-one' }),
+            buildChange({ cursor: 10, kind: 'pluginDomain', entityId: 'pluginDomain/example.tasks/availability',
+                hint: { pluginDomain: 'availability', pluginId: 'example.tasks' } }),
+        ]) {
+            expect(changePlanner.plannedChangesAffectWorkflowTriggers(planSyncActionsFromChanges([...unrelated, changed]))).toBe(true);
+        }
+        expect(changePlanner.accountChangeKindsAffectWorkflowTriggers(['machine', 'session', 'kv'])).toBe(false);
+        for (const kinds of [undefined, [], ['account'], ['pluginDomain'], ['future-kind']]) {
+            expect(changePlanner.accountChangeKindsAffectWorkflowTriggers(kinds)).toBe(true);
+        }
+    });
+
     it('refreshes connected-service currentness without waking encrypted Settings and retains the next settings-only fast path', () => {
         const serviceChanges = [
             buildConnectedServicesAccountChangeV1({ pluginId: 'acme.accounts', localId: 'service-a' }),

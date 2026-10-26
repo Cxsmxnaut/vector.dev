@@ -69,7 +69,10 @@ export function useWorkflowTriggerSets(request: WorkflowTriggerListRequestV1 | n
     }, [addressed, focused, identity, lifetime, sets, state]);
     const [attempt, setAttempt] = React.useState(0);
     React.useEffect(() => !accountLifetime ? undefined : subscribeHomeAccountChange(event => {
-        if (areServerProfileIdentifiersEquivalent(event.serverId, accountLifetime.scope.serverId)) setAttempt(value => value + 1);
+        if (!areServerProfileIdentifiersEquivalent(event.serverId, accountLifetime.scope.serverId)) return;
+        // Consume the producer's admitted source/definition decision, including mixed pages.
+        if (event.workflowTriggersAffect === false) return;
+        setAttempt(value => value + 1);
     }), [accountLifetime]);
     React.useEffect(() => {
         if (readRequest === null || (addressed && !accountLifetime?.isCurrent())) return;
