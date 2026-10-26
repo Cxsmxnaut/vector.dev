@@ -168,7 +168,8 @@ describe('happier agents --json', () => {
       expect(first).toEqual(expect.objectContaining({
         id: 'acme.agents-list/listed',
         title: 'Admitted Agent',
-        installed: expect.any(Boolean),
+        // PATH is empty and the declaration has no managed install, so the admitted Agent is listed but not installed.
+        installed: false,
       }));
       expect(first.source === null || typeof first.source === 'string').toBe(true);
       expect(first.command === null || typeof first.command === 'string').toBe(true);
