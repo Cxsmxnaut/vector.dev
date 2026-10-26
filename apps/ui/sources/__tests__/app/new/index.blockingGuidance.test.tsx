@@ -6,6 +6,11 @@ import { pressTestInstanceAsync, renderScreen } from '@/dev/testkit';
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
 const mockState = vi.hoisted(() => ({
+    platform: 'web',
+    enhancedWizard: false,
+    routerBack: vi.fn(),
+    navigationBack: vi.fn(),
+    canGoBack: true,
     persistedDraft: null as Record<string, unknown> | null,
     tempData: null as Record<string, unknown> | null,
     serverId: 's1',
@@ -16,6 +21,7 @@ const mockState = vi.hoisted(() => ({
     } as { dataId?: string; spawnServerId?: string; draftId?: string; draftOrigin?: string },
     serverListeners: new Set<() => void>(),
     guidanceModelListeners: new Set<() => void>(),
+    blockingListeners: new Set<() => void>(),
     guidanceKind: 'connect_machine' as 'connect_machine' | 'select_session',
     shouldBlockNewSession: true,
     guidanceHookCalls: 0,
@@ -40,15 +46,30 @@ vi.mock('react-native', async () => {
     return createReactNativeWebMock(
         {
                             View: 'View',
+                            Platform: { get OS() { return mockState.platform; } },
                         }
     );
+});
+
+vi.mock('react-native-safe-area-context', async () => {
+    const { createSafeAreaContextMock } = await import('@/dev/testkit/mocks/nativeEnvironment');
+    return createSafeAreaContextMock({
+        keyboard: { isVisible: false, height: 0 },
+        safeArea: { top: 59, bottom: 34, left: 0, right: 0 },
+    });
 });
 
 vi.mock('@/components/sessions/guidance/SessionGettingStartedGuidance', () => ({
     SessionGettingStartedGuidance: 'SessionGettingStartedGuidance',
     useShouldBlockNewSessionWithGettingStartedGuidance: () => {
         mockState.newSessionBlockHookCalls += 1;
-        return mockState.shouldBlockNewSession;
+        return React.useSyncExternalStore(
+            (listener) => {
+                mockState.blockingListeners.add(listener);
+                return () => { mockState.blockingListeners.delete(listener); };
+            },
+            () => mockState.shouldBlockNewSession,
+        );
     },
     useSessionGettingStartedGuidanceBaseModel: () => {
         mockState.guidanceHookCalls += 1;
@@ -75,19 +96,23 @@ vi.mock('@/components/sessions/guidance/SessionGettingStartedGuidance', () => ({
     },
 }));
 
-vi.mock('@/sync/store/hooks', () => ({
-    useSetting: () => false,
-    useLocalSettingMutable: () => [[], vi.fn()],
-    useSettings: () => ({
-        serverSelectionGroups: [],
-        serverSelectionActiveTargetKind: 'server',
-        serverSelectionActiveTargetId: mockState.serverId,
-    }),
-    useActiveServerAccountScope: () => ({
-        serverId: mockState.serverId,
-        accountId: 'account-1',
-    }),
-}));
+vi.mock('@/sync/store/hooks', async () => {
+    const { localSettingsDefaults } = await import('@/sync/domains/settings/localSettings');
+    return {
+        useLocalSetting: (key: keyof typeof localSettingsDefaults) => localSettingsDefaults[key],
+        useSetting: (key: string) => key === 'useEnhancedSessionWizard' ? mockState.enhancedWizard : false,
+        useLocalSettingMutable: () => [[], vi.fn()],
+        useSettings: () => ({
+            serverSelectionGroups: [],
+            serverSelectionActiveTargetKind: 'server',
+            serverSelectionActiveTargetId: mockState.serverId,
+        }),
+        useActiveServerAccountScope: () => ({
+            serverId: mockState.serverId,
+            accountId: 'account-1',
+        }),
+    };
+});
 
 vi.mock('@/sync/domains/server/serverRuntime', () => ({
     getActiveServerSnapshot: () => ({
@@ -122,7 +147,12 @@ vi.mock('expo-router', async () => {
     const { createExpoRouterMock } = await import('@/dev/testkit/mocks/router');
     const expoRouterMock = createExpoRouterMock({
         params: mockState.localSearchParams,
+        navigation: {
+            canGoBack: () => mockState.canGoBack,
+            goBack: () => mockState.navigationBack(),
+        },
         router: {
+            back: () => mockState.routerBack(),
             push: (...args: unknown[]) => mockState.routerPush(...args),
             replace: (...args: unknown[]) => mockState.routerReplace(...args),
             setParams: (...args: unknown[]) => mockState.routerSetParams(...args),
@@ -218,11 +248,17 @@ vi.mock('@/components/ui/popover', async (importOriginal) => {
 });
 
 afterEach(() => {
+    mockState.platform = 'web';
+    mockState.enhancedWizard = false;
+    mockState.canGoBack = true;
+    mockState.routerBack.mockReset();
+    mockState.navigationBack.mockReset();
     mockState.persistedDraft = null;
     mockState.tempData = null;
     mockState.serverListeners.clear();
     mockState.serverId = 's1';
     mockState.guidanceModelListeners.clear();
+    mockState.blockingListeners.clear();
     mockState.guidanceKind = 'connect_machine';
     mockState.shouldBlockNewSession = true;
     mockState.resolvedTargetServerId = undefined;
@@ -241,6 +277,55 @@ afterEach(() => {
 });
 
 describe('/new (blocking guidance)', () => {
+    it.each(['ios', 'android'])('lets users close blocking guidance on %s without creating a session', async (platform) => {
+        mockState.platform = platform;
+        const Screen = (await import('@/app/(app)/new')).default;
+        const screen = await renderScreen(React.createElement(Screen));
+
+        expect(screen.findByType('SessionGettingStartedGuidance')).toBeTruthy();
+        await pressTestInstanceAsync(screen.findByTestId('new-session-cancel'));
+        expect(mockState.navigationBack).toHaveBeenCalledTimes(1);
+        expect(mockState.routerBack).not.toHaveBeenCalled();
+        expect(mockState.wizardRenders).toBe(0);
+        expect(mockState.routerPush).not.toHaveBeenCalled();
+    });
+
+    it('returns a directly opened native guidance page to home when there is no back stack', async () => {
+        mockState.platform = 'ios';
+        mockState.canGoBack = false;
+        const Screen = (await import('@/app/(app)/new')).default;
+        const screen = await renderScreen(React.createElement(Screen));
+
+        await pressTestInstanceAsync(screen.findByTestId('new-session-cancel'));
+        expect(mockState.routerReplace).toHaveBeenCalledWith('/');
+        expect(mockState.routerBack).not.toHaveBeenCalled();
+    });
+
+    it('removes the native guidance shell when machines become available', async () => {
+        mockState.platform = 'ios';
+        const Screen = (await import('@/app/(app)/new')).default;
+        const screen = await renderScreen(React.createElement(Screen));
+        expect(screen.findByTestId('new-session-cancel')).not.toBeNull();
+
+        await React.act(async () => {
+            mockState.shouldBlockNewSession = false;
+            for (const listener of mockState.blockingListeners) listener();
+        });
+        expect(screen.findAllByType('SessionGettingStartedGuidance')).toHaveLength(0);
+        expect(screen.findByTestId('new-session-cancel')).toBeNull();
+        expect(screen.findByType('NewSessionWizard')).toBeTruthy();
+    });
+
+    it('leaves dismissal to the navigator for the native wizard presentation', async () => {
+        mockState.platform = 'ios';
+        mockState.enhancedWizard = true;
+        const Screen = (await import('@/app/(app)/new')).default;
+        const screen = await renderScreen(React.createElement(Screen));
+
+        expect(screen.findByType('SessionGettingStartedGuidance')).toBeTruthy();
+        expect(screen.findByTestId('new-session-cancel')).toBeNull();
+    });
+
     it('resolves a direct ordinary /new route through the continuity owner', async () => {
         mockState.localSearchParams = {};
         mockState.shouldBlockNewSession = true;

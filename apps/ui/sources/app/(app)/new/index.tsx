@@ -4,7 +4,8 @@ import { StyleSheet } from 'react-native-unistyles';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { AppHeaderCloseButton } from '@/components/navigation/AppHeaderCloseButton';
-import { SessionGettingStartedGuidance, useShouldBlockNewSessionWithGettingStartedGuidance } from '@/components/sessions/guidance/SessionGettingStartedGuidance';
+import { useShouldBlockNewSessionWithGettingStartedGuidance } from '@/components/sessions/guidance/SessionGettingStartedGuidance';
+import { NewSessionBlockingGuidance } from '@/components/sessions/new/components/NewSessionBlockingGuidance';
 import { NewSessionSimplePanel } from '@/components/sessions/new/components/NewSessionSimplePanel';
 import { NewSessionWizard } from '@/components/sessions/new/components/NewSessionWizard';
 import { useNewSessionScreenModel } from '@/components/sessions/new/hooks/useNewSessionScreenModel';
@@ -106,7 +107,7 @@ function NewSessionContent(props: Readonly<{
         return (
             <>
                 <NewSessionWebCloseFallback />
-                <SessionGettingStartedGuidance variant="newSessionBlocking" />
+                <NewSessionBlockingGuidance />
             </>
         );
     }
