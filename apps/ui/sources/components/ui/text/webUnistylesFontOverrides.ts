@@ -87,7 +87,7 @@ function collectSheetFontMetrics(sheet: CSSStyleSheet, cache: Map<string, Unisty
     }
 }
 
-export function scanDocumentForUnistylesFontMetrics(
+function scanDocumentForUnistylesFontMetrics(
     document: Document,
     cache: Map<string, UnistylesFontMetric>,
 ): number {
@@ -99,7 +99,7 @@ export function scanDocumentForUnistylesFontMetrics(
     return added;
 }
 
-export function ensureOverrideStyleElement(document: Document): HTMLStyleElement {
+function ensureOverrideStyleElement(document: Document): HTMLStyleElement {
     const existing = document.getElementById(HAPPIER_UI_FONT_OVERRIDE_STYLE_ELEMENT_ID);
     if (existing && existing.tagName.toLowerCase() === 'style') {
         return existing as HTMLStyleElement;
@@ -136,7 +136,7 @@ function buildOverrideRule(className: string, metric: UnistylesFontMetric): stri
     return `.${className} { ${parts.join(' ')} }\n`;
 }
 
-export function syncOverrideStyleElement(
+function syncOverrideStyleElement(
     styleEl: HTMLStyleElement,
     cache: Map<string, UnistylesFontMetric>,
 ): number {

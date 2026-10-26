@@ -59,6 +59,10 @@ it('updates only new font rules, without idle frames or observing its own writes
 
         const override = () => document.getElementById(HAPPIER_UI_FONT_OVERRIDE_STYLE_ELEMENT_ID)?.textContent ?? '';
         expect(override()).toContain('font-size: calc(16px *');
+        const unscaledText = document.createElement('span');
+        unscaledText.setAttribute('data-happier-ui-font-scaling', 'disabled');
+        document.body.appendChild(unscaledText);
+        expect(dom.window.getComputedStyle(unscaledText).getPropertyValue(HAPPIER_UI_FONT_SCALE_CSS_VAR), 'disableUiFontScaling opts out of the scale').toBe('1');
         let publications = 0;
         const publishedStyle = document.getElementById(HAPPIER_UI_FONT_OVERRIDE_STYLE_ELEMENT_ID)!;
         const publicationObserver = new MutationObserver((records: MutationRecord[]) => {
@@ -75,6 +79,9 @@ it('updates only new font rules, without idle frames or observing its own writes
         await act(async () => { await Promise.resolve(); });
         expect(override()).toContain('font-size: calc(18px *');
         expect(override()).toContain('line-height: calc(24px *');
+        sheet.insertRule('.unistyles_late { font-size: 18px; line-height: 24px; }');
+        await act(async () => { await Promise.resolve(); });
+        expect(override().split('.unistyles_late ').length - 1, 'a re-inserted known rule is not duplicated').toBe(1);
 
         const added = document.createElement('style');
         added.textContent = '.unistyles_sheet { font-size: 22px; }';

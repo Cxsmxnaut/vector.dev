@@ -4547,7 +4547,6 @@
     "sources/components/ui/text/Text.privateStyleAdapter.test.tsx",
     "sources/components/ui/text/Text.selectabilityScope.test.tsx",
     "sources/components/ui/text/uiFontScale.test.ts",
-    "sources/components/ui/text/webUnistylesFontOverrides.test.ts",
     "sources/components/ui/theme/haptics.test.ts",
     "sources/components/ui/treeDragDrop/__tests__/autoscroll/useTreeDropAutoscroll.test.ts",
     "sources/components/ui/treeDragDrop/__tests__/entityDragDropHooks.test.ts",
