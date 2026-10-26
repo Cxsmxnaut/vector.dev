@@ -27,7 +27,7 @@ import { resolveUiClientEncryptionRequirementForScope } from '@/sync/domains/set
 import { createServerAccountScope } from '@/sync/domains/scope/serverAccountScope';
 import type { ServerAccountScope } from '@/sync/domains/scope/serverAccountScope';
 import { getActiveServerAccountScope } from '@/sync/domains/scope/activeServerAccountScope';
-import { clearMachineRequestReachabilityForMachine, withdrawMachinePresenceForScope } from '@/sync/domains/machines/reachability/machineReachability';
+import { captureMachinePresenceObservation, clearMachineRequestReachabilityForMachine, clearMachineRequestReachabilityForScope, withdrawMachinePresenceForScope } from '@/sync/domains/machines/reachability/machineReachability';
 import {
     getEffectiveServerSelectionFromRawSettings,
     type RawServerSelectionSettings,
@@ -1543,11 +1543,19 @@ async function connectManagedServer(
                 queueRefresh(entry, 'socket', impact === 'machines' ? 'machines' : 'refresh');
             });
             socket.on('ephemeral', (raw: unknown) => {
-                if (!isManagedServerActive(entry)) return;
+                if (!isManagedServerActive(entry) || entry.socket !== socket) return;
                 const usage = EphemeralUpdateSchema.safeParse(raw);
-                if (usage.success && usage.data.type === 'machine-activity'
-                    && usage.data.active === true && usage.data.reconnected === true && ingressAccountId) {
-                    clearMachineRequestReachabilityForMachine({ serverId: entry.id, accountId: ingressAccountId }, usage.data.id);
+                if (usage.success && usage.data.type === 'machine-activity' && ingressAccountId) {
+                    const scope = { serverId: entry.id, accountId: ingressAccountId };
+                    const update = usage.data;
+                    const observe = captureMachinePresenceObservation(scope);
+                    storage.getState().applyMachineActivityUpdates([
+                        { id: update.id, active: update.active, activeAt: update.activeAt },
+                    ], { sourceServerId: entry.id });
+                    observe([update.id]);
+                    if (update.active === true && update.reconnected === true) {
+                        clearMachineRequestReachabilityForMachine(scope, update.id);
+                    }
                 }
                 if (usage.success && (usage.data.type === 'usage' || usage.data.type === 'usage-sources-invalidated')) {
                     publishHomeAccountChange(entry.id, [PROVIDER_ACCOUNT_USAGE_ACCOUNT_CHANGE_ENTITY_ID_V1]);
@@ -1592,6 +1600,7 @@ async function connectManagedServer(
                 transport.onConnected(() => {
                     if (!isManagedServerActive(entry) || entry.socket !== socket) return;
                     accountEncryptionObservation?.connected();
+                    if (ingressAccountId) clearMachineRequestReachabilityForScope({ serverId: entry.id, accountId: ingressAccountId });
                     notifyExecutionRunActivityReconnect(entry.id);
                     statusDemandTransport.resend();
                     // This content-free secondary transport has no changes
