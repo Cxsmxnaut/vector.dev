@@ -10,12 +10,34 @@ import {
   buildRemoveWindowsScheduledTaskIfPresentPowerShellCommand,
   buildReadWindowsScheduledTaskStatusPowerShellCommand,
   buildStopWindowsScheduledTaskIfRunningPowerShellCommand,
+  isWindowsScheduledTaskLauncherActionExpected,
   parseWindowsScheduledTaskFolderPowerShellJson,
   parseWindowsScheduledTaskStatusPowerShellJson,
   renderWindowsScheduledTaskWrapperPs1,
 } from './windows';
 
 describe('Windows scheduled-task launcher action', () => {
+  it('accepts Windows executable path casing while requiring the exact launcher arguments', () => {
+    const paths = {
+      launcherPath: 'C:\\Users\\Test\\happier-service-launcher.exe',
+      definitionPath: 'C:\\Users\\Test\\daemon.ps1',
+      diagnosticLogPath: 'C:\\Users\\Test\\daemon.launcher.log',
+    };
+    const action = buildWindowsScheduledTaskLauncherAction(paths);
+    expect(isWindowsScheduledTaskLauncherActionExpected({
+      ...paths,
+      taskToRun: `${action.executable.toUpperCase()} ${action.arguments}`,
+    })).toBe(true);
+    expect(isWindowsScheduledTaskLauncherActionExpected({
+      ...paths,
+      taskToRun: `${action.executable} ${action.arguments.replace('--wrapper', '--WRAPPER')}`,
+    })).toBe(false);
+    expect(isWindowsScheduledTaskLauncherActionExpected({
+      ...paths,
+      taskToRun: `${action.executable}.elsewhere ${action.arguments}`,
+    })).toBe(false);
+  });
+
   it('keeps executable and arguments structured with literal Unicode and metacharacters', () => {
     const action = buildWindowsScheduledTaskLauncherAction({
       launcherPath: 'C:\\Users\\Zoë & QA\\launcher.exe',

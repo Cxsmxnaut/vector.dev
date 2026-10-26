@@ -64,7 +64,11 @@ export function isWindowsScheduledTaskLauncherActionExpected(params: Readonly<{
   const taskToRun = String(params.taskToRun ?? '').trim();
   if (!taskToRun) return false;
   const expected = buildWindowsScheduledTaskLauncherAction(params);
-  return taskToRun === `${expected.executable} ${expected.arguments}`;
+  // Windows executable paths ignore casing; option names and arguments retain the
+  // launcher's exact contract. Discovery and install verification use this same rule.
+  const argumentsSuffix = ` ${expected.arguments}`;
+  return taskToRun.endsWith(argumentsSuffix)
+    && taskToRun.slice(0, -argumentsSuffix.length).toLowerCase() === expected.executable.toLowerCase();
 }
 
 /** Register only the invoking user's interactive task, never an all-users logon trigger. */

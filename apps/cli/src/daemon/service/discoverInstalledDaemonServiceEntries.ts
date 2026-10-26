@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import { spawnBackgroundSync } from '@happier-dev/cli-common/process';
 import {
   buildListWindowsScheduledTaskFolderPowerShellCommand,
-  buildWindowsScheduledTaskLauncherAction,
+  isWindowsScheduledTaskLauncherActionExpected,
   parsePowerShellQuotedString,
   parseWindowsScheduledTaskFolderPowerShellJson,
   resolveInstalledWindowsServiceLauncherPaths,
@@ -278,14 +278,12 @@ function isInstalledWindowsLauncherActionHealthy(definition: WindowsScheduledTas
     label: win32Path.basename(definition.wrapperPath, '.ps1'),
     version: resolveDaemonWindowsServiceLauncherInstallSpec().version,
   });
-  if (definition.launcherPath.toLowerCase() !== expected.launcherPath.toLowerCase()) return false;
-  // The launcher accepts only this exact action; a missing or different diagnostic log is not current.
-  const expectedArguments = buildWindowsScheduledTaskLauncherAction({
+  if (!isWindowsScheduledTaskLauncherActionExpected({
+    taskToRun: `${definition.launcherPath} ${definition.launcherArguments ?? ''}`,
     launcherPath: expected.launcherPath,
     definitionPath: definition.wrapperPath,
     diagnosticLogPath: expected.diagnosticLogPath,
-  }).arguments;
-  if (definition.launcherArguments !== expectedArguments) return false;
+  })) return false;
   try {
     validateWindowsServiceLauncherPe(fs.readFileSync(expected.launcherPath), expected.launcherPath);
     return true;
