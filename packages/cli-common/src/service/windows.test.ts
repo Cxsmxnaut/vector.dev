@@ -10,6 +10,7 @@ import {
   buildRemoveWindowsScheduledTaskIfPresentPowerShellCommand,
   buildReadWindowsScheduledTaskStatusPowerShellCommand,
   buildStopWindowsScheduledTaskIfRunningPowerShellCommand,
+  buildWindowsScheduledTaskPowerShellAction,
   isWindowsScheduledTaskLauncherActionExpected,
   parseWindowsScheduledTaskFolderPowerShellJson,
   parseWindowsScheduledTaskStatusPowerShellJson,
@@ -225,6 +226,52 @@ describe('Windows scheduled task PowerShell status helper', () => {
 });
 
 describe('Windows scheduled task lifecycle PowerShell helpers', () => {
+  it('recognizes only the current and released 0.2.1 legacy action argument forms', () => {
+    const definitionPath = 'C:\\Users\\test\\.happier\\services\\happier-daemon.default.ps1';
+    const command = buildStopWindowsScheduledTaskIfRunningPowerShellCommand({
+      qualifiedTaskName: 'Happier\\happier-daemon.default',
+      definitionPath,
+    });
+    const currentArguments = buildWindowsScheduledTaskPowerShellAction({ definitionPath }).slice('powershell.exe '.length);
+    const releasedArguments = `-NoProfile -ExecutionPolicy Bypass -File "${definitionPath}"`;
+    const quote = (value: string) => `"${value.replaceAll('`', '``').replaceAll('$', '`$').replaceAll('"', '`"')}"`;
+
+    expect(command).toContain(`$expectedLegacyArguments = @(${quote(currentArguments)}, ${quote(releasedArguments)})`);
+    expect(command).toContain('$registeredArguments.Equals($_, [StringComparison]::OrdinalIgnoreCase)');
+  });
+
+  it.runIf(process.platform === 'win32').each([
+    { kind: 'current', executable: 'powershell.exe', extraArguments: '', expectedStatus: 0 },
+    { kind: 'released-0.2.1', executable: 'powershell.exe', extraArguments: '', expectedStatus: 0 },
+    { kind: 'released-0.2.1', executable: 'powershell.exe', extraArguments: ' -NoExit', expectedStatus: 1 },
+    { kind: 'released-0.2.1', executable: 'other.exe', extraArguments: '', expectedStatus: 1 },
+  ])('checks the full $kind task action before stopping ($executable, extra "$extraArguments")', ({
+    kind, executable, extraArguments, expectedStatus,
+  }) => {
+    const definitionPath = 'C:\\Users\\test\\.happier\\services\\happier-daemon.default.ps1';
+    const argumentsValue = (kind === 'current'
+      ? buildWindowsScheduledTaskPowerShellAction({ definitionPath }).slice('powershell.exe '.length)
+      : `-NoProfile -ExecutionPolicy Bypass -File "${definitionPath}"`) + extraArguments;
+    const literal = (value: string) => `'${value.replaceAll("'", "''")}'`;
+    // Task Scheduler and the process inventory are OS boundaries; execute the real generated guard.
+    const fixture = [
+      '$global:fixtureStopped = $false',
+      `function Get-ScheduledTask { param($TaskPath, $TaskName, $ErrorAction); [pscustomobject]@{ State = $(if ($global:fixtureStopped) { 3 } else { 4 }); Actions = @([pscustomobject]@{ Execute = ${literal(executable)}; Arguments = ${literal(argumentsValue)} }) } }`,
+      'function Get-CimInstance { param($ClassName, $ErrorAction); @() }',
+      'function Stop-ScheduledTask { param($TaskPath, $TaskName, $ErrorAction); $global:fixtureStopped = $true; Write-Output "fixture-stopped" }',
+      buildStopWindowsScheduledTaskIfRunningPowerShellCommand({
+        qualifiedTaskName: 'Happier\\happier-daemon.default',
+        definitionPath,
+      }),
+    ].join('; ');
+    const result = spawnSync('powershell.exe', [
+      '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', fixture,
+    ], { encoding: 'utf8', windowsHide: true, timeout: 30_000 });
+
+    expect(result.status).toBe(expectedStatus);
+    expect(result.stdout.includes('fixture-stopped')).toBe(expectedStatus === 0);
+  });
+
   it.each([false, true])('refuses tasks with multiple actions before stopping any process (native launcher: %s)', (native) => {
     const command = buildStopWindowsScheduledTaskIfRunningPowerShellCommand({
       qualifiedTaskName: 'Happier\\happier-daemon.default',

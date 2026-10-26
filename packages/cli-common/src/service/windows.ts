@@ -129,8 +129,11 @@ export function buildStopWindowsScheduledTaskIfRunningPowerShellCommand(params: 
         diagnosticLogPath: params.diagnosticLogPath,
       }).arguments
     : '';
-  const expectedLegacyArguments = buildWindowsScheduledTaskPowerShellAction({ definitionPath })
-    .slice('powershell.exe '.length);
+  const expectedLegacyArguments = [
+    buildWindowsScheduledTaskPowerShellAction({ definitionPath }).slice('powershell.exe '.length),
+    // cli-v0.2.1 emitted this action; its registered task can survive later CLI updates.
+    `-NoProfile -ExecutionPolicy Bypass -File "${definitionPath}"`,
+  ];
   return [
     '$ErrorActionPreference = "Stop"',
     `$taskPath = ${psQuoted(taskPath)}`,
@@ -139,7 +142,7 @@ export function buildStopWindowsScheduledTaskIfRunningPowerShellCommand(params: 
     `$wrapperActionToken = ${psQuoted(wrapperActionToken)}`,
     `$launcherPath = ${psQuoted(launcherPath)}`,
     `$expectedNativeArguments = ${psQuoted(expectedNativeArguments)}`,
-    `$expectedLegacyArguments = ${psQuoted(expectedLegacyArguments)}`,
+    `$expectedLegacyArguments = @(${expectedLegacyArguments.map(psQuoted).join(', ')})`,
     '$expectedLauncherRoot = Join-Path (Split-Path -Parent $definitionPath) ([IO.Path]::GetFileNameWithoutExtension($definitionPath))',
     '$task = Get-ScheduledTask -TaskPath $taskPath -TaskName $taskName -ErrorAction SilentlyContinue',
     'if ($null -ne $task -and [int]$task.State -eq 4) {',
@@ -161,7 +164,8 @@ export function buildStopWindowsScheduledTaskIfRunningPowerShellCommand(params: 
     '    Stop-ScheduledTask -TaskPath $taskPath -TaskName $taskName -ErrorAction Stop',
     '    exit 0',
     '  }',
-    '  if (-not $registeredExecute.Equals("powershell.exe", [StringComparison]::OrdinalIgnoreCase) -or -not $registeredArguments.Equals($expectedLegacyArguments, [StringComparison]::OrdinalIgnoreCase)) {',
+    '  $isExpectedLegacyArguments = @($expectedLegacyArguments | Where-Object { $registeredArguments.Equals($_, [StringComparison]::OrdinalIgnoreCase) }).Count -gt 0',
+    '  if (-not $registeredExecute.Equals("powershell.exe", [StringComparison]::OrdinalIgnoreCase) -or -not $isExpectedLegacyArguments) {',
     '    throw "Refusing to stop scheduled task because its registered action is not the expected Happier launcher or legacy wrapper"',
     '  }',
     // Stop-ScheduledTask terminates the PowerShell action but can leave the
