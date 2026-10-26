@@ -76,7 +76,13 @@ export function captureSessionTurnBaseline(sessionId: string): SessionTurnBaseli
   };
 }
 
-/** Assistant reply texts after the baseline; thinking output is stored as agent-text but is never a reply. */
+function readAssistantReplyText(message: Message | undefined): string | null {
+  if (message?.kind !== 'agent-text' || message.peer || message.isThinking === true
+    || typeof message.text !== 'string') return null;
+  return message.text.trim() || null;
+}
+
+/** Assistant reply texts after the baseline, excluding thinking and peer input. */
 export function collectAssistantTextMessagesSinceBaseline(
   sessionId: string,
   baselineIds: Set<string>,
@@ -87,13 +93,9 @@ export function collectAssistantTextMessagesSinceBaseline(
   const out: string[] = [];
   for (let idx = startIndex; idx < messages.length; idx += 1) {
     const message = messages[idx];
-    if (message?.kind !== 'agent-text') continue;
-    if (message?.isThinking === true) continue;
-    if (typeof message?.text !== 'string') continue;
     if (typeof message?.id === 'string' && baselineIds.has(message.id)) continue;
-    const text = message.text.trim();
-    if (!text) continue;
-    out.push(text);
+    const text = readAssistantReplyText(message);
+    if (text) out.push(text);
   }
   return out;
 }
@@ -209,8 +211,7 @@ export function collectFinalAssistantReplySinceBaseline(
       trailing = [];
       continue;
     }
-    if (message?.kind !== 'agent-text' || message?.isThinking === true || typeof message?.text !== 'string') continue;
-    const text = message.text.trim();
+    const text = readAssistantReplyText(message);
     if (text) trailing.push(text);
   }
   const reply = trailing.length > 0 ? trailing : beforePeer;
