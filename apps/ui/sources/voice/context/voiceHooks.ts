@@ -363,7 +363,7 @@ export const voiceHooks = {
     // This is one explicit user request, not an ambient Session/Follow update.
     // Local Agent channels deliberately discard ambient session_context, so
     // keep the privacy-projected facts with the request that consumes them.
-    sink.sendTextMessage(controlSessionId, `INBOX BRIEF\n\n${brief.context}\n\nBrief me on this known Inbox work: needs-you, failures, then ready work. Say when information is incomplete. Approvals are tap-only in the canonical UI; do not approve or deny a request.`);
+    sink.sendTextMessage(controlSessionId, `INBOX BRIEF\n\n${brief.context}\n\nBrief me on this known Inbox work: needs-you, failures, then ready work. Say when information is incomplete. Follow the approval guidance in this Brief.`);
     return true;
   },
 

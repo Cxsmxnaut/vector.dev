@@ -1049,7 +1049,7 @@ export async function sessionAbort(sessionId: string, options?: Readonly<{ serve
 export async function sessionRespondToPermission(
     sessionId: string,
     params: Omit<SessionPermissionRespondRpcParamsV1, 'answers'>,
-    options?: Readonly<{ serverId?: string; signal?: AbortSignal }>,
+    options?: Readonly<{ serverId?: string; signal?: AbortSignal; onIssued?: () => void }>,
 ): Promise<void> {
     if (params.decision !== 'abort') {
         await sendSessionPermissionResponse(sessionId, params, options);
@@ -1063,7 +1063,7 @@ export async function sessionRespondToPermission(
     try {
         await withActionAccountRequestSignal(account, options?.signal, async (signal) => {
             account.assertCurrent();
-            await sendSessionPermissionResponse(sessionId, params, { serverId, signal });
+            await sendSessionPermissionResponse(sessionId, params, { serverId, signal, onIssued: options?.onIssued });
             account.assertCurrent();
             await sessionAbort(sessionId, { serverId, signal });
         });
@@ -1114,7 +1114,7 @@ function assertSessionInteractionResponseApplied(result: unknown): void {
 async function sendSessionPermissionResponse(
     sessionId: string,
     params: Omit<SessionPermissionRespondRpcParamsV1, 'answers'>,
-    options?: Readonly<{ serverId?: string; signal?: AbortSignal }> | ScopedSessionPermissionResponseOptions,
+    options?: Readonly<{ serverId?: string; signal?: AbortSignal; onIssued?: () => void }> | ScopedSessionPermissionResponseOptions,
 ): Promise<void> {
     const exactScope = options && 'scope' in options ? options : null;
     const serverId = options && 'serverId' in options ? options.serverId : undefined;
@@ -1134,6 +1134,7 @@ async function sendSessionPermissionResponse(
         // The permission owner settles the admitted answer. Connection setup
         // stays bounded; the generic RPC cutoff cannot declare its effect failed.
         timeoutMs: null,
+        ...(options?.onIssued ? { onIssued: options.onIssued } : {}),
     };
     const result = exactScope
         ? await sessionRpcWithServerAccountScope<unknown, SessionPermissionRespondRpcParamsV1>({
@@ -1237,13 +1238,14 @@ export async function sessionAllowWithAnswers(
 export async function sessionRespondToUserAction(
     sessionId: string,
     params: SessionUserActionAnswerRpcParamsV1,
-    options?: Readonly<{ serverId?: string; signal?: AbortSignal }>,
+    options?: Readonly<{ serverId?: string; signal?: AbortSignal; onIssued?: () => void }>,
 ): Promise<unknown> {
     const result = await sessionRpcWithPreferredSessionScope<unknown, SessionUserActionAnswerRpcParamsV1>({
         sessionId,
         ...(options?.serverId !== undefined ? { serverId: options.serverId } : {}),
         method: RPC_METHODS.SESSION_USER_ACTION_ANSWER,
         ...(options?.signal ? { signal: options.signal } : {}),
+        ...(options?.onIssued ? { onIssued: options.onIssued } : {}),
         payload: 'disposition' in params ? params : { ...params, answeringClientCategory: readAnsweringClientCategory() },
     });
     assertSessionInteractionResponseApplied(result);
