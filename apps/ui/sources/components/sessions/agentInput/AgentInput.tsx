@@ -654,9 +654,9 @@ const stylesheet = StyleSheet.create((theme, runtime) => ({
         paddingBottom: AGENT_INPUT_PANEL_PADDING_BOTTOM,
         paddingHorizontal: 8,
     },
-    // Opt-in "glass" composer: the Liquid Glass tab bar's solid look — `surface.base`
-    // fill, the glass rim, and a top inset shadow. Fully redefines the border so the
-    // standard hairline + highlight don't leak through. The cast shadow lives on the
+    // Opt-in "glass" composer: the themed glass fill, rim, and a top inset shadow.
+    // Fully redefines the border so the standard hairline + highlight don't leak
+    // through. The cast shadow lives on the
     // `panelShadow` wrapper (glass mode only).
     unifiedPanelGlass: {
         backgroundColor: theme.colors.glass.composerSurface,
@@ -2541,8 +2541,8 @@ export const AgentInput = React.memo(React.forwardRef<MultiTextInputHandle, Agen
     // Fade the chip rows out to the composer's own fill: the glass surface in glass
     // mode, the standard input background otherwise.
     const actionBarFadeColor = React.useMemo(() => {
-        return isGlassComposer ? theme.colors.surface.base : theme.colors.input.background;
-    }, [isGlassComposer, theme.colors.surface.base, theme.colors.input.background]);
+        return isGlassComposer ? theme.colors.glass.composerSurface : theme.colors.input.background;
+    }, [isGlassComposer, theme.colors.glass.composerSurface, theme.colors.input.background]);
 
     // Handle abort button press
     const handleAbortPress = React.useCallback(async () => {
