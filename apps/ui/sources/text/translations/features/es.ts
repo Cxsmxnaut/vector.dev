@@ -10909,9 +10909,10 @@ const es: typeof en = {
         expandMap: 'Abrir el mapa junto a la sesión',
     },
     map: {
-        folded: "El trabajo terminado se pliega",
+        folded: ({ names }) => `El trabajo terminado queda en Lista: ${names}`,
         backgroundRuns: ({ count }) => (count === 1 ? "1 ejecución en segundo plano" : `${count} ejecuciones en segundo plano`),
         positionUnder: ({ position, total, parent }) => `${position} de ${total} bajo ${parent}`,
+        waitingOn: ({ count }) => `Esperando a ${count}`,
     },
     actions: {
         showInTranscript: 'Mostrar en la transcripción',

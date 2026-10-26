@@ -10892,9 +10892,10 @@ const de: typeof en = {
         expandMap: 'Karte neben der Sitzung öffnen',
     },
     map: {
-        folded: "Erledigte Arbeit wird eingeklappt",
+        folded: ({ names }) => `Erledigte Arbeit bleibt in Liste: ${names}`,
         backgroundRuns: ({ count }) => (count === 1 ? "1 Hintergrundlauf" : `${count} Hintergrundläufe`),
         positionUnder: ({ position, total, parent }) => `${position} von ${total} unter ${parent}`,
+        waitingOn: ({ count }) => `Wartet auf ${count}`,
     },
     actions: {
         showInTranscript: 'Im Transkript anzeigen',

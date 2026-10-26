@@ -10930,9 +10930,10 @@ const ru: typeof en = {
         expandMap: 'Открыть карту рядом с сессией',
     },
     map: {
-        folded: "Завершённая работа сворачивается",
+        folded: ({ names }) => `Завершённая работа остаётся в списке: ${names}`,
         backgroundRuns: ({ count }) => (count === 1 ? "1 фоновый запуск" : `${count} фоновых запусков`),
         positionUnder: ({ position, total, parent }) => `${position} из ${total} под ${parent}`,
+        waitingOn: ({ count }) => `Ждёт: ${count}`,
     },
     actions: {
         showInTranscript: 'Показать в переписке',

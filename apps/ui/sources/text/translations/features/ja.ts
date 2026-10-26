@@ -10893,9 +10893,10 @@ const ja: typeof en = {
         expandMap: 'セッションの横にマップを開く',
     },
     map: {
-        folded: "完了した作業は折りたたまれます",
+        folded: ({ names }) => `完了した作業はリストに残ります: ${names}`,
         backgroundRuns: ({ count }) => (count === 1 ? "バックグラウンド実行 1 件" : `${count} 件のバックグラウンド実行`),
         positionUnder: ({ position, total, parent }) => `${parent} の下 ${position} / ${total}`,
+        waitingOn: ({ count }) => `${count} 件を待機中`,
     },
     actions: {
         showInTranscript: '会話記録に表示',

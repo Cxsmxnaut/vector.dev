@@ -10905,9 +10905,10 @@ const ca: typeof en = {
         expandMap: 'Obre el mapa al costat de la sessió',
     },
     map: {
-        folded: "La feina acabada es plega",
+        folded: ({ names }) => `La feina acabada queda a Llista: ${names}`,
         backgroundRuns: ({ count }) => (count === 1 ? "1 execució en segon pla" : `${count} execucions en segon pla`),
         positionUnder: ({ position, total, parent }) => `${position} de ${total} sota ${parent}`,
+        waitingOn: ({ count }) => `Esperant ${count}`,
     },
     actions: {
         showInTranscript: 'Mostra a la transcripció',

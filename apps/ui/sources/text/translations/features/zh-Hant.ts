@@ -10889,9 +10889,10 @@ const zhHant: typeof en = {
         expandMap: '在工作階段旁開啟地圖',
     },
     map: {
-        folded: "已完成的工作已摺疊",
+        folded: ({ names }) => `已完成的工作保留在清單中：${names}`,
         backgroundRuns: ({ count }) => (count === 1 ? "1 個背景執行" : `${count} 個背景執行`),
         positionUnder: ({ position, total, parent }) => `${parent} 下的第 ${position}/${total} 項`,
+        waitingOn: ({ count }) => `等待 ${count} 項`,
     },
     actions: {
         showInTranscript: '在對話記錄中顯示',

@@ -10889,9 +10889,10 @@ const zhHans: typeof en = {
         expandMap: '在会话旁打开地图',
     },
     map: {
-        folded: "已完成的工作已折叠",
+        folded: ({ names }) => `已完成的工作保留在列表中：${names}`,
         backgroundRuns: ({ count }) => (count === 1 ? "1 个后台运行" : `${count} 个后台运行`),
         positionUnder: ({ position, total, parent }) => `${parent} 下的第 ${position}/${total} 项`,
+        waitingOn: ({ count }) => `等待 ${count} 项`,
     },
     actions: {
         showInTranscript: '在对话记录中显示',

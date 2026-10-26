@@ -10906,9 +10906,10 @@ const fr: typeof en = {
         expandMap: 'Ouvrir la carte à côté de la session',
     },
     map: {
-        folded: "Le travail terminé est replié",
+        folded: ({ names }) => `Le travail terminé reste dans Liste : ${names}`,
         backgroundRuns: ({ count }) => (count === 1 ? "1 exécution en arrière-plan" : `${count} exécutions en arrière-plan`),
         positionUnder: ({ position, total, parent }) => `${position} sur ${total} sous ${parent}`,
+        waitingOn: ({ count }) => `En attente de ${count}`,
     },
     actions: {
         showInTranscript: 'Afficher dans la transcription',

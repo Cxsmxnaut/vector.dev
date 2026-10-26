@@ -69,9 +69,10 @@ export const en = {
         expandMap: 'Open the map beside the session',
     },
     map: {
-        folded: "Finished work folds away",
+        folded: ({ names }: { names: string }) => `Finished work stays in List: ${names}`,
         backgroundRuns: ({ count }: { count: number }) => (count === 1 ? "1 background run" : `${count} background runs`),
         positionUnder: ({ position, total, parent }: { position: number; total: number; parent: string }) => `${position} of ${total} under ${parent}`,
+        waitingOn: ({ count }: { count: number }) => `Waiting on ${count}`,
     },
     actions: {
         showInTranscript: 'Show in transcript',
