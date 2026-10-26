@@ -366,8 +366,6 @@ function createDefaultNativeRendererOptions(input: Readonly<{
             platform: 'ios',
             availability,
             accessibilityAccepted,
-            packageProofAccepted: availability.available,
-            crashFallbackAvailable: true,
         };
     }
 
@@ -383,8 +381,6 @@ function createDefaultNativeRendererOptions(input: Readonly<{
             platform: 'android',
             availability,
             accessibilityAccepted,
-            packageProofAccepted: availability.available,
-            crashFallbackAvailable: true,
         };
     }
 
