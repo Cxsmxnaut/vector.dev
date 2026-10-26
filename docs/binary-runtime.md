@@ -563,8 +563,11 @@ unchanged; missing, shadowed, divergent, peer-dependent, or linked copies are re
 
 In current development source, the PTY provider uses the existing Python relay on
 POSIX Bun. Both native packages use `tty.ReadStream` for a nonblocking PTY master;
-the bundled Bun 1.4.2 can return a successful spawn without working input/output
-([upstream issue](https://github.com/oven-sh/bun/issues/25822)). Module-load success
+Bun can return a successful spawn without working input/output
+([upstream issue](https://github.com/oven-sh/bun/issues/25822), reported on macOS through
+Bun 1.4.2 and still open). On Linux x64, a `node-pty` interactive input/output and exit probe
+passes on both Bun 1.4.2 and the bundled 1.4.4, so it cannot show the issue is fixed; macOS has
+not been re-checked on 1.4.4. Module-load success
 therefore cannot establish backend usability. Re-enable native POSIX selection
 only after the bundled runtime passes interactive input/output and cleanup checks.
 The relay requires Python 3, applies the initial window size, and reports

@@ -421,7 +421,7 @@ jobs:
         if: ${{ env.BUILD_INSTALLER_BINARIES == 'true' || env.BUILD_SMOKE_BINARIES == 'true' }}
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
         with:
-          bun-version: 1.4.2
+          bun-version: 1.4.4
       - name: Enable Corepack
         uses: ./.github/actions/enable-corepack-yarn
       - name: Install dependencies
@@ -834,7 +834,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
         with:
-          bun-version: 1.4.2
+          bun-version: 1.4.4
 
       # Discovery-only source trees for website availability claims. These moving branch refs do
       # not establish release identity or authorize publication.
@@ -1058,7 +1058,7 @@ jobs:
         if: matrix.part == 1
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
         with:
-          bun-version: 1.4.2
+          bun-version: 1.4.4
 
       - name: Install system dependencies
         run: |
@@ -1301,7 +1301,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
         with:
-          bun-version: 1.4.2
+          bun-version: 1.4.4
 
       - name: Enable Corepack
         uses: ./.github/actions/enable-corepack-yarn
@@ -1363,7 +1363,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
         with:
-          bun-version: 1.4.2
+          bun-version: 1.4.4
 
       - name: Enable Corepack
         uses: ./.github/actions/enable-corepack-yarn
@@ -1425,7 +1425,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
         with:
-          bun-version: 1.4.2
+          bun-version: 1.4.4
 
       - name: Enable Corepack
         uses: ./.github/actions/enable-corepack-yarn
@@ -1508,7 +1508,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
         with:
-          bun-version: 1.4.2
+          bun-version: 1.4.4
 
       - name: Enable Corepack
         uses: ./.github/actions/enable-corepack-yarn
@@ -1572,7 +1572,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
         with:
-          bun-version: 1.4.2
+          bun-version: 1.4.4
 
       - name: Enable Corepack
         uses: ./.github/actions/enable-corepack-yarn
@@ -1851,7 +1851,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
         with:
-          bun-version: 1.4.2
+          bun-version: 1.4.4
 
       - name: Enable Corepack
         uses: ./.github/actions/enable-corepack-yarn
@@ -1911,7 +1911,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
         with:
-          bun-version: 1.4.2
+          bun-version: 1.4.4
 
       - name: Enable Corepack
         uses: ./.github/actions/enable-corepack-yarn
@@ -1961,7 +1961,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
         with:
-          bun-version: 1.4.2
+          bun-version: 1.4.4
 
       - name: Enable Corepack
         uses: ./.github/actions/enable-corepack-yarn
@@ -2012,7 +2012,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
         with:
-          bun-version: 1.4.2
+          bun-version: 1.4.4
 
       - name: Enable Corepack
         uses: ./.github/actions/enable-corepack-yarn
@@ -2064,7 +2064,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
         with:
-          bun-version: 1.4.2
+          bun-version: 1.4.4
 
       - name: Enable Corepack
         uses: ./.github/actions/enable-corepack-yarn
