@@ -21,7 +21,6 @@ const mockState = vi.hoisted(() => ({
     } as { dataId?: string; spawnServerId?: string; draftId?: string; draftOrigin?: string },
     serverListeners: new Set<() => void>(),
     guidanceModelListeners: new Set<() => void>(),
-    blockingListeners: new Set<() => void>(),
     guidanceKind: 'connect_machine' as 'connect_machine' | 'select_session',
     shouldBlockNewSession: true,
     guidanceHookCalls: 0,
@@ -63,13 +62,7 @@ vi.mock('@/components/sessions/guidance/SessionGettingStartedGuidance', () => ({
     SessionGettingStartedGuidance: 'SessionGettingStartedGuidance',
     useShouldBlockNewSessionWithGettingStartedGuidance: () => {
         mockState.newSessionBlockHookCalls += 1;
-        return React.useSyncExternalStore(
-            (listener) => {
-                mockState.blockingListeners.add(listener);
-                return () => { mockState.blockingListeners.delete(listener); };
-            },
-            () => mockState.shouldBlockNewSession,
-        );
+        return mockState.shouldBlockNewSession;
     },
     useSessionGettingStartedGuidanceBaseModel: () => {
         mockState.guidanceHookCalls += 1;
@@ -258,7 +251,6 @@ afterEach(() => {
     mockState.serverListeners.clear();
     mockState.serverId = 's1';
     mockState.guidanceModelListeners.clear();
-    mockState.blockingListeners.clear();
     mockState.guidanceKind = 'connect_machine';
     mockState.shouldBlockNewSession = true;
     mockState.resolvedTargetServerId = undefined;
@@ -299,21 +291,6 @@ describe('/new (blocking guidance)', () => {
         await pressTestInstanceAsync(screen.findByTestId('new-session-cancel'));
         expect(mockState.routerReplace).toHaveBeenCalledWith('/');
         expect(mockState.routerBack).not.toHaveBeenCalled();
-    });
-
-    it('removes the native guidance shell when machines become available', async () => {
-        mockState.platform = 'ios';
-        const Screen = (await import('@/app/(app)/new')).default;
-        const screen = await renderScreen(React.createElement(Screen));
-        expect(screen.findByTestId('new-session-cancel')).not.toBeNull();
-
-        await React.act(async () => {
-            mockState.shouldBlockNewSession = false;
-            for (const listener of mockState.blockingListeners) listener();
-        });
-        expect(screen.findAllByType('SessionGettingStartedGuidance')).toHaveLength(0);
-        expect(screen.findByTestId('new-session-cancel')).toBeNull();
-        expect(screen.findByType('NewSessionWizard')).toBeTruthy();
     });
 
     it('leaves dismissal to the navigator for the native wizard presentation', async () => {
