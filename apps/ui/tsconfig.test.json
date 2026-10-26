@@ -265,7 +265,6 @@
     "sources/__tests__/routes/_layout.init.spec.tsx",
     "sources/__tests__/routes/dev/softSurfaces.guard.test.tsx",
     "sources/__tests__/routes/routeRootTestHelpers.ts",
-    "sources/__tests__/voice/settings/localDirectSection.unhandledRejection.test.tsx",
     "sources/activity/actions/openWorkflowRunInteraction.test.ts",
     "sources/activity/actions/parseActivityInteraction.test.ts",
     "sources/activity/actions/resolveActivityInteractionCommand.test.ts",
