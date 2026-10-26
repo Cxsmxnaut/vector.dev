@@ -149,6 +149,9 @@ export function registerAutomationV3Routes(
                 ...(query.workflowDefinitionIds !== undefined ? { workflowDefinitionIds: query.workflowDefinitionIds } : {}),
                 ...(query.scopeSessionId !== undefined ? { scopeSessionId: query.scopeSessionId } : {}),
                 ...(query.scope !== undefined ? { scope: query.scope } : {}),
+                ...(query.managedTarget !== undefined ? { managedTarget: query.managedTarget } : {}),
+                ...(query.includeUnindexedManagedTargets !== undefined ? { includeUnindexedManagedTargets: query.includeUnindexedManagedTargets } : {}),
+                ...(query.managedTargetUnindexed !== undefined ? { managedTargetUnindexed: query.managedTargetUnindexed } : {}),
             });
             const rows = page.automations;
             const [eventProjections, lifecycleProjections] = await Promise.all([

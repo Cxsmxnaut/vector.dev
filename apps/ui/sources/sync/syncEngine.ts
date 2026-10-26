@@ -1410,6 +1410,7 @@ class Sync {
     private sessionListSnapshotGeneration = 0;
     private bootstrapForegroundReady: Promise<void> | null = null;
     private managedTargetBackfillLifetime: ServerAccountScopeLifetime | null = null;
+    private consumeBootstrapAutomationPage: NonNullable<Parameters<typeof fetchAndApplyAutomations>[0]['onDefinitionsRead']> | null = null;
       private sessionByIdHydrationInFlight = new Map<string, Readonly<{
           sessionId: string;
           serverId: string | undefined;
@@ -8220,11 +8221,18 @@ class Sync {
           const backfillLifetime = captureActiveServerAccountScopeLifetime();
           if (backfillLifetime && this.managedTargetBackfillLifetime !== backfillLifetime) {
               this.managedTargetBackfillLifetime = backfillLifetime;
-              fireAndForget(import('@/sync/engine/automations/backfillAutomationManagedTargets')
-                  .then(({ backfillAutomationManagedTargetsForAccount }) => backfillAutomationManagedTargetsForAccount(backfillLifetime)), {
-                  tag: 'Sync.automationManagedTargetBackfill',
-                  logError: false,
-              });
+              // The existing reader applies the canonical Automation decision before
+              // delivering its current response. Complete known rows prove no work;
+              // an incomplete page cannot prove anything about the unobserved tail.
+              this.consumeBootstrapAutomationPage = page => {
+                  if (!backfillLifetime.isCurrent()) return;
+                  if (page.nextCursor === null && page.automations.every(row => row.managedTarget !== undefined)) return;
+                  fireAndForget(import('@/sync/engine/automations/backfillAutomationManagedTargets')
+                      .then(({ backfillAutomationManagedTargetsForAccount }) => backfillAutomationManagedTargetsForAccount(backfillLifetime)), {
+                      tag: 'Sync.automationManagedTargetBackfill',
+                      logError: false,
+                  });
+              };
           }
 
           // Each peripheral publishes its own loading/error state. These queues
@@ -9342,6 +9350,10 @@ class Sync {
         const target = this.getAppliedTransportTarget();
         if (!credentials || !target) return;
         const shouldContinue = this.createAppliedTransportScopeGuard(target);
+        // Only bootstrap installs this continuation. Take it once, even if
+        // admission/read fails; later refreshes and arrivals never restart it.
+        const onDefinitionsRead = this.consumeBootstrapAutomationPage ?? undefined;
+        this.consumeBootstrapAutomationPage = null;
         const refreshRuns = this.automationRunRefreshPending;
         this.automationRunRefreshPending = false;
         try {
@@ -9349,6 +9361,7 @@ class Sync {
                 credentials,
                 requestContext: this.createAppliedAutomationRequestContext(target),
                 shouldContinue,
+                onDefinitionsRead,
                 applyAutomations: (automations, nextCursor) =>
                     storage.getState().applyAutomations(automations, nextCursor),
                 appendAutomations: (cursor, traversalToken, automations, nextCursor) =>

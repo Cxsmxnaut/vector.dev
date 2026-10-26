@@ -55,7 +55,13 @@ recipe remains the authority for the Action and its effect.
 
 An omitted field means unknown, while explicit `null` means known unrelated.
 An authorised client's one-shot Account startup pass selects only unknown rows
-and reseals readable current recipes through the same definition CAS. Committed
+and reseals readable current recipes through the same definition CAS. UI startup
+first consumes its existing feature-admitted Automation page: disabled, missing
+or unavailable Automation support makes no migration request, and a complete
+all-known page proves no work remains. An incomplete or unknown page permits
+the existing exact unknown selector, not an inventory traversal. The daemon's
+existing feature-admitted worker startup remains a separate host adapter to the
+same codec and CAS owner. Committed
 rows are excluded on the next pass, including after a lost acknowledgement or
 crash. Conflicts and locked content remain unknown without a hot retry. Renders,
 subscriptions and polling do not start this backfill. Older recipe writers that

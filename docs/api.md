@@ -1301,6 +1301,10 @@ is unknown, so the current client can apply the existing private recognizer
 during backfill. `managedTargetUnindexed: true` selects only unknown rows for
 the one-shot authenticated client startup migration. These selectors cannot be
 combined with Workflow, Session or Account-inline scope selectors.
+The structured POST is read-only and shares the GET list handler; migration
+writes use the separate recipe-only PATCH CAS. UI startup reuses its existing
+feature-admitted list response, skips a complete all-known page, and issues the
+unknown selector only when that page is incomplete or contains an unknown row.
 
 List/detail `managedTarget` is optional and nullable: omitted means unknown,
 `null` means indexed and unrelated, and an id pair identifies a candidate.

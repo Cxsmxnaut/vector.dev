@@ -2875,6 +2875,9 @@ model Automation {
     accountId        String
     workflowDefinitionId String?
     scopeSessionId   String?
+    managedTargetHomeId String?
+    managedTargetManagedId String?
+    managedTargetIndexed Boolean @default(false)
     account          Account                @relation(fields: [accountId], references: [id], onDelete: Cascade)
     name             String
     description      String?
@@ -2893,6 +2896,8 @@ model Automation {
     @@index([accountId, enabled, updatedAt(sort: Desc)])
     @@index([accountId, workflowDefinitionId], map: "Automation_account_workflow_idx")
     @@index([accountId, scopeSessionId], map: "Automation_account_scope_idx")
+    @@index([accountId, deletedAt, managedTargetIndexed, managedTargetHomeId, managedTargetManagedId], map: "Automation_account_managed_target_idx")
+    @@index([accountId, deletedAt, managedTargetIndexed, updatedAt(sort: Desc), id(sort: Asc)], map: "Automation_account_managed_unknown_idx")
     @@index([accountId, deletedAt, updatedAt(sort: Desc), id(sort: Asc)], map: "Automation_account_deleted_updated_id_idx")
 }
 

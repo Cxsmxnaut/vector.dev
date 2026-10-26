@@ -476,7 +476,7 @@ describe('automationWorker', () => {
     }
   });
 
-  it('does not decode or migrate Account definitions while the current assignment inventory contains only Workflow recipes', async () => {
+  it('only selects unindexed definitions at startup while the current assignment inventory contains only Workflow recipes', async () => {
     const now = Date.now();
     process.env.HAPPIER_SERVER_URL = 'https://api.example.test';
     process.env.HAPPIER_WEBAPP_URL = 'https://app.example.test';
@@ -491,7 +491,7 @@ describe('automationWorker', () => {
     try {
       await worker.refreshAssignments();
       await waitForCondition(() => mockPost.mock.calls.length > 0);
-      expect(migrationBoundary.list).not.toHaveBeenCalled();
+      expect(migrationBoundary.list).toHaveBeenCalledExactlyOnceWith({ token: 'token-1', managedTargetUnindexed: true, signal: expect.any(AbortSignal) });
       expect(migrationBoundary.get).not.toHaveBeenCalled();
       expect(migrationBoundary.reconcile).not.toHaveBeenCalled();
     } finally { worker.stop(); }
