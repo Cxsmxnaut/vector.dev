@@ -1520,7 +1520,7 @@ jobs:
             --release-channel "$env:INSTALLERS_RELEASE_CHANNEL"
 
   binary-smoke:
-    if: ${{ (inputs.select_jobs_explicitly && inputs.run_binary_smoke) || (!inputs.select_jobs_explicitly && needs.ci_plan.outputs.run_binary_smoke == 'true') }}
+    if: ${{ !cancelled() && needs.ci_plan.result == 'success' && needs.trusted_ref_guard.result == 'success' && needs.build-cli.result == 'success' && ((inputs.select_jobs_explicitly && inputs.run_binary_smoke) || (!inputs.select_jobs_explicitly && needs.ci_plan.outputs.run_binary_smoke == 'true')) }}
     needs: [ci_plan, trusted_ref_guard, build-cli]
     name: Binary Smoke (isolated cwd)
     runs-on: ${{ needs.trusted_ref_guard.outputs.ubuntu_2404 }}
@@ -2229,7 +2229,7 @@ jobs:
           fi
 
   cli-daemon-e2e:
-    if: ${{ (inputs.select_jobs_explicitly && inputs.run_cli_daemon_e2e) || (!inputs.select_jobs_explicitly && needs.ci_plan.outputs.run_cli_daemon_e2e == 'true') }}
+    if: ${{ !cancelled() && needs.ci_plan.result == 'success' && needs.build-cli.result == 'success' && ((inputs.select_jobs_explicitly && inputs.run_cli_daemon_e2e) || (!inputs.select_jobs_explicitly && needs.ci_plan.outputs.run_cli_daemon_e2e == 'true')) }}
     needs: [ci_plan, build-cli]
     name: CLI + Server (light/sqlite) E2E
     runs-on: ubuntu-latest
@@ -2422,7 +2422,7 @@ jobs:
           done
 
   e2e-core:
-    if: ${{ (inputs.select_jobs_explicitly && inputs.run_e2e_core) || (!inputs.select_jobs_explicitly && needs.ci_plan.outputs.run_e2e_core == 'true') }}
+    if: ${{ !cancelled() && needs.ci_plan.result == 'success' && needs.trusted_ref_guard.result == 'success' && needs.build-cli.result == 'success' && ((inputs.select_jobs_explicitly && inputs.run_e2e_core) || (!inputs.select_jobs_explicitly && needs.ci_plan.outputs.run_e2e_core == 'true')) }}
     needs: [ci_plan, trusted_ref_guard, build-cli]
     name: Core E2E (fast, packages/tests, server-light, sqlite)
     runs-on: ${{ needs.trusted_ref_guard.outputs.ubuntu_2204 }}
@@ -2488,7 +2488,7 @@ jobs:
           path: .project/logs/e2e
 
   e2e-core-slow:
-    if: ${{ inputs.select_jobs_explicitly && inputs.run_e2e_core_slow }}
+    if: ${{ !cancelled() && needs.trusted_ref_guard.result == 'success' && needs.build-cli.result == 'success' && inputs.select_jobs_explicitly && inputs.run_e2e_core_slow }}
     needs: [trusted_ref_guard, build-cli]
     name: Core E2E (slow, packages/tests, server-light, sqlite)
     runs-on: ${{ needs.trusted_ref_guard.outputs.ubuntu_2204 }}
