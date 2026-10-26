@@ -11102,6 +11102,9 @@ const enSessionInfo = {
   thinking: 'Thinking',
   thinkingSince: 'Thinking since',
   thinkingLevel: 'Thinking level',
+  peerReportFrom: ({ name }: { name: string }) => `Report from ${name}`,
+  peerMessageFrom: ({ name }: { name: string }) => `Message from ${name}`,
+  peerUnnamedSender: 'another agent',
   cliVersion: 'CLI version',
   cliVersionOutdated: 'CLI update required',
   cliVersionOutdatedMessage: ({

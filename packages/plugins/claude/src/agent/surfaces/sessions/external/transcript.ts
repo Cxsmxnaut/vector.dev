@@ -93,7 +93,10 @@ function projectForwardLine(params: Parameters<typeof projectClaudeJsonlLineReco
     if (projection !== 'terminal' && activeOffsets && !activeOffsets.has(params.lineStartOffsetBytes)) return { disposition: 'known_non_transcript', items: [] };
     if (projection === 'terminal') {
         const classification = classifyClaudeNativeTranscriptRow(params.lineValue);
-        if (classification.content.kind === 'peer_message') return projectClaudeJsonlLineRecord(params);
+        // A hand-back may settle its launching Agent tool. Only the runtime's ordered task
+        // projector knows that launch, so it decides between a tool result and peer text.
+        const runtimeDecidesPeer = classification.content.kind === 'peer_message' && classification.content.peer.handback;
+        if (classification.content.kind === 'peer_message' && !runtimeDecidesPeer) return projectClaudeJsonlLineRecord(params);
         const raw = classification.rawObject;
         const attachment = raw && typeof raw === 'object' && 'attachment' in raw ? raw.attachment : null;
         const queuedCommand = attachment && typeof attachment === 'object' && 'type' in attachment
@@ -104,13 +107,15 @@ function projectForwardLine(params: Parameters<typeof projectClaudeJsonlLineReco
             && classification.lifecycle.kind !== 'shell_output'
             && !classification.semanticParts.some((part) => part.kind === 'tool_result' || part.kind === 'tool_use');
         const workflowEvidence = parseClaudeWorkflowFacts(params.lineValue).length > 0;
-        if (readClaudeTaskLifecycleEnvelope(params.lineValue)?.subtype === 'task_notification' || userPrompt || classification.rawType === 'queue-operation' || (classification.rawType === 'attachment' && queuedCommand)) {
+        // Replay and live alike: the runtime's ordered task projector owns task results and hand-backs.
+        const runtimeDecidesTask = runtimeDecidesPeer || readClaudeTaskLifecycleEnvelope(params.lineValue)?.subtype === 'task_notification';
+        if (runtimeDecidesTask || userPrompt || classification.rawType === 'queue-operation' || (classification.rawType === 'attachment' && queuedCommand)) {
             const parsed = nativeObservationContent.safeParse(projectClaudeNativeTranscriptObservation(params.lineValue));
             if (!parsed.success) return { disposition: 'unsupported', items: [] };
             return {
                 disposition: 'mapped',
                 items: [
-                    ...(historicalReplay ? projectClaudeJsonlLineRecord({ ...params, maxItems: undefined }).items : []),
+                    ...(historicalReplay && !runtimeDecidesTask ? projectClaudeJsonlLineRecord({ ...params, maxItems: undefined }).items : []),
                     { ...readClaudeJsonlLineIdentity(params), id: `${readClaudeJsonlLineIdentity(params).id}:source_observation`, raw: { role: 'source_observation', content: parsed.data } },
                 ],
             };

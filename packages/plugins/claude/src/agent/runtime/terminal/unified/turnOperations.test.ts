@@ -24,6 +24,13 @@ import {
 } from './turnOperations.js';
 import { createClaudeNativeSessionRuntimeFromOperations } from '../../nativeRuntime.js';
 import { createFakeControlPort } from './tuiControls/fakeControlPort.js';
+import {
+  CLAUDE_HANDBACK_REPORT,
+  claudeAsyncAgentLaunchAck,
+  claudeHandbackPointerNotification,
+  claudeHandbackQueuedAttachment,
+  claudeHandbackUserRow,
+} from '../../../transcripts/peerMessage.testkit.js';
 
 const RESUME_CHOICE_DIALOG = [
   'This session is 18h 2m old and 560.4k tokens.',
@@ -249,6 +256,62 @@ describe('createClaudeUnifiedTerminalTurnOperations', () => {
         });
         expect(events.filter(event => event.kind === 'tool-result' && event.toolCallId === 'ordinary-action-tool')).toHaveLength(1);
       }
+    } finally {
+      subscription.dispose();
+      await session.dispose();
+    }
+  });
+
+  it.each(['live', 'initial_replay'] as const)('settles a background Agent from its ordered %s hand-back and publishes an unlinked hand-back as peer text', async (phase) => {
+    const transcripts = createManualTranscriptFollowFixture();
+    let replayBaseline: (() => Promise<void>) | undefined;
+    const ctx = createPluginContextFixture(createTerminalHostFixture().service, createEventsFixture().service, {
+      transcripts: { ...transcripts.service, followSource: vi.fn(async () => {
+        await replayBaseline?.();
+        return { dispose: vi.fn(async () => undefined) };
+      }) },
+    });
+    const operations = createClaudeUnifiedTerminalProviderOperations({
+      ctx, directory: '/tmp/claude-project', happierSessionId: 'unified-handback',
+      hostPreference: 'zellij', launchEnv: {}, permissionMode: 'default',
+    });
+    const session = createClaudeNativeSessionRuntimeFromOperations(operations, {
+      kind: 'create', sessionId: 'unified-handback', cwd: '/tmp/claude-project',
+    }, { session: { services: {
+      activeInput: { bind: () => ({ dispose() {} }) }, models: { bind: () => ({ dispose() {} }) },
+    } } } as unknown as AgentSessionRuntimeContext);
+    const events: AgentSessionRuntimeEvent[] = [];
+    const subscription = session.watch(event => events.push(event));
+    const providerSessionId = 'claude-provider-session-1';
+    replayBaseline = async () => {
+      await session.observeSourceTranscript?.({ providerSessionId, sourceId: 'history:ack', phase: 'initial_replay',
+        row: { ...claudeAsyncAgentLaunchAck({ toolUseId: 'toolu_a1' }), session_id: providerSessionId } });
+    };
+    try {
+      await operations.startProviderSession();
+      const hook = vi.mocked(ctx.agentRuntime.sessionHooks.startServer).mock.calls[0]?.[0].onSessionHook;
+      if (!hook || !session.observeSourceTranscript) throw new Error('native transcript transport was not registered');
+      await hook(providerSessionId, { hook_event_name: 'SessionStart', session_id: providerSessionId,
+        source: 'resume', transcript_path: '/tmp/claude-provider-session-1.jsonl' });
+      const rows = [
+        { ...claudeHandbackQueuedAttachment(), sessionId: providerSessionId },
+        { ...claudeHandbackPointerNotification({ toolUseId: 'toolu_a1' }), sessionId: providerSessionId },
+        { ...claudeHandbackUserRow({ withReportText: true, taskId: 'unlinked', uuid: 'handback-unlinked' }), sessionId: providerSessionId },
+      ];
+      // The file follower observes each row too; only the ordered source reader publishes it.
+      if (phase === 'live') for (const row of rows) await transcripts.emitRow(row);
+      for (const [index, row] of rows.entries()) {
+        await session.observeSourceTranscript({ providerSessionId, sourceId: `${phase}:${index}`, row,
+          ...(phase === 'initial_replay' ? { phase } : {}) });
+      }
+      expect(events.filter(event => event.kind === 'tool-result')).toEqual([
+        expect.objectContaining({ toolCallId: 'toolu_a1', output: CLAUDE_HANDBACK_REPORT }),
+      ]);
+      expect(events.filter(event => event.kind === 'transcript-message-committed')).toEqual([
+        expect.objectContaining({ role: 'assistant', text: CLAUDE_HANDBACK_REPORT,
+          messageId: 'claude-jsonl:main:user:handback-unlinked', peer: { name: 'general-purpose', handback: true } }),
+      ]);
+      expect(events.find(event => event.kind === 'transcript-message-committed')).not.toHaveProperty('turnId');
     } finally {
       subscription.dispose();
       await session.dispose();

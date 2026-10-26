@@ -37,6 +37,12 @@ import {
 } from '../../../auth/services/cloud/refreshBridge.js';
 import { createSessionProviderInputOutcomeNormalizer } from '../../../../../../../../apps/cli/src/agent/runtime/session/input/providerInputOutcome.js';
 import { projectClaudeJsonlLineToDirectMessages } from '../../../transcripts/projection.js';
+import {
+  CLAUDE_HANDBACK_REPORT,
+  claudeAsyncAgentLaunchAck,
+  claudeHandbackPointerNotification,
+  claudeHandbackUserRow,
+} from '../../../transcripts/peerMessage.testkit.js';
 import { mergeProviderCatalogV1 } from '@happier-dev/protocol/providers/catalog/merge';
 import { resolveClaudeEffortForModel, resolveClaudeEffortLevelsForProviderModel } from '../../reasoningEffort.js';
 
@@ -383,13 +389,46 @@ describe('bindClaudeAgentSdkFallbackSession', () => {
       await exec.emit({ type: 'user', uuid: 'native-peer-delivery', session_id: 'native-peer-recipient',
         origin: { kind: 'peer', from: 'uds:/tmp/sender.sock', name: 'Sender' }, message: { role: 'user', content } });
       await vi.waitFor(() => expect(events).toEqual(expect.arrayContaining([
-        expect.objectContaining({ kind: 'transcript-message-committed', role: 'assistant', text: 'From Sender:\n\nDelivered' }),
+        expect.objectContaining({ kind: 'transcript-message-committed', role: 'assistant', text: 'Delivered',
+          peer: { name: 'Sender', handback: false } }),
       ])));
       await exec.emit({ type: 'result', subtype: 'success', is_error: false, result: 'Recipient response',
         uuid: 'peer-turn-result', session_id: 'native-peer-recipient', queued_turn_count: 0, usage: {}, modelUsage: {} });
       await vi.waitFor(() => expect(events).toEqual(expect.arrayContaining([
         expect.objectContaining({ kind: 'transcript-message-committed', role: 'assistant', text: 'Recipient response' }),
       ])));
+    } finally { subscription.dispose(); await session.dispose(); }
+  });
+
+  it('settles a background Agent with its delivered hand-back and keeps unlinked hand-backs as peer messages', async () => {
+    const exec = createSdkExecFixture();
+    const ctx = createPluginContextFixture(createTerminalHostFixture().service, createEventsFixture().service, { exec: exec.service });
+    const operations = createClaudeAgentSdkProviderOperations({ ctx, directory: '/tmp/claude-project', launchEnv: {},
+      happierSessionId: 'sdk-handback', permissionMode: 'default', publishTranscriptMessages: true });
+    const context = { session: { services: { activeInput: { bind: () => ({ dispose() {} }) }, models: { bind: () => ({ dispose() {} }) } } } } as unknown as AgentSessionRuntimeContext;
+    const session = createClaudeNativeSessionRuntimeFromOperations(operations, { kind: 'create', sessionId: 'sdk-handback', cwd: '/tmp/claude-project' }, context);
+    const events: AgentSessionRuntimeEvent[] = [];
+    const subscription = session.watch(event => events.push(event));
+    const sessionId = 'native-handback';
+    try {
+      await operations.sendProviderTurnPrompt('delegate in the background');
+      await vi.waitFor(() => expect(exec.spawnClient).toHaveBeenCalledOnce());
+      await exec.emit({ type: 'system', subtype: 'init', session_id: sessionId });
+      await exec.emit({ type: 'assistant', uuid: 'launch', session_id: sessionId, message: { role: 'assistant',
+        content: [{ type: 'tool_use', id: 'toolu_a1', name: 'Agent', input: { description: 'Diagnose', run_in_background: true } }] } });
+      await exec.emit({ ...claudeAsyncAgentLaunchAck({ toolUseId: 'toolu_a1' }), session_id: sessionId });
+      await exec.emit(claudeHandbackUserRow({ withReportText: true, sessionId }));
+      await exec.emit({ ...claudeHandbackPointerNotification({ toolUseId: 'toolu_a1' }), session_id: sessionId });
+      await exec.emit(claudeHandbackUserRow({ withReportText: false, taskId: 'unlinked', uuid: 'handback-unlinked', sessionId }));
+      await vi.waitFor(() => expect(events).toEqual(expect.arrayContaining([
+        expect.objectContaining({ kind: 'transcript-message-committed', role: 'assistant', text: CLAUDE_HANDBACK_REPORT,
+          peer: { name: 'general-purpose', handback: true } }),
+      ])));
+      const agentResults = events.filter(event => event.kind === 'tool-result' && event.toolCallId === 'toolu_a1');
+      expect(agentResults.at(-1)).toMatchObject({ output: CLAUDE_HANDBACK_REPORT });
+      expect(agentResults.at(-1)?.isError).not.toBe(true);
+      expect(agentResults.some(event => JSON.stringify(event).includes('report was delivered'))).toBe(false);
+      expect(events.filter(event => event.kind === 'transcript-message-committed' && event.peer)).toHaveLength(1);
     } finally { subscription.dispose(); await session.dispose(); }
   });
 

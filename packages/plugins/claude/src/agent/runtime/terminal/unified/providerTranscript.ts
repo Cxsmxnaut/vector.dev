@@ -538,10 +538,12 @@ export function createClaudeUnifiedProviderTranscriptPublisher(
     if (input.phase === 'initial_replay') {
       const row = parseRawJsonLinesObject(input.row);
       if (row) {
-        activeBinding.taskNotificationProjector.project(row);
+        // Replay settles task results through the same ordered projector as live rows.
+        const projectedTaskResult = activeBinding.taskNotificationProjector.project(row);
         await params.onObserveRow?.(row, {
           providerSessionId: activeBinding.providerSessionId, transcriptPath: activeBinding.transcriptPath,
           historicalReplay: true, phase: 'initial_replay',
+          ...(projectedTaskResult ? { projectedTaskResult } : {}),
         });
       }
       activeBinding.observedSourceIds.add(input.sourceId);
@@ -571,7 +573,8 @@ export function createClaudeUnifiedProviderTranscriptPublisher(
       ...(projectedTaskResult ? { projectedTaskResult } : {}),
     });
     if (fact) {
-      if (fact.subtype === 'task_notification' || projectedTaskResult) {
+      // The row observer publishes an unlinked hand-back as peer text; it is never a prompt or lifecycle row.
+      if (fact.subtype === 'task_notification' || fact.subtype === 'handback' || projectedTaskResult) {
         activeBinding.observedSourceIds.add(input.sourceId);
         return;
       }

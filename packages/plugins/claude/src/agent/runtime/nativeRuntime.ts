@@ -272,9 +272,16 @@ function textDelta(value: unknown): Readonly<{ text: string; channel: 'assistant
     : null;
 }
 
+function committedPeer(value: unknown): Readonly<{ name: string | null; handback: boolean }> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const peer = value as Readonly<Record<string, unknown>>;
+  return typeof peer.handback === 'boolean' && (peer.name === null || typeof peer.name === 'string')
+    ? { name: peer.name, handback: peer.handback } : null;
+}
+
 function committedMessage(
   event: Extract<ClaudeProviderEvent, { kind: 'transcript-agent-message-committed' }>,
-): Readonly<{ text: string; role: 'assistant' | 'reasoning' }> | null {
+): Readonly<{ text: string; role: 'assistant' | 'reasoning'; peer?: Readonly<{ name: string | null; handback: boolean }> }> | null {
   if (!event.body || typeof event.body !== 'object' || Array.isArray(event.body)) return null;
   const body = event.body as Readonly<Record<string, unknown>>;
   const text = typeof body.message === 'string'
@@ -282,7 +289,9 @@ function committedMessage(
     : typeof body.text === 'string'
       ? body.text
       : null;
-  return text === null ? null : { text, role: body.thinking === true ? 'reasoning' : 'assistant' };
+  if (text === null) return null;
+  const peer = committedPeer(body.peer);
+  return peer ? { text, role: 'assistant', peer } : { text, role: body.thinking === true ? 'reasoning' : 'assistant' };
 }
 
 const claudeRuntimeAuthAdapter = createClaudeConnectedServiceRuntimeAuthAdapter();

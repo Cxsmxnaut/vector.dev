@@ -58,7 +58,7 @@ import type {
     SDKUserMessage,
 } from '../../../sdk/types.js';
 import { createClaudeTaskNotificationToolResultProjector, readClaudeTaskLifecycleEnvelope } from '../../../transcripts/taskNotification.js';
-import { readClaudeNativePeerMessageText } from '../../../transcripts/nativeSemanticProjection.js';
+import { readClaudeNativePeerMessage } from '../../../transcripts/nativeSemanticProjection.js';
 import { buildClaudeJsonlProviderFactLocalIdFromParts } from '../../../transcripts/providerFactIdentity.js';
 import { recordClaudeRuntimeProviderAccountUsageSnapshot } from '../../accountUsage.js';
 import { buildClaudeLiveContextUsageSnapshot } from '../../../usage/liveContextSnapshot.js';
@@ -595,7 +595,8 @@ function mapSdkTranscriptEvent(params: Readonly<{
     sequence: number;
     turnId: string | null;
 }>): ProviderEventMessage | null {
-    const text = readClaudeNativePeerMessageText(params.message)
+    const peerMessage = readClaudeNativePeerMessage(params.message);
+    const text = peerMessage?.text
         ?? (isSdkAssistantMessage(params.message) ? readAssistantText(params.message) : null);
     if (!text) return null;
     const record = params.message as Readonly<Record<string, unknown>>;
@@ -622,6 +623,7 @@ function mapSdkTranscriptEvent(params: Readonly<{
         body: {
             type: 'message',
             message: text,
+            ...(peerMessage ? { peer: peerMessage.peer } : {}),
         },
         meta: {
             source: 'claude-agent-sdk',
@@ -694,7 +696,7 @@ function mapSdkToolRuntimeEvents(params: Readonly<{
     turnId: string | null;
     toolNameByCallId: Map<string, string>;
     taskNotificationProjector: ReturnType<typeof createClaudeTaskNotificationToolResultProjector>;
-}>): ProviderEventMessage[] {
+}>): Readonly<{ events: ProviderEventMessage[]; projectedTaskResult: boolean }> {
     const events: ProviderEventMessage[] = [];
     const sidechainId = readSdkSidechainId(params.message);
     for (const block of extractToolUseBlocksFromSdkMessage(params.message)) {
@@ -726,7 +728,7 @@ function mapSdkToolRuntimeEvents(params: Readonly<{
             ...(toolName ? { toolName } : {}),
         }));
     }
-    return events;
+    return { events, projectedTaskResult: projectedTaskResult !== null };
 }
 
 export type ClaudeAgentSdkTurnOperationsParams = Readonly<{
@@ -1897,7 +1899,19 @@ export function createClaudeAgentSdkTurnOperations(
                     });
                     publishRuntimeEvent(runtimeEvent);
                 }
-                if (params.publishTranscriptMessages === true || params.publishSdkMessages === true) {
+                // The task projector decides first: a correlated hand-back settles its Agent tool
+                // instead of becoming peer text. Publication order stays text before tool events.
+                const toolRuntimeEvents = params.publishSdkMessages === true || params.publishTranscriptMessages === true
+                    ? mapSdkToolRuntimeEvents({
+                        message,
+                        sessionId: readRuntimeEventSessionId(),
+                        turnId: readForegroundTurnId(),
+                        toolNameByCallId,
+                        taskNotificationProjector,
+                    })
+                    : null;
+                if ((params.publishTranscriptMessages === true || params.publishSdkMessages === true)
+                    && toolRuntimeEvents?.projectedTaskResult !== true) {
                     const transcriptEvent = mapSdkTranscriptEvent({
                         message,
                         sessionId: readString(params.happierSessionId) ?? providerSessionId ?? 'claude-agent-sdk',
@@ -1924,16 +1938,8 @@ export function createClaudeAgentSdkTurnOperations(
                         usage: usage ?? {},
                     }));
                 }
-                if (params.publishSdkMessages === true || params.publishTranscriptMessages === true) {
-                    for (const runtimeEvent of mapSdkToolRuntimeEvents({
-                        message,
-                        sessionId: readRuntimeEventSessionId(),
-                        turnId: readForegroundTurnId(),
-                        toolNameByCallId,
-                        taskNotificationProjector,
-                    })) {
-                        publishRuntimeEvent(runtimeEvent);
-                    }
+                for (const runtimeEvent of toolRuntimeEvents?.events ?? []) {
+                    publishRuntimeEvent(runtimeEvent);
                 }
                 if (completedBackgroundTasks) {
                     completeProviderBackgroundObservation(turnQuery);

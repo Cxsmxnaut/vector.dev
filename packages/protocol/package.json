@@ -422,6 +422,11 @@
       "types": "./dist/serverConfig/homeSettingsWrite.d.ts",
       "default": "./dist/serverConfig/homeSettingsWrite.js"
     },
+    "./sessions/messages/transcriptPeerSenderV1": {
+      "happier-source": "./src/sessions/messages/transcriptPeerSenderV1.ts",
+      "types": "./dist/sessions/messages/transcriptPeerSenderV1.d.ts",
+      "default": "./dist/sessions/messages/transcriptPeerSenderV1.js"
+    },
     "./sessions/messages/sessionTranscriptPageLimits": {
       "happier-source": "./src/sessions/messages/sessionTranscriptPageLimits.ts",
       "types": "./dist/sessions/messages/sessionTranscriptPageLimits.d.ts",

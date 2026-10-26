@@ -41,6 +41,7 @@ import { useMessageInlineReferences } from '@/components/sessions/transcript/ref
 import { ComposerAttachmentFallbackRow } from '@/components/sessions/transcript/composerAttachments/ComposerAttachmentFallbackRow';
 import { useMessageComposerAttachments } from '@/components/sessions/transcript/composerAttachments/messageComposerAttachments';
 import { useTranscriptMotion } from '@/components/sessions/transcript/motion/TranscriptMotionContext';
+import { PeerMessageRow } from '@/components/sessions/transcript/peer/PeerMessageRow';
 import { ThinkingTimelineRow } from '@/components/sessions/transcript/thinking/ThinkingTimelineRow';
 import { TranscriptEventRow } from '@/components/sessions/transcript/events/TranscriptEventRow';
 import { projectWorkerCardDelivery } from '@/components/sessions/transcript/events/followWorkerCardDelivery';
@@ -1283,6 +1284,7 @@ function AgentTextBlock(props: {
       transcriptStreamingSmoothingEnabled === true &&
       props.historical !== true &&
       isStructuredOnly !== true &&
+      props.message.peer === undefined &&
       (streamSegmentMeta ? streamSegmentAssistantStreaming === true : true);
   const streaming = useStreamingTextSmoothing({
       enabled: streamingSmoothingEligible,
@@ -1448,7 +1450,28 @@ function AgentTextBlock(props: {
                   />
                 </ThinkingTimelineRow>
             ) : (
-              shouldRenderStreamingMarkdown ? (
+              props.message.peer ? (
+                <PeerMessageRow
+                  id={props.message.id}
+                  createdAt={props.message.createdAt}
+                  peer={props.message.peer}
+                  summary={deriveThinkingSummary(markdown)}
+                >
+                  <MarkdownView
+                    markdown={markdown}
+                    codeBlockStateKey={JSON.stringify([props.sessionId, props.message.id])}
+                    findActive={findActive} findSourceRanges={findSourceRanges}
+                    agentTexMath
+                    renderCacheKey={buildMessageMarkdownRenderCacheKey(props.message.id, props.messageRevision)}
+                    onOptionPress={handleOptionPress}
+                    onOptionLongPress={handleOptionLongPress}
+                    onLinkPress={handleMarkdownLinkPress}
+                    selectable={true}
+                    profile="transcript"
+                    textStyle={styles.transcriptMarkdownText}
+                  />
+                </PeerMessageRow>
+              ) : shouldRenderStreamingMarkdown ? (
                   <MarkdownView
                       markdown={streamingMarkdownText}
                       codeBlockStateKey={JSON.stringify([props.sessionId, props.message.id])}

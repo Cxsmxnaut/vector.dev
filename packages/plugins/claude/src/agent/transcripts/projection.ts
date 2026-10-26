@@ -7,7 +7,7 @@ import {
 import { isRecord, parseTimestampMs } from '@happier-dev/plugin-sdk';
 import { createExternalSessionUnsupportedTranscriptItem } from '@happier-dev/plugin-sdk/sessions/file-stores';
 
-import { classifyClaudeNativeTranscriptRow } from './nativeSemanticProjection.js';
+import { classifyClaudeNativeTranscriptRow, type ClaudeNativePeerSender } from './nativeSemanticProjection.js';
 import { buildClaudeJsonlProviderFactLocalId } from './providerFactIdentity.js';
 import type { RawJSONLines } from './rawJsonLines.js';
 
@@ -69,8 +69,11 @@ function createClaudeAgentSemanticRaw(data: unknown): AgentExternalSessionTransc
     });
 }
 
-function createClaudeAgentMessageRaw(text: string): AgentExternalSessionTranscriptItem['raw'] | null {
-    return createClaudeAgentSemanticRaw({ type: 'message', message: text });
+function createClaudeAgentMessageRaw(
+    text: string,
+    peer?: ClaudeNativePeerSender,
+): AgentExternalSessionTranscriptItem['raw'] | null {
+    return createClaudeAgentSemanticRaw({ type: 'message', message: text, ...(peer ? { peer } : {}) });
 }
 
 function createClaudeAgentEventRaw(
@@ -278,7 +281,7 @@ function projectClaudeJsonlLine(params: Readonly<{
         })
         : null;
     if (classification.content.kind === 'peer_message') {
-        const raw = createClaudeAgentMessageRaw(classification.content.text);
+        const raw = createClaudeAgentMessageRaw(classification.content.text, classification.content.peer);
         return raw ? {
             items: [{ id: stableId, localId, createdAtMs, messageRole: 'agent', raw }],
             withheldEveryPart: false,

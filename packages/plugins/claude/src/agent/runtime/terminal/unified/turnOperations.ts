@@ -868,16 +868,36 @@ export function createClaudeUnifiedTerminalTurnOperations(
           reason: 'claude-unified-native-transcript',
         });
       }
-      if (!observation.historicalReplay) {
-        await resumeChoiceStartupHandler?.observeTranscript(row);
-        for (const result of extractToolResultBlocksFromSdkMessage(observation.projectedTaskResult ?? row)) {
+      const replayingSource = observation.phase === 'initial_replay';
+      if (!observation.historicalReplay) await resumeChoiceStartupHandler?.observeTranscript(row);
+      // Replay pages already display ordinary tool results; only task projections are runtime-owned there.
+      const toolResultSource = !observation.historicalReplay ? observation.projectedTaskResult ?? row
+        : replayingSource ? observation.projectedTaskResult : undefined;
+      if (toolResultSource) {
+        for (const result of extractToolResultBlocksFromSdkMessage(toolResultSource)) {
           publishClaudeUnifiedRuntimeEvent({
             handlers, logger: params.ctx.logger,
-            event: { kind: 'tool-result', sessionId: params.happierSessionId, emittedAtMs: Date.now(),
+            event: { kind: 'tool-result', sessionId: params.happierSessionId,
+              emittedAtMs: replayingSource ? readClaudeJsonlRowTimestampMs(row) ?? Date.now() : Date.now(),
               toolCallId: result.toolUseId, output: result.output,
               ...(result.isError === undefined ? {} : { isError: result.isError }) },
           });
         }
+      }
+      // A hand-back the task projector could not attach to its launch stays Session-scoped peer text.
+      const peerMessage = (observation.orderedSource || replayingSource) && !observation.projectedTaskResult
+        ? classifyClaudeNativeTranscriptRow(row).content : null;
+      const peerLocalId = peerMessage?.kind === 'peer_message' && peerMessage.peer.handback
+        ? buildClaudeJsonlProviderFactLocalIdFromParts({ type: row.type, id: readNonEmptyString((row as Readonly<Record<string, unknown>>).uuid) ?? '' })
+        : null;
+      if (peerMessage?.kind === 'peer_message' && peerLocalId) {
+        publishClaudeUnifiedRuntimeEvent({
+          handlers, logger: params.ctx.logger,
+          event: { kind: 'transcript-agent-message-committed', sessionId: params.happierSessionId,
+            emittedAtMs: readClaudeJsonlRowTimestampMs(row) ?? Date.now(),
+            agentId: CLAUDE_UNIFIED_TERMINAL_PROVIDER_ID, localId: peerLocalId,
+            body: { type: 'message', message: peerMessage.text, peer: peerMessage.peer } },
+        });
       }
       if (observation.phase === 'initial_replay') {
         workflowRuntime.observeTranscriptMessage(row, { historicalReplay: true });
