@@ -21,7 +21,7 @@ function evaluateWorkflowExpression(expression, context) {
   return Function(`return (${body});`)();
 }
 
-test('superseded v0.3 push runs stop while consumed exact-SHA push verdicts finish', async () => {
+test('push runs keep their complete verdict; only superseded pull request runs stop', async () => {
   const parsed = YAML.parse(await readWorkflow('.github/workflows/tests.yml'));
   assert.equal(
     parsed?.concurrency?.group,
@@ -42,10 +42,10 @@ test('superseded v0.3 push runs stop while consumed exact-SHA push verdicts fini
   for (const branch of consumed) {
     assert.equal(cancels('push', branch), false, `a later ${branch} push must not discard the consumed exact-SHA verdict`);
   }
-  for (const branch of parsed.on.push.branches.filter((branch) => !consumed.has(branch) && branch !== 'v0.3')) {
+  for (const branch of parsed.on.push.branches.filter((branch) => !consumed.has(branch))) {
     assert.equal(cancels('push', branch), false, `${branch} push runs keep their complete verdict`);
   }
-  assert.equal(cancels('push', 'v0.3'), true, 'no automation consumes a v0.3 push verdict, so the newest v0.3 push supersedes it');
+  assert.equal(cancels('push', 'v0.3'), false, 'v0.3 pushes arrive faster than a run lasts; cancelling would leave no completed verdict');
   assert.equal(cancels('pull_request', '42/merge'), true);
   assert.equal(cancels('workflow_dispatch', 'v0.3'), false, 'a focused manual dispatch is never cancelled by the push policy');
 });
