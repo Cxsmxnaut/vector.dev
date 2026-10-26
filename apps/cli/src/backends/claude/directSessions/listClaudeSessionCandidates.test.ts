@@ -2,39 +2,57 @@ import { mkdir, mkdtemp, writeFile, utimes } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Pass-through spy: counts per-session title reads without changing their behavior.
-vi.mock('./readClaudeSessionTitle', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('./readClaudeSessionTitle')>();
-  return { ...actual, readClaudeSessionTitle: vi.fn(actual.readClaudeSessionTitle) };
+const readdirMock = vi.hoisted(() => vi.fn<typeof import('node:fs/promises').readdir>());
+
+vi.mock('node:fs/promises', async () => {
+  const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
+  return { ...actual, readdir: (...args: Parameters<typeof actual.readdir>) => readdirMock(...args) };
 });
 
 import { listClaudeSessionCandidates } from './listClaudeSessionCandidates';
-import { readClaudeSessionTitle } from './readClaudeSessionTitle';
 
 function jsonlLine(value: unknown): string {
   return `${JSON.stringify(value)}\n`;
 }
 
 describe('listClaudeSessionCandidates', () => {
+  beforeEach(async () => {
+    const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
+    readdirMock.mockReset();
+    readdirMock.mockImplementation(actual.readdir);
+  });
+
   it('shares one in-flight listing for identical concurrent calls', async () => {
     const root = await mkdtemp(join(tmpdir(), 'happier-claude-direct-list-inflight-'));
     const configDir = join(root, '.claude');
     await mkdir(join(configDir, 'projects', 'proj-a'), { recursive: true });
     await writeFile(join(configDir, 'projects', 'proj-a', 'sess-1.jsonl'), jsonlLine({ type: 'user', message: { content: 'hello' } }), 'utf8');
-    const titleReads = vi.mocked(readClaudeSessionTitle);
-    titleReads.mockClear();
+    const projectsDir = join(configDir, 'projects');
+    const discoveryScans = () => readdirMock.mock.calls.filter(([path]) => String(path) === projectsDir).length;
     const request = { source: { kind: 'claudeConfig', configDir, projectId: null }, limit: 10 } as const;
 
     const [first, second] = await Promise.all([listClaudeSessionCandidates(request), listClaudeSessionCandidates({ ...request })]);
     expect(first).toEqual(second);
     expect(first.candidates.map((candidate) => candidate.remoteSessionId)).toEqual(['sess-1']);
-    expect(titleReads).toHaveBeenCalledTimes(1);
+    expect(first.candidates[0]?.title).toBe('hello');
+    expect(discoveryScans()).toBe(1);
 
-    await listClaudeSessionCandidates({ ...request, limit: 5 });
+    await Promise.all([
+      listClaudeSessionCandidates(request),
+      listClaudeSessionCandidates({ ...request, limit: 5 }),
+    ]);
+    expect(discoveryScans()).toBe(3);
+
+    await Promise.all([
+      listClaudeSessionCandidates({ ...request, env: {} }),
+      listClaudeSessionCandidates({ ...request, env: { HAPPIER_DIRECT_SESSIONS_CLAUDE_DISCOVERY_CONCURRENCY: '1' } }),
+    ]);
+    expect(discoveryScans()).toBe(5);
+
     await listClaudeSessionCandidates(request);
-    expect(titleReads).toHaveBeenCalledTimes(3);
+    expect(discoveryScans()).toBe(6);
   });
 
   it('lists session jsonl files under ~/.claude/projects', async () => {

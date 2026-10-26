@@ -1,16 +1,16 @@
-import { appendFile, mkdir, mkdtemp, rename, truncate, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, mkdtemp, rename, truncate, writeFile, type FileHandle } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Pass-through spy: counts backward page reads without changing their behavior.
-vi.mock('@/api/directSessions/filePaging/jsonlBackwardPager', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/api/directSessions/filePaging/jsonlBackwardPager')>();
-  return { ...actual, readJsonlFileBackwardPage: vi.fn(actual.readJsonlFileBackwardPage) };
+const openMock = vi.hoisted(() => vi.fn<typeof import('node:fs/promises').open>());
+
+vi.mock('node:fs/promises', async () => {
+  const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
+  return { ...actual, open: (...args: Parameters<typeof actual.open>) => openMock(...args) };
 });
 
-import { readJsonlFileBackwardPage } from '@/api/directSessions/filePaging/jsonlBackwardPager';
 import { readClaudeSessionTitle } from './readClaudeSessionTitle';
 
 function jsonlLine(value: unknown): string {
@@ -18,6 +18,12 @@ function jsonlLine(value: unknown): string {
 }
 
 describe('readClaudeSessionTitle', () => {
+  beforeEach(async () => {
+    const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
+    openMock.mockReset();
+    openMock.mockImplementation(actual.open);
+  });
+
   it('prefers the latest custom title over newer AI snapshots across tail pages', async () => {
     const root = await mkdtemp(join(tmpdir(), 'happier-claude-title-precedence-'));
     const filePath = join(root, 'session-one.jsonl');
@@ -169,24 +175,50 @@ describe('readClaudeSessionTitle', () => {
     await expect(readClaudeSessionTitle(filePath)).resolves.toBe(queuedPrompt);
   });
 
-  it('does not rescan already-read transcript bytes on repeated title reads', async () => {
+  it('avoids reading the full transcript again for unchanged files and appended records', async () => {
     const root = await mkdtemp(join(tmpdir(), 'happier-claude-title-incremental-'));
     const filePath = join(root, 'session-one.jsonl');
-    await writeFile(filePath, [
+    const transcript = [
       jsonlLine({ type: 'user', message: { content: 'Initial user prompt' } }),
       jsonlLine({ type: 'ai-title', aiTitle: 'AI title' }),
       ...Array.from({ length: 520 }, () => jsonlLine({ type: 'progress', data: 'x'.repeat(4_096) })),
-    ].join(''), 'utf8');
-    const backwardPages = vi.mocked(readJsonlFileBackwardPage);
+    ].join('');
+    await writeFile(filePath, transcript, 'utf8');
+    const transcriptBytes = Buffer.byteLength(transcript);
+    const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
+    const handles: FileHandle[] = [];
+    openMock.mockImplementation(async (...args) => {
+      const handle = await actual.open(...args);
+      if (String(args[0]) === filePath) {
+        // Instrument the OS boundary while retaining real reads and both JSONL readers.
+        vi.spyOn(handle, 'read');
+        handles.push(handle);
+      }
+      return handle;
+    });
+    const bytesRead = async () => {
+      let total = 0;
+      for (const handle of handles) {
+        for (const result of vi.mocked(handle.read).mock.results) {
+          if (result.type === 'return') total += (await result.value).bytesRead;
+        }
+      }
+      return total;
+    };
 
     await expect(readClaudeSessionTitle(filePath)).resolves.toBe('AI title');
-    expect(backwardPages.mock.calls.length).toBeGreaterThan(1);
+    const coldBytes = await bytesRead();
+    expect(coldBytes).toBeGreaterThanOrEqual(transcriptBytes);
 
-    backwardPages.mockClear();
     await expect(readClaudeSessionTitle(filePath)).resolves.toBe('AI title');
-    await appendFile(filePath, jsonlLine({ type: 'progress', data: 'tail' }), 'utf8');
+    const unchangedBytes = await bytesRead();
+    expect(unchangedBytes - coldBytes).toBeLessThan(transcriptBytes / 10);
+
+    await appendFile(filePath, jsonlLine({ type: 'progress', data: 'Appended progress' }), 'utf8');
     await expect(readClaudeSessionTitle(filePath)).resolves.toBe('AI title');
-    expect(backwardPages).not.toHaveBeenCalled();
+    const appendedBytes = (await bytesRead()) - unchangedBytes;
+    expect(appendedBytes).toBeGreaterThan(0);
+    expect(appendedBytes).toBeLessThan(transcriptBytes / 10);
   });
 
   it('keeps title precedence while a transcript keeps growing', async () => {
