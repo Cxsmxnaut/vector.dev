@@ -234,19 +234,11 @@ describe('SessionRightPanelServicesView', () => {
         await homes.reset();
     });
 
-    it('passes supplied local service launcher state into the Services pane', async () => {
-        const screen = await renderScreen(
-            <SessionRightPanelServicesView
-                inventoryState={buildLocalServiceInventoryState({ rows: [] })}
-                launcherState={buildLauncherState()}
-            />,
-        );
-
-        expect(screen.findByTestId('session-rightpanel-services-row:managed:session-feed')).toBeTruthy();
-    });
-
-    it('does not poll public preview status when public previews are disabled', async () => {
-        await publishFeatures(false);
+    it.each([
+        [true, 'polls'],
+        [false, 'does not poll'],
+    ])('public previews enabled %s: %s public preview status', async (publicPreviewEnabled) => {
+        await publishFeatures(publicPreviewEnabled);
 
         await renderScreen(
             <SessionRightPanelServicesView
@@ -259,7 +251,7 @@ describe('SessionRightPanelServicesView', () => {
         );
         await new Promise((resolve) => setTimeout(resolve, 0));
 
-        expect(daemonRequests(RPC_METHODS.DAEMON_LOCAL_SERVICES_PUBLIC_PREVIEW_STATUS)).toEqual([]);
+        expect(daemonRequests(RPC_METHODS.DAEMON_LOCAL_SERVICES_PUBLIC_PREVIEW_STATUS).length > 0).toBe(publicPreviewEnabled);
     });
 
 

@@ -100,7 +100,7 @@ describe('SessionRightPanel (terminal tab)', () => {
         expect(screen.findHostByTestId('session-rightpanel-tab:terminal')).toBeNull();
     });
 
-    it('puts Terminal in the bottom pane on larger devices', async () => {
+    it('keeps Terminal out of the sidebar on larger devices, where it docks in the bottom pane', async () => {
         const screen = await renderPanel();
         expect(screen.findHostByTestId('session-rightpanel-tab:terminal')).toBeNull();
     });

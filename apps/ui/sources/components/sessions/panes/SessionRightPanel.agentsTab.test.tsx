@@ -160,9 +160,9 @@ describe('SessionRightPanel (core tabs)', () => {
 
         const screen = await renderScreen(<SessionRightPanel sessionId="s1" scopeId="session:s1" />);
 
-        const agentsSurface = findHostByTestId(screen, 'session-rightpanel-surface-agents');
-        expect(agentsSurface).not.toBeNull();
-        expect(agentsSurface?.props.pointerEvents).toBe('auto');
+        const agentsSurfaces = screen.findAllByTestId('session-rightpanel-surface-agents').filter((node) => typeof node.type === 'string');
+        expect(agentsSurfaces).toHaveLength(1);
+        expect(agentsSurfaces[0]?.props.pointerEvents).toBe('auto');
         expect(findHostByTestId(screen, 'session-rightpanel-surface-git')).toBeNull();
         expect(findHostByTestId(screen, 'session-rightpanel-surface-files')).toBeNull();
     });
