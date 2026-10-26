@@ -3,6 +3,21 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { getProjectPath } from "./path";
 
+export class ClaudeResumeSessionUnavailableError extends Error {
+    readonly code = 'claude_resume_session_unavailable';
+    readonly providerSessionId: string;
+
+    constructor(providerSessionId: string, options?: ErrorOptions) {
+        super(
+            `Claude session ${providerSessionId} cannot be resumed because its transcript is unavailable. `
+            + 'Happier did not start a new session because the requested operation was resume.',
+            options,
+        );
+        this.name = 'ClaudeResumeSessionUnavailableError';
+        this.providerSessionId = providerSessionId;
+    }
+}
+
 export function resolveClaudeSessionTranscriptPath(
     sessionId: string,
     path: string,
@@ -27,7 +42,8 @@ export function hasClaudeMaterializedSessionTranscript(
   } catch (error) {
     const code = error !== null && typeof error === 'object' && 'code' in error ? error.code : null;
     if (code === 'ENOENT' || code === 'ENOTDIR') return false;
-    throw error;
+    // An inspection failure cannot authorize a fresh conversation or an automatic retry.
+    throw new ClaudeResumeSessionUnavailableError(sessionId, { cause: error });
   }
 }
 

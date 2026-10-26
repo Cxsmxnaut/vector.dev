@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { DeferredApiSessionClient } from '@/agent/runtime/startup/DeferredApiSessionClient';
 import { resolveClaudeRemoteLaunchErrorDisposition } from './claudeRemoteLauncher';
-import { ClaudeResumeSessionUnavailableError } from './remote/sessionStartPlan';
+import { ClaudeResumeSessionUnavailableError } from './utils/claudeCheckSession';
 import { ClaudeNativeProviderExitUnverifiedError } from './sdk/types';
 
 describe('Claude remote launch error disposition', () => {

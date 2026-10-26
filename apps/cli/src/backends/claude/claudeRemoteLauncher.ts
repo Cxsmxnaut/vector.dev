@@ -5,7 +5,7 @@ import {
     claudeRemoteDispatch,
     type ClaudeRemoteRunnerKind,
 } from "./remote/claudeRemoteDispatch";
-import { ClaudeResumeSessionUnavailableError } from './remote/sessionStartPlan';
+import { ClaudeResumeSessionUnavailableError } from './utils/claudeCheckSession';
 import {
     prepareClaudeUnifiedStartupLifecycle,
     type ClaudeUnifiedStartupLifecycleIntent,

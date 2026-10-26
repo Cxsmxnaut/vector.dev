@@ -1,5 +1,6 @@
 import {
   claudeCheckSession,
+  ClaudeResumeSessionUnavailableError,
   hasClaudeMaterializedSessionTranscript,
 } from '@/backends/claude/utils/claudeCheckSession';
 import { claudeFindLastSession } from '@/backends/claude/utils/claudeFindLastSession';
@@ -8,20 +9,6 @@ export type ClaudeRemoteSessionStartPlan = {
   startFrom: string | null;
   shouldContinue: boolean;
 };
-
-export class ClaudeResumeSessionUnavailableError extends Error {
-  readonly code = 'claude_resume_session_unavailable';
-  readonly providerSessionId: string;
-
-  constructor(providerSessionId: string) {
-    super(
-      `Claude session ${providerSessionId} cannot be resumed because its transcript is unavailable. `
-      + 'Happier did not start a new session because the requested operation was resume.',
-    );
-    this.name = 'ClaudeResumeSessionUnavailableError';
-    this.providerSessionId = providerSessionId;
-  }
-}
 
 type ResolveClaudeRemoteSessionStartPlanDeps = {
   checkSession: (
@@ -58,15 +45,9 @@ export function resolveClaudeRemoteSessionStartPlan(
   let shouldContinue = false;
 
   if (opts.sessionId) {
-    let transcriptMaterialized: boolean;
-    try {
-      transcriptMaterialized = effectiveDeps.hasMaterializedSessionTranscript(
-        opts.sessionId, opts.path, opts.transcriptPath, opts.claudeConfigDir,
-      );
-    } catch {
-      // An inaccessible requested transcript is unavailable resume state, never permission to start fresh.
-      throw new ClaudeResumeSessionUnavailableError(opts.sessionId);
-    }
+    const transcriptMaterialized = effectiveDeps.hasMaterializedSessionTranscript(
+      opts.sessionId, opts.path, opts.transcriptPath, opts.claudeConfigDir,
+    );
     if (!transcriptMaterialized) {
       throw new ClaudeResumeSessionUnavailableError(opts.sessionId);
     } else if (!effectiveDeps.checkSession(

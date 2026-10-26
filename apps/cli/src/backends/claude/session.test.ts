@@ -854,7 +854,7 @@ describe('Session', () => {
     }
   });
 
-  it('does not replace a provisional identity when its transcript cannot be inspected', async () => {
+  it.each(['getResumableSessionId', 'clearSessionId'] as const)('preserves a provisional identity and reports unavailable resume state when %s cannot inspect its transcript', async operation => {
     const tempDir = mkdtempSync(join(tmpdir(), 'happier-claude-session-'));
     const transcriptPath = join(tempDir, 'sess_unreadable.jsonl');
     const session = createSession(createSessionClientStub());
@@ -865,8 +865,13 @@ describe('Session', () => {
       const denied = Object.assign(new Error('Transcript access denied'), { code: 'EACCES' });
       const stat = vi.mocked(fs.statSync).mockImplementationOnce(() => { throw denied; });
       try {
-        expect(() => session.getResumableSessionId()).toThrow(denied);
+        expect(() => session[operation]()).toThrow(expect.objectContaining({
+          code: 'claude_resume_session_unavailable',
+          providerSessionId: 'sess_unreadable',
+          cause: denied,
+        }));
         expect(session.sessionId).toBe('sess_unreadable');
+        expect(session.transcriptPath).toBe(transcriptPath);
       } finally { stat.mockClear(); }
     } finally {
       session.cleanup();

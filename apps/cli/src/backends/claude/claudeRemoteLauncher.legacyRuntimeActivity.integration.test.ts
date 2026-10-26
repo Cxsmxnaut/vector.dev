@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import * as fs from 'node:fs';
 
 import { MessageQueue2 } from '@/agent/runtime/modeMessageQueue';
 import type { SessionClientPort } from '@/api/session/sessionClientPort';
@@ -26,6 +27,12 @@ const mockClaudeRemote = vi.hoisted(() => vi.fn());
 const mockClaudeRemoteAgentSdk = vi.hoisted(() => vi.fn());
 const mockRunClaudeUnifiedTerminalSession = vi.hoisted(() => vi.fn());
 const notifyDaemonSessionStarted = vi.hoisted(() => vi.fn(async () => ({})));
+
+// Replace only the OS filesystem operation; keep Session identity and launcher recovery real.
+vi.mock('node:fs', async importOriginal => {
+  const actual = await importOriginal<typeof import('node:fs')>();
+  return { ...actual, statSync: vi.fn(actual.statSync) };
+});
 
 // Daemon HTTP boundary; keep capability reporting and launcher selection real.
 vi.mock('@/daemon/controlClient', async (importOriginal) => ({
@@ -214,6 +221,54 @@ describe.sequential('claudeRemoteLauncher legacy Runtime Activity subscriber', (
         disposition: 'preserve-resume-and-exit',
       }));
     } finally {
+      infoFile.mockRestore();
+      await rm(transcriptDir, { recursive: true, force: true });
+    }
+  });
+
+  it('exits once without consuming input when a provisional transcript inspection is denied', async () => {
+    const { session } = createHarness(undefined, { providerSessionId: null });
+    const transcriptDir = await mkdtemp(join(tmpdir(), 'claude-denied-resume-'));
+    const transcriptPath = join(transcriptDir, 'claude-observed.jsonl');
+    session.onSessionFound('claude-observed', { transcript_path: transcriptPath });
+    await session.drainCriticalMetadataWrites({ timeoutMs: 500 });
+    const denied = Object.assign(new Error('Transcript access denied'), { code: 'EACCES' });
+    const actualFs = await vi.importActual<typeof import('node:fs')>('node:fs');
+    const stat = vi.mocked(fs.statSync).mockImplementation((...args) => {
+      if (args[0] === transcriptPath) throw denied;
+      return Reflect.apply(actualFs.statSync, actualFs, args);
+    });
+    const termination = new AbortController();
+    let launchErrors = 0;
+    const originalInfoFile = logger.infoFile.bind(logger);
+    const infoFile = vi.spyOn(logger, 'infoFile').mockImplementation((...args) => {
+      originalInfoFile(...args);
+      if (args[0] === '[remote]: launch error' && ++launchErrors > 1) {
+        // Bound a regressed busy loop without replacing its recovery decision or adding a timer.
+        termination.abort('repeated-transcript-inspection-failure');
+      }
+    });
+    session.queue.push('continue the observed conversation', {
+      permissionMode: 'default', claudeRemoteAgentSdkEnabled: true, claudeUnifiedTerminalEnabled: false,
+    }, { userMessageLocalId: 'denied-resume-input' });
+
+    try {
+      await expect(claudeRemoteLauncher(session, { signal: termination.signal })).resolves.toBe('exit');
+      expect(launchErrors).toBe(1);
+      expect(termination.signal.aborted).toBe(false);
+      expect(session.sessionId).toBe('claude-observed');
+      expect(session.transcriptPath).toBe(transcriptPath);
+      expect(session.queue.size()).toBe(1);
+      expect(mockClaudeRemoteAgentSdk).not.toHaveBeenCalled();
+      expect(infoFile).toHaveBeenCalledWith('[remote]: launch error', expect.objectContaining({
+        error: expect.stringContaining('ClaudeResumeSessionUnavailableError'),
+        disposition: 'preserve-resume-and-exit',
+      }));
+      expect(session.client.sendSessionEvent).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'message', message: expect.stringContaining('transcript is unavailable'),
+      }));
+    } finally {
+      stat.mockImplementation(actualFs.statSync);
       infoFile.mockRestore();
       await rm(transcriptDir, { recursive: true, force: true });
     }
