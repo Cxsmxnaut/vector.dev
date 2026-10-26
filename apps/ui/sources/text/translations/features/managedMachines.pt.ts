@@ -257,7 +257,8 @@ export const managedMachines: ManagedMachinesTranslations = {
         },
         credential: {
             refused: "A conexão do provisionador não está mais disponível.",
-            required: "Conecte uma conta de provisionador para ver as máquinas disponíveis.",
+            required: "Conecte uma conta para ver o que você pode criar.",
+            choose: "Escolha uma conta para ver o que você pode criar.",
         },
         power: {
             pending: ({ provider, state }: { provider: string; state: string }) => `Aguardando ${provider} confirmar ${state}…`,

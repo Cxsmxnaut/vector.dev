@@ -42,6 +42,9 @@ import { buildSessionActionFieldOptionsResolver } from '@/components/sessions/ac
 import { useInputFieldOptions } from '@/components/sessions/actions/useInputFieldOptions';
 import { resolveEffectiveActionInputFields } from '@happier-dev/protocol/actions/actionInputHintsRuntime';
 import { resolvePluginProjectedActionPresentation } from '@/sync/domains/plugins/ui/actionPresentation';
+import { readDeclaredConnectedAccountPurposeV1 } from '@happier-dev/protocol/connect/connectedAccountPurposeSelectionV1';
+import { useProjectedConnectedServicesRegistry, useProjectedPluginLocalizedTextResolver } from '@/components/appShell/plugins/AppShellPluginUiProjection';
+import { resolveQualifiedConnectedServiceRegistryDisplayName } from '@/components/settings/connectedServices/model/resolveConnectedServiceDisplayName';
 import { createMachinePresetCollectionClient } from './machinePresetCollectionClient';
 import type { MachinePresetCollectionOptions, MachinePresetCollectionSettledResult } from './machinePresetCollectionClient';
 import { useMachinePresetQuery, isMachinePresetAccessLost } from './useMachinePresets';
@@ -159,16 +162,25 @@ function ManagedMachineConfigurationViewBody(props: ManagedMachineConfigurationV
     const credentialsReady = credentialPurposes !== undefined && credentialSelections.length === credentialPurposes.length && credentialsCurrent;
     const credentialInput = React.useMemo(() => Object.fromEntries((credentialPurposes ?? []).map(({ purpose }, index) => [String(index),
         credentialSelections.find(credential => qualifiedPurposeKey(credential.purpose) === qualifiedPurposeKey(purpose))?.account])), [credentialPurposes, credentialSelections]);
-    const credentialFields = React.useMemo(() => resolveEffectiveActionInputFields({ inputHints: { fields: (credentialPurposes ?? []).map(({ purpose, options }, index) => ({
-        path: String(index), title: `${t('connectedServices.title')} · ${purpose.purpose}`, widget: 'select' as const, required: true, options,
-    })) } }, credentialInput), [credentialPurposes, credentialInput]);
-    const credentialFieldOptions = React.useMemo(() => buildSessionActionFieldOptionsResolver({}), []);
     // A retained draft describes what was reviewed; only the current catalog admits new reads or mutations.
     const provisioner = catalogProvisioner ?? draft?.provisioner;
     const controller = requestedController;
     const presentation = useManagedProvisionerPresentation({ serverId: props.serverId, controller: catalogController, provisioner, refreshKey: readRevision });
     const optionsInput = useManagedProvisionerOptionsInput({ binding: catalog.binding, controller: catalogController, provisioner: catalogProvisioner,
         projection: presentation.projection, projectionReady: presentation.projectionReady, projectionFailed: presentation.projectionFailed, refreshKey: readRevision });
+    // The account a purpose draws on is named by its service, never by the purpose id.
+    const connectedServices = useProjectedConnectedServicesRegistry();
+    const localizeServiceText = useProjectedPluginLocalizedTextResolver();
+    const purposeAccountTitle = React.useCallback((purpose: string) => {
+        const service = provisioner && readDeclaredConnectedAccountPurposeV1({ purpose: { consumer: provisioner.contribution, purpose },
+            projection: presentation.projection, machineProvisionersById: presentation.projection.machineProvisionersById })?.serviceRefs[0];
+        return service ? resolveQualifiedConnectedServiceRegistryDisplayName(connectedServices, service, t, localizeServiceText) : undefined;
+    }, [provisioner, presentation.projection, connectedServices, localizeServiceText]);
+    // An account to choose from is a field; with none connected yet the Connect row below is the one way forward.
+    const credentialFields = React.useMemo(() => resolveEffectiveActionInputFields({ inputHints: { fields: (credentialPurposes ?? []).flatMap(({ purpose, options }, index) => options.length === 0 ? [] : [{
+        path: String(index), title: purposeAccountTitle(purpose.purpose) ?? t('managedMachines.receipt.account'), widget: 'select' as const, required: true, options,
+    }]) } }, credentialInput), [credentialPurposes, credentialInput, purposeAccountTitle]);
+    const credentialFieldOptions = React.useMemo(() => buildSessionActionFieldOptionsResolver({}), []);
     const optionHints = React.useMemo(() => optionsInput.kind === 'ready'
         ? resolvePluginProjectedActionPresentation({ pluginId: optionsInput.action.pluginId,
             presentation: optionsInput.action, projection: presentation.projection }).inputHints ?? undefined : undefined,
@@ -599,8 +611,9 @@ function ManagedMachineConfigurationViewBody(props: ManagedMachineConfigurationV
                 diagnosticCode={error === 'conflict' ? undefined : error} testID="managed-config.error"
                 action={{ label: t(error === 'conflict' ? 'managedMachines.actions.review' : 'managedMachines.actions.tryAgain'), onPress: retry }} />
         </ItemGroup> : null}
-        {draft && credentialFields.length ? <ItemGroup title={t('managedMachines.receipt.account')}>
-            <ActionInputFields fields={credentialFields} input={credentialInput}
+        {draft && credentialPurposes?.length ? <ItemGroup title={t('managedMachines.receipt.account')}
+            description={credentialsReady ? undefined : t(credentialPurposes.some(({ options }) => options.length === 0) ? 'managedMachines.credential.required' : 'managedMachines.credential.choose')}>
+            {credentialFields.length ? <ActionInputFields fields={credentialFields} input={credentialInput}
                 editable={!!catalogProvisioner && !!catalogController && !busy && (!preset || props.presetOnly === true)} busy={busy}
                 resolveFieldOptions={credentialFieldOptions} resolveFieldTestID={field => `managed-config.credential:${credentialPurposes?.[Number(field.path)]?.purpose.purpose}`}
                 onPatch={patch => {
@@ -612,16 +625,14 @@ function ManagedMachineConfigurationViewBody(props: ManagedMachineConfigurationV
                     });
                     setDraft(current => current ? setManagedConfiguratorCredentials(current,
                         managedConfiguratorCredentialSelections({ credentials: selections }, catalogProvisioner)) : current);
-                }} />
+                }} /> : null}
             {credentialPurposes?.map(({ purpose }) => <Item key={qualifiedPurposeKey(purpose)}
                 testID={`managed-config.connect:${purpose.purpose}`} title={t(credentialSelections.some(entry =>
                     qualifiedPurposeKey(entry.purpose) === qualifiedPurposeKey(purpose)) ? 'connectedServices.detail.actions.reconnect' : 'managedMachines.add.action.connect')}
-                subtitle={`${t('connectedServices.title')} · ${purpose.purpose}`}
+                subtitle={purposeAccountTitle(purpose.purpose)}
                 disabled={!catalogController || !catalogProvisioner || busy || !!preset && !props.presetOnly}
                 onPress={() => openAccountSetup(purpose.purpose)} />)}
         </ItemGroup> : null}
-        {draft && !credentialsReady ? <SurfaceStateCard kind="warning" size="line" title={t('managedMachines.credential.required')}
-            testID="managed-config.credential-required" /> : null}
         {draft && showRecipeFields ? <ItemGroup title={t('managedMachines.detail.recipeTitle')}>
             <ActionInputFields fields={recipeFields} input={fieldInput} editable={!!catalogProvisioner && !!catalogController && !busy && (!preset || props.presetOnly === true)}
                 busy={busy} resolveFieldOptions={fieldOptions.resolveOptions} resolveFieldTestID={field => `managed-config.field:${field.path}`}

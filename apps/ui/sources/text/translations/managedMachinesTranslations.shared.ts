@@ -263,7 +263,8 @@ export const managedMachinesEn = {
         },
         credential: {
             refused: "The provisioner connection is no longer available.",
-            required: "Connect a provisioner account to see available machines.",
+            required: "Connect an account to see what you can create.",
+            choose: "Choose an account to see what you can create.",
         },
         power: {
             pending: ({ provider, state }: { provider: string; state: string }) => `Waiting for ${provider} to confirm ${state}…`,

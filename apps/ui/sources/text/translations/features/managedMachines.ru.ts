@@ -257,7 +257,8 @@ export const managedMachines: ManagedMachinesTranslations = {
         },
         credential: {
             refused: "Подключение к провайдеру машин больше недоступно.",
-            required: "Подключите аккаунт провайдера машин, чтобы увидеть доступные машины.",
+            required: "Подключите аккаунт, чтобы увидеть, что можно создать.",
+            choose: "Выберите аккаунт, чтобы увидеть, что можно создать.",
         },
         power: {
             pending: ({ provider, state }: { provider: string; state: string }) => `Ожидание подтверждения ${state} от ${provider}…`,

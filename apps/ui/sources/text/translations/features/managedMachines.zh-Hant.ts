@@ -257,7 +257,8 @@ export const managedMachines: ManagedMachinesTranslations = {
         },
         credential: {
             refused: "佈建器連線已不再可用。",
-            required: "連接佈建器帳號以查看可用的機器。",
+            required: "連接帳號以查看可建立的內容。",
+            choose: "選擇帳號以查看可建立的內容。",
         },
         power: {
             pending: ({ provider, state }: { provider: string; state: string }) => `正在等待 ${provider} 確認${state}…`,

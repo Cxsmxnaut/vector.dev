@@ -257,7 +257,8 @@ export const managedMachines: ManagedMachinesTranslations = {
         },
         credential: {
             refused: "プロビジョナーとの接続は利用できなくなりました。",
-            required: "利用可能なマシンを表示するには、プロビジョナーのアカウントを接続してください。",
+            required: "アカウントを接続すると、作成できるものが表示されます。",
+            choose: "アカウントを選ぶと、作成できるものが表示されます。",
         },
         power: {
             pending: ({ provider, state }: { provider: string; state: string }) => `${provider} が ${state} を確認するのを待っています…`,

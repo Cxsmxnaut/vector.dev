@@ -257,7 +257,8 @@ export const managedMachines: ManagedMachinesTranslations = {
         },
         credential: {
             refused: "配置器连接已不再可用。",
-            required: "连接配置器账户以查看可用的机器。",
+            required: "连接账户以查看可创建的内容。",
+            choose: "选择账户以查看可创建的内容。",
         },
         power: {
             pending: ({ provider, state }: { provider: string; state: string }) => `正在等待 ${provider} 确认${state}…`,

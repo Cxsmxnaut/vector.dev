@@ -214,6 +214,39 @@ describe('managed provisioner credential purposes', () => {
         expect(actionInputs('machines.managed.acquire')).toHaveLength(0);
         await screen.unmount();
     });
+    it('leads a purpose with no connected account with one Connect row named for its service, not a field or an error', async () => {
+        const serverId = await setupHome();
+        harness.answer(serverId, '/v1/actions/machines.provisioners.list', { select: value => {
+            const request = ExternalActionRequestEnvelopeV1Schema.parse(value);
+            const noCloud = { ...provisioner, credentialPurposes: provisioner.credentialPurposes!.map(entry =>
+                entry.purpose.purpose === cloudPurpose.purpose ? { ...entry, options: [] } : entry) };
+            return { body: { v: 1, actionId: 'machines.provisioners.list', requestId: request.requestId,
+                execution: { ok: true, result: { controller, provisioners: [noCloud] } } } };
+        } });
+        // The provider declares a launch field: it has nothing to fill from until an account is connected.
+        const describeProjection = nativeBoundary.rpc.getMockImplementation()!;
+        nativeBoundary.rpc.mockImplementation(async (request: { method: string }) => {
+            const result = await describeProjection(request);
+            if (request.method === RPC_METHODS.DAEMON_MERGED_CONTRIBUTION_REGISTRY_PROJECTION_DESCRIBE) {
+                const action = result.projection.actionsById[buildQualifiedPluginContributionKey({ pluginId: contribution.pluginId, localId: 'options' })];
+                action.inputHints = { fields: [{ path: 'cpu', title: 'CPU cores', widget: 'integer', required: true }] };
+            }
+            return result;
+        });
+        const { ManagedMachineConfigurationView } = await import('./ManagedMachineConfigurationView');
+        const screen = await renderAccountScreen(<ManagedMachineConfigurationView serverId={serverId}
+            provisioner={buildQualifiedPluginContributionKey(contribution)} initialController={controller} />);
+        const connect = () => screen.tree.findAll(node => node.props.testID === 'managed-config.connect:cloud-account' && typeof node.props.onPress === 'function')[0];
+        await waitForHomeGovernance(() => expect(connect()).toBeDefined());
+        // The purpose id is plumbing: the row names the account by its service's title.
+        expect(connect()!.props.subtitle).toBe('Cloud');
+        expect(screen.tree.findAll(node => String(node.props.controlTestID ?? '') === 'managed-config.credential:cloud-account')).toHaveLength(0);
+        expect(screen.tree.findAll(node => node.props.description === 'Connect an account to see what you can create.').length).toBeGreaterThan(0);
+        // Nothing failed: there is no read to retry until an account is connected.
+        expect(screen.findByTestId('managed-config.error')).toBeNull();
+        expect(screen.findByTestId('managed-config.field:cpu')).toBeNull();
+        await screen.unmount();
+    });
     it('returns from Cancel unchanged and offers the exact revoked account for Reconnect without selecting it', async () => {
         const serverId = await setupHome();
         const { storage } = await import('@/sync/domains/state/storage');
