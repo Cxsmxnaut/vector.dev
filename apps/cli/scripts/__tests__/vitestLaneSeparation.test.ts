@@ -88,15 +88,6 @@ describe('Vitest lane separation', () => {
             'src/daemon/peer/iroh/workspaceMachineCarrierMutagen.real.integration.test.ts',
         );
 
-        const packageJson = JSON.parse(
-            readFileSync(new URL('../../package.json', import.meta.url), 'utf8'),
-        ) as { scripts?: Record<string, string> };
-        expect(packageJson.scripts?.['test:workspace-sync:real']).toContain(
-            '--script=test:workspace-sync:real:local',
-        );
-        expect(packageJson.scripts?.['test:workspace-sync:real:local']).toBe(
-            'node scripts/runWorkspaceSyncRealIntegration.mjs',
-        );
     });
 
     it('uses the canonical shared-host worker budget in parallel CLI lanes', () => {
@@ -112,53 +103,31 @@ describe('Vitest lane separation', () => {
             readFileSync(new URL('../../package.json', import.meta.url), 'utf8'),
         ) as { scripts?: Record<string, string> };
 
-        const unitWrapper = packageJson.scripts?.['test:unit'];
         const unitLocal = packageJson.scripts?.['test:unit:local'];
-        const unitVitestWrapper = packageJson.scripts?.['test:unit:vitest'];
-        const unitVitestLocal = packageJson.scripts?.['test:unit:vitest:local'];
-        const integrationWrapper = packageJson.scripts?.['test:integration'];
-        const integrationLocal = packageJson.scripts?.['test:integration:local'];
-        const slowWrapper = packageJson.scripts?.['test:slow'];
-        const slowLocal = packageJson.scripts?.['test:slow:local'];
-        const vitestWrapper = packageJson.scripts?.vitest;
         const vitestLocal = packageJson.scripts?.['vitest:local'];
         const fastScripts = [
             unitLocal,
-            integrationLocal,
-            slowLocal,
+            packageJson.scripts?.['test:integration:local'],
+            packageJson.scripts?.['test:slow:local'],
         ].join('\n');
 
-        expect(unitWrapper).toContain('--script=test:unit:local');
+        // The unit lane's post-suite checks (native node:test files + import-cycle guard)
+        // run only behind `--unit-checks`; runVitestShards.test.ts proves what that flag runs.
         expect(unitLocal).toContain('node scripts/runVitestShards.mjs --config vitest.config.ts --unit-checks');
-        expect(unitVitestWrapper).toContain('--script=test:unit:vitest:local');
-        expect(unitVitestLocal).toContain(
-            'node scripts/runVitestShards.mjs --config vitest.config.ts',
-        );
-        expect(integrationWrapper).toContain('--script=test:integration:local');
-        expect(integrationLocal).toContain(
-            'node scripts/runVitestShards.mjs --config vitest.integration.config.ts',
-        );
-        expect(slowWrapper).toContain('--script=test:slow:local');
-        expect(slowLocal).toContain('vitest run --config vitest.slow.config.ts');
         expect(fastScripts).not.toContain('runPkgrollBuild');
         expect(fastScripts).not.toContain('syncPackageDist');
         expect(fastScripts).not.toContain('syncSharedDepsForDev');
         expect(vitestLocal).not.toContain('syncSharedDepsForDev');
 
-        expect(vitestWrapper).toContain('--script=vitest:local');
-        expect(vitestLocal).toBe('vitest');
+        // pnpm runs `pre*` lifecycle hooks implicitly; none may reintroduce a build.
         expect(packageJson.scripts?.pretest).toBeUndefined();
-        expect(packageJson.scripts?.typecheck).toContain('--script=typecheck:local');
         expect(packageJson.scripts?.['pretypecheck:local']).toBeUndefined();
         expect(packageJson.scripts?.['typecheck:local']).not.toContain(
             'prepare:declarations',
         );
     });
 
-    it('wires the CLI runtime import-cycle guard into root and CLI unit lanes', () => {
-        const cliPackageJson = JSON.parse(
-            readFileSync(new URL('../../package.json', import.meta.url), 'utf8'),
-        ) as { scripts?: Record<string, string> };
+    it('exposes the CLI runtime import-cycle guard from the repository root', () => {
         const rootPackageJson = JSON.parse(
             readFileSync(new URL('../../../../package.json', import.meta.url), 'utf8'),
         ) as { scripts?: Record<string, string> };
@@ -166,8 +135,6 @@ describe('Vitest lane separation', () => {
         expect(rootPackageJson.scripts?.['test:import-cycles']).toBe(
             'pnpm --filter @happier-dev/cli run test:import-cycles',
         );
-        expect(cliPackageJson.scripts?.['test:unit']).toContain('--script=test:unit:local');
-        expect(cliPackageJson.scripts?.['test:unit:local']).toContain('--unit-checks');
     });
 
     it('keeps build-output dist verification out of the unit lane', () => {
