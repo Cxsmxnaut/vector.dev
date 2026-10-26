@@ -33,10 +33,33 @@ if [ -n "$command_repo_root" ]; then
     /*) command_repo_root=$(CDPATH= cd -- "$command_repo_root" && pwd -P) || exit 1 ;;
     *) printf '%s\n' '[preferred-execution] --repo requires an absolute sibling checkout' >&2; exit 1 ;;
   esac
+  # A linked Git worktree has no executor configuration or dependencies of its
+  # own. Its launcher hands sibling dispatch to its primary checkout's executor.
+  if [ "$command_repo_root" = "$repo_root" ] && [ -f "$repo_root/.git" ]; then
+    IFS= read -r worktree_git_dir < "$repo_root/.git" || worktree_git_dir=
+    worktree_git_dir=${worktree_git_dir#gitdir: }
+    case "$worktree_git_dir" in /*) ;; ?*) worktree_git_dir=$repo_root/$worktree_git_dir ;; esac
+    case "$worktree_git_dir" in
+      */.git/worktrees/?*)
+        primary_checkout=$(CDPATH= cd -- "${worktree_git_dir%/.git/worktrees/*}" 2>/dev/null && pwd -P) || primary_checkout=
+        if [ -n "$primary_checkout" ] && [ "$primary_checkout" != "$repo_root" ] \
+          && [ "${primary_checkout%/*}" = "${repo_root%/*}" ] && [ -f "$primary_checkout/apps/stack/bin/hstack-exec" ]; then
+          exec /bin/sh "$primary_checkout/apps/stack/bin/hstack-exec" "--repo=$repo_root" "$@"
+        fi ;;
+    esac
+  fi
   [ "${command_repo_root%/*}" = "${repo_root%/*}" ] || {
     printf '%s\n' '[preferred-execution] --repo requires an absolute sibling checkout' >&2; exit 1
   }
   if [ "$command_repo_root" = "$repo_root" ]; then command_repo_root=; fi
+fi
+# The named command checkout supplies the default cwd: its root unless the
+# caller already stands inside it (--cwd still selects a subdirectory).
+if [ -n "$command_repo_root" ]; then
+  case "$invoked_cwd" in
+    "$command_repo_root"|"$command_repo_root"/*) ;;
+    *) cd -- "$command_repo_root" || exit 1; invoked_cwd=$command_repo_root ;;
+  esac
 fi
 
 # Workload classes and memory requirements have one source owner. Load its

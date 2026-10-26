@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { access, chmod, mkdir, mkdtemp, readFile, readdir, rm, utimes, writeFile } from 'node:fs/promises';
+import { access, chmod, mkdir, mkdtemp, readFile, readdir, realpath, rm, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
@@ -2662,6 +2662,29 @@ test('native launcher preserves the canonical repository cwd boundary', async ()
   assert.equal(result.status, 1);
   assert.match(result.stderr, /working directory must stay inside the repository/i);
   assert.equal(result.stdout, '');
+});
+
+test('a linked worktree launcher hands its own --repo dispatch to the primary checkout executor', { skip: process.platform === 'win32' }, async t => {
+  const fixture = await createTempFixture(t, { prefix: 'hstack-worktree-launcher-' });
+  const root = await realpath(fixture.root);
+  const primary = join(root, 'primary');
+  const worktree = join(root, 'basis');
+  await mkdir(join(primary, '.git', 'worktrees', 'basis'), { recursive: true });
+  await mkdir(join(primary, 'apps', 'stack', 'bin'), { recursive: true });
+  await mkdir(join(worktree, 'apps', 'stack', 'bin'), { recursive: true });
+  await mkdir(join(worktree, 'apps', 'ui'), { recursive: true });
+  // Git's linked-worktree pointer is the only identity the launcher reads.
+  await writeFile(join(worktree, '.git'), `gitdir: ${join(primary, '.git', 'worktrees', 'basis')}\n`);
+  await writeFile(join(worktree, 'apps', 'stack', 'bin', 'hstack-exec'), await readFile(launcher, 'utf8'));
+  await executable(join(primary, 'apps', 'stack', 'bin', 'hstack-exec'),
+    '#!/bin/sh\nprintf "primary cwd=%s args=%s\\n" "$(pwd -P)" "$*"\n');
+  const result = spawnSync('/bin/sh', [join(worktree, 'apps', 'stack', 'bin', 'hstack-exec'), `--repo=${worktree}`,
+    '--', 'pnpm', '--dir', 'apps/ui', 'exec', 'vitest', 'run', 'a.test.ts'], {
+    cwd: join(worktree, 'apps', 'ui'), env: executionNeutralEnv, encoding: 'utf8',
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout,
+    `primary cwd=${join(worktree, 'apps', 'ui')} args=--repo=${worktree} -- pnpm --dir apps/ui exec vitest run a.test.ts\n`);
 });
 
 test('remote heavyweight admission starts from the configured repository when SSH login cwd is external', async (t) => {
@@ -6296,6 +6319,13 @@ test('native launcher flushes an automatically selected mirror and retries anoth
   assert.match(siblingResult.stdout, /remote:.*probe-command.*sibling/);
   assert.deepEqual((await readFile(flushMarker, 'utf8')).trim().split('\n'),
     ['linux', 'mac2'].map(name => resolveMutagenSessionName(name, sibling)));
+  // An absolute --repo names the command checkout; the caller's cwd elsewhere
+  // (normally the executor checkout) runs the command from that checkout's root.
+  const fromExecutor = spawnSync('/bin/sh', [launcher, `--repo=${sibling}`, '--', 'probe-command', 'from-executor'], {
+    cwd: repoRoot, env, encoding: 'utf8',
+  });
+  assert.equal(fromExecutor.status, 0, fromExecutor.stderr);
+  assert.match(fromExecutor.stdout, /remote:.*probe-command.*from-executor/);
 });
 
 test('native launcher exact target flushes the selected Mutagen session before remote dispatch and fails closed after a flush failure', async (t) => {
