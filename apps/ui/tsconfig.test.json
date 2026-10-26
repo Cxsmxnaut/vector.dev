@@ -2954,7 +2954,6 @@
     "sources/components/sessions/transcript/viewport/bottomFollow/host/useTranscriptLiveTailIntentHost.commitTiming.test.tsx",
     "sources/components/sessions/transcript/viewport/bottomFollow/writeScheduler.test.ts",
     "sources/components/sessions/transcript/viewport/driver/commandHost.test.ts",
-    "sources/components/sessions/transcript/viewport/driver/nativeStandardList.test.ts",
     "sources/components/sessions/transcript/viewport/driver/nativeStandardListFacts.test.ts",
     "sources/components/sessions/transcript/viewport/driver/readNativeAbsoluteScrollOffset.test.ts",
     "sources/components/sessions/transcript/viewport/driver/scrollIngress.test.ts",

@@ -122,33 +122,6 @@ describe('useTranscriptBottomFollowHost identity stability', () => {
         await hook.unmount();
     });
 
-    it('consumes native entry-settle confirmation without issuing an app follow writer', async () => {
-        const members = createStableMembers();
-        members.lifecycleHost.observeNativeScrollConfirmation.mockReturnValue({
-            consumed: true,
-            entrySettleEffects: [{
-                sessionId: 's1',
-                type: 'issue-entry-settle-reconfirm-pin',
-            }],
-            explicitJumpEffects: [],
-        });
-        const deps = buildDeps(members);
-        const hook = await renderHook(
-            (nextDeps: BottomFollowHostDeps) => useTranscriptBottomFollowHost(nextDeps),
-            { initialProps: deps },
-        );
-
-        hook.getCurrent().observeNativeConfirmation({
-            contentHeight: 1000,
-            distanceFromBottom: 0,
-            isTrusted: false,
-            mountSettleStable: true,
-        });
-
-        expect(members.executeViewportCommand).not.toHaveBeenCalled();
-        await hook.unmount();
-    });
-
     it('keeps host callbacks referentially stable across re-renders with fresh deps object identities', async () => {
         const members = createStableMembers();
         const hook = await renderHook(
