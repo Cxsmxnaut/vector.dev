@@ -60,10 +60,6 @@ vi.mock('react-native-safe-area-context', async () => {
 
 vi.mock('@/components/sessions/guidance/SessionGettingStartedGuidance', () => ({
     SessionGettingStartedGuidance: 'SessionGettingStartedGuidance',
-    useShouldBlockNewSessionWithGettingStartedGuidance: () => {
-        mockState.newSessionBlockHookCalls += 1;
-        return mockState.shouldBlockNewSession;
-    },
     useSessionGettingStartedGuidanceBaseModel: () => {
         mockState.guidanceHookCalls += 1;
 
@@ -86,6 +82,13 @@ vi.mock('@/components/sessions/guidance/SessionGettingStartedGuidance', () => ({
             serverUrl: 'https://api.happier.dev',
             showServerSetup: false,
         };
+    },
+}));
+
+vi.mock('@/components/sessions/guidance/useShouldBlockNewSessionWithGettingStartedGuidance', () => ({
+    useShouldBlockNewSessionWithGettingStartedGuidance: () => {
+        mockState.newSessionBlockHookCalls += 1;
+        return mockState.shouldBlockNewSession;
     },
 }));
 

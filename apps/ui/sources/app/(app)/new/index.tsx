@@ -4,7 +4,7 @@ import { StyleSheet } from 'react-native-unistyles';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { AppHeaderCloseButton } from '@/components/navigation/AppHeaderCloseButton';
-import { useShouldBlockNewSessionWithGettingStartedGuidance } from '@/components/sessions/guidance/SessionGettingStartedGuidance';
+import { useShouldBlockNewSessionWithGettingStartedGuidance } from '@/components/sessions/guidance/useShouldBlockNewSessionWithGettingStartedGuidance';
 import { NewSessionBlockingGuidance } from '@/components/sessions/new/components/NewSessionBlockingGuidance';
 import { NewSessionSimplePanel } from '@/components/sessions/new/components/NewSessionSimplePanel';
 import { NewSessionWizard } from '@/components/sessions/new/components/NewSessionWizard';

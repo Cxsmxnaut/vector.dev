@@ -6,7 +6,7 @@ import { createMachineFixture } from '@/dev/testkit/fixtures/machineFixtures';
 import { getActiveServerSnapshot } from '@/sync/domains/server/serverRuntime';
 import { storage } from '@/sync/domains/state/storageStore';
 
-import { useShouldBlockNewSessionWithGettingStartedGuidance } from './SessionGettingStartedGuidance';
+import { useShouldBlockNewSessionWithGettingStartedGuidance } from './useShouldBlockNewSessionWithGettingStartedGuidance';
 
 const initialState = storage.getState();
 
