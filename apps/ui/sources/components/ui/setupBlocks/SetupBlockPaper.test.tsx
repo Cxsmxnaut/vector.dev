@@ -1,5 +1,6 @@
 import * as React from 'react';
-import { Text } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
+import Color from 'color';
 import { describe, expect, it, vi } from 'vitest';
 
 import { renderScreen } from '@/dev/testkit';
@@ -33,5 +34,26 @@ describe('SetupBlockPaper', () => {
         expect(reach?.top).toBe(7);
         expect(reach?.bottom).toBe(10);
         expect(reach?.left).toBe(10);
+    });
+
+    it('gives a setup card the Elements material over a backdrop and its exact paper with nothing behind', async () => {
+        const { GlassMaterialSettingsProvider } = await import('@/components/ui/glass/useGlassMaterialSettings');
+        const { GlassRuntimeEnvironmentProvider } = await import('@/components/ui/glass/glassRuntimeEnvironment');
+        const { glassPresetMaterials } = await import('@/components/ui/glass/glassMaterial');
+        const { useUnistyles } = await import('react-native-unistyles');
+        const { theme } = useUnistyles();
+        const scene = (atmosphereBehind: 'wallpaper' | 'none') => <GlassRuntimeEnvironmentProvider value={{ atmosphereBehind }}>
+            <GlassMaterialSettingsProvider value={{ glassSurfaceMaterials: glassPresetMaterials('auto') }}>
+                <SetupBlockPaper testID="backdrop-setup-paper" layout="card"><Text>Set up voice</Text></SetupBlockPaper>
+            </GlassMaterialSettingsProvider>
+        </GlassRuntimeEnvironmentProvider>;
+        const paints = (screen: Awaited<ReturnType<typeof renderScreen>>) => screen.findAllByType('View').map(node => StyleSheet.flatten(node.props.style) ?? {});
+        const screen = await renderScreen(scene('wallpaper'));
+        expect(paints(screen).some(style => typeof style.backdropFilter === 'string' && style.backdropFilter.includes('blur'))).toBe(true);
+        await screen.update(scene('none'));
+        expect(paints(screen).some(style => typeof style.backdropFilter === 'string' && style.backdropFilter.includes('blur'))).toBe(false);
+        // The same card fill and finish as every other Element on the page.
+        expect(paints(screen).some(style => typeof style.backgroundColor === 'string' && Color(style.backgroundColor).hexa() === Color(theme.colors.edge.cardFill).hexa())).toBe(true);
+        expect(paints(screen).some(style => typeof style.backgroundImage === 'string' && style.backgroundImage.includes('gradient'))).toBe(true);
     });
 });

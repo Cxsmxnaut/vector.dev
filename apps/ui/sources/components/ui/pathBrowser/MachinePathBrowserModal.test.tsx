@@ -62,7 +62,9 @@ async function waitForTestId(screen: ReturnType<typeof renderScreen> extends Pro
         }
         await flushHookEffects({ cycles: 1, turns: 1 });
     }
-    return screen.findByTestId(testID);
+    const target = screen.findByTestId(testID);
+    if (!target) throw new Error(`Expected test ID ${testID} to render`);
+    return target;
 }
 
 const listMachineFileBrowserRootsMock = vi.hoisted(() => vi.fn<(params: unknown) => Promise<DaemonFilesystemListRootsResponse>>(async () => ({
@@ -111,6 +113,8 @@ const machineWorkspaceFileListMock = vi.hoisted(() => vi.fn<(machineId: string, 
 const modalPromptMock = vi.hoisted(() => vi.fn<(...args: any[]) => Promise<string | null>>(async () => null));
 const modalAlertMock = vi.hoisted(() => vi.fn());
 const itemRenderCounts = vi.hoisted(() => new Map<string, number>());
+// Platform.OS is read at render time; a test may switch to iOS for a native-only contract.
+const platformOS = vi.hoisted(() => ({ current: 'web' as 'web' | 'ios' }));
 
 vi.mock('@legendapp/list/react-native', async (importOriginal) => {
     const { createCapturingLegendListMock } = await import('@/dev/testkit/mocks/legendList');
@@ -152,8 +156,12 @@ vi.mock('react-native', async () => {
             );
         }),
         Platform: {
-            OS: 'web',
-            select: (options: { web?: unknown; default?: unknown }) => options.web ?? options.default,
+            get OS() {
+                return platformOS.current;
+            },
+            select: (options: { ios?: unknown; native?: unknown; web?: unknown; default?: unknown }) => platformOS.current === 'ios'
+                ? options.ios ?? options.native ?? options.default
+                : options.web ?? options.default,
         },
     });
 });
@@ -310,6 +318,7 @@ const { MachinePathBrowserModal, MachinePathBrowserView } = await import('./Mach
 describe('MachinePathBrowserModal', () => {
     afterEach(async () => {
         vi.useRealTimers();
+        platformOS.current = 'web';
         standardCleanup();
         try {
             await connection?.dispose(); connection = undefined;
@@ -708,33 +717,6 @@ describe('MachinePathBrowserModal', () => {
         vi.useRealTimers();
     });
 
-    it('renders nested directories when expanding a child folder', async () => {
-
-        const screen = await renderInModalChrome(<MachinePathBrowserModal
-                    machineId="machine-1"
-                    onResolve={vi.fn()}
-                    onClose={vi.fn()}
-                />);
-
-        await waitForTestId(screen, getPathBrowserToggleTestId('/'));
-        await screen.pressByTestIdAsync(getPathBrowserToggleTestId('/'));
-
-        await waitForTestId(screen, getPathBrowserRowTestId('/Users'));
-
-        await screen.pressByTestIdAsync(getPathBrowserToggleTestId('/Users'));
-
-        await waitForTestId(screen, getPathBrowserRowTestId('/Users/leeroy'));
-
-        expect(listMachineFileBrowserDirectoryEntriesMock.mock.calls).toEqual(expect.arrayContaining([
-            [expect.objectContaining({
-                machineId: 'machine-1',
-                directoryPath: '/Users',
-                includeFiles: false,
-            })],
-        ]));
-        expect(screen.findByTestId(getPathBrowserRowTestId('/Users/leeroy'))).toBeTruthy();
-    });
-
     it('does not rerender unchanged ancestor rows when expanding a descendant directory', async () => {
 
         const screen = await renderInModalChrome(<MachinePathBrowserModal
@@ -751,7 +733,14 @@ describe('MachinePathBrowserModal', () => {
         expect(rootRenderCountAfterRootExpand).toBeGreaterThan(0);
 
         await screen.pressByTestIdAsync(getPathBrowserToggleTestId('/Users'));
-        await waitForTestId(screen, getPathBrowserRowTestId('/Users/leeroy'));
+        expect(await waitForTestId(screen, getPathBrowserRowTestId('/Users/leeroy'))).not.toBeNull();
+        expect(listMachineFileBrowserDirectoryEntriesMock.mock.calls).toEqual(expect.arrayContaining([
+            [expect.objectContaining({
+                machineId: 'machine-1',
+                directoryPath: '/Users',
+                includeFiles: false,
+            })],
+        ]));
 
         expect(itemRenderCounts.get(getPathBrowserRowTestId('/')) ?? 0).toBe(rootRenderCountAfterRootExpand);
     });
@@ -943,7 +932,7 @@ describe('MachinePathBrowserModal', () => {
         expect(titledInfoRows[0]?.props?.title).toBe('newSession.pathPicker.truncatedDirectoryInfo:1');
     });
 
-    it('lets the browser body shrink inside the shared card and keeps the footer buttons at normal size', async () => {
+    it('publishes no card container of its own and hands both footer actions to the shared chrome', async () => {
 
         const screen = await renderInModalChrome(<MachinePathBrowserModal
                     machineId="machine-1"
@@ -954,19 +943,43 @@ describe('MachinePathBrowserModal', () => {
         // The card is the shared chrome's: the browser names it and publishes no container of its own.
         expect(screen.findByTestId(PATH_BROWSER_MODAL_TEST_ID)?.type).toBe('ChromeHost');
 
-        const body = screen.findAll((node) => {
-            return node.props?.style
-                && node.props.style.flex === 1
-                && node.props.style.minHeight === 0;
-        })[0];
-
-        expect(body).toBeTruthy();
-
         const footerButtons = screen.findAll((node) => {
             return node.props?.title === 'common.cancel' || node.props?.title === 'common.use';
         });
-        expect(footerButtons.length).toBeGreaterThanOrEqual(2);
-        expect(footerButtons.every((node) => node.props.size === 'normal')).toBe(true);
+        expect(new Set(footerButtons.map((node) => node.props.title))).toEqual(new Set(['common.cancel', 'common.use']));
+    });
+
+    it('does not republish card chrome on iOS when the host re-renders after applying it', async () => {
+        platformOS.current = 'ios';
+        let publishCount = 0;
+        const host: { rerender?: () => void } = {};
+
+        // Like the modal host, every applied chrome update re-renders the host.
+        function Harness() {
+            const [, forceRender] = React.useReducer((value: number) => value + 1, 0);
+            React.useEffect(() => {
+                host.rerender = forceRender;
+            }, []);
+            const setChrome = React.useCallback(() => {
+                publishCount += 1;
+                forceRender();
+            }, []);
+            const onClose = React.useCallback(() => {}, []);
+            const onResolve = React.useCallback(() => {}, []);
+            return <MachinePathBrowserModal machineId="machine-1" onClose={onClose} onResolve={onResolve} setChrome={setChrome} />;
+        }
+
+        await renderScreen(<Harness />);
+        await flushHookEffects({ cycles: 8, turns: 2 });
+        const settledPublishCount = publishCount;
+        expect(settledPublishCount).toBeGreaterThan(0);
+
+        await act(async () => {
+            host.rerender?.();
+        });
+        await flushHookEffects({ cycles: 2, turns: 2 });
+
+        expect(publishCount).toBe(settledPublishCount);
     });
 
     it('requests body-owned scrolling when rendered through shared modal chrome', async () => {

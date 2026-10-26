@@ -63,7 +63,7 @@ function splitDir(dir: string | null): string[] {
  * The shortest run of trailing folders that tells `fullPath` apart from every sibling with the same
  * file name ('' when the name is already unique, or when no folder can separate them).
  */
-export function resolveDistinguishingFolderPrefix(fullPath: string, siblingPaths: readonly string[]): string {
+function resolveDistinguishingFolderPrefix(fullPath: string, siblingPaths: readonly string[]): string {
     const own = normalizeRepoPathParts({ fullPath });
     const ownDir = splitDir(own.dir);
     const rivals = siblingPaths

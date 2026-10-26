@@ -3884,7 +3884,6 @@
     "sources/components/ui/panels/resolvePointerClientX.test.ts",
     "sources/components/ui/panels/shouldRedirectDetailsRouteToPanes.test.ts",
     "sources/components/ui/path/InlineRepoPathLabel.test.tsx",
-    "sources/components/ui/pathBrowser/MachinePathBrowserModal.nativeChromeStability.test.tsx",
     "sources/components/ui/pathBrowser/MachinePathBrowserModal.test.tsx",
     "sources/components/ui/pathBrowser/openMachinePathBrowserModal.test.ts",
     "sources/components/ui/performance/LazyMountOnScreen.web.test.tsx",

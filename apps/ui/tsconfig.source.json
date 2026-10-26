@@ -2648,7 +2648,6 @@
     "sources/components/ui/panels/panelTestHelpers.ts",
     "sources/components/ui/panels/resolvePointerClientX.ts",
     "sources/components/ui/pathBrowser/PathInputBrowseButton.tsx",
-    "sources/components/ui/pathBrowser/pathBrowserTestHelpers.ts",
     "sources/components/ui/performance/LazyMountOnScreen.web.tsx",
     "sources/components/ui/popover/popoverTestHelpers.ts",
     "sources/components/ui/presentation/AppPresentationPlatformProvider.tsx",
