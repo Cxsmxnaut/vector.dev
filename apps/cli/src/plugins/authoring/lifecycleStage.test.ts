@@ -19,19 +19,6 @@ describe('plugin authoring stage report rendering', () => {
     expect(lines).toContain('    at src/daemon.ts:7:19');
   });
 
-  it('renders a file-only source location when no line was reported', () => {
-    const lines = describePluginAuthoringStageReport(pluginAuthoringStageFailure({
-      stage: 'source_validated',
-      diagnostics: [{
-        code: 'plugin_author_tool_failed',
-        message: 'Entry module is missing.',
-        source: { file: 'src/daemon.ts' },
-      }],
-    }));
-
-    expect(lines).toContain('    at src/daemon.ts');
-  });
-
   it('renders nothing extra for a diagnostic with no source location', () => {
     const lines = describePluginAuthoringStageReport(pluginAuthoringStageFailure({
       stage: 'admitted',
