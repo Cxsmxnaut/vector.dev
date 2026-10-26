@@ -317,6 +317,18 @@ Do this on the same machine and against the same Happier account/server profile 
 If Happier detached its managed TUI, the session can still accept messages from the
 app. Reattach with `happier attach <session-id>` from a terminal on the same machine.
 
+### Happier cannot release the previous managed server
+
+Current development builds report **Cannot release the previous managed OpenCode server**
+when a replacement is needed but Happier cannot verify the recorded process or confirm
+that it stopped. Happier keeps the existing server record instead of starting another
+server and losing track of the previous one.
+
+On the machine running the session, inspect the recorded managed server and confirm
+which process it belongs to. Resolve that server's shutdown or the permissions preventing
+verification, then retry. Do not terminate a process merely because its name mentions
+OpenCode; it may belong to another session or application.
+
 ## Related
 
 - [Agent capabilities](/agents/capabilities) — what this agent supports, generated from the manifest.

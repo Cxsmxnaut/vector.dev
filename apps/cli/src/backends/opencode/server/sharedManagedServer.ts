@@ -159,7 +159,7 @@ type ReleaseForAuthSwitchDeps = Readonly<{
    * session kept by `allowCurrentSessionClaim`) currently has an in-flight OpenCode turn. When it
    * does, the release is deferred (the server is left running, state intact) so the turn is never
    * torn down mid-stream — closing the OQ-2 sole-claimant mid-turn-kill window. The server is then
-   * reaped at turn quiescence by the orphan-reap startup scan once no claim remains.
+   * considered by the acquisition-triggered orphan scan once no claim remains.
    */
   hasInFlightTurnForLaunchFingerprint?: () => Promise<boolean> | boolean;
 }>;
@@ -175,7 +175,9 @@ type ReleaseForAuthSwitchResult = Readonly<{
     | 'pid_dead'
     | 'process_identity_mismatch'
     | 'tracked_session_claimed'
-    | 'in_flight_turn';
+    | 'in_flight_turn'
+    | 'evidence_unavailable'
+    | 'termination_failed';
 }>;
 
 function hashCommandLine(rawCommandLine: string): string {
@@ -240,15 +242,10 @@ function isCompatibleProcessStartTime(stateStartTimeMs: number, observedStartTim
   return Math.abs(stateStartTimeMs - observedStartTimeMs) <= 2_000;
 }
 
-type ManagedOpenCodeStartupScanStateDecision = Readonly<{
-  action: 'keep' | 'drop';
-  reason:
-    | 'verified_live_state'
-    | 'state_untrusted'
-    | 'active_server_dir_mismatch'
-    | 'pid_dead'
-    | 'process_identity_mismatch';
-}>;
+type ManagedOpenCodeStartupScanStateDecision =
+  | Readonly<{ action: 'keep'; reason: 'verified_live_state' }>
+  | Readonly<{ action: 'drop'; reason: 'pid_dead' | 'process_identity_mismatch' }>
+  | Readonly<{ action: 'defer'; reason: 'process_identity_unknown' | 'state_untrusted' | 'active_server_dir_mismatch' }>;
 
 type ManagedOpenCodeStartupScanOrphanReapDecision = Readonly<{
   action: 'drop' | 'keep' | 'reap';
@@ -299,16 +296,21 @@ export function decideManagedOpenCodeStartupScanStateAction(input: Readonly<{
   observedStartTimeMs: number | null;
   observedProcessInstanceFingerprint?: string | null;
 }>): ManagedOpenCodeStartupScanStateDecision {
-  if (!isTrustedManagedOpenCodeStateV2(input.state)) {
-    return { action: 'drop', reason: 'state_untrusted' };
-  }
-  if (input.state.activeServerDir !== input.currentActiveServerDir) {
-    return { action: 'drop', reason: 'active_server_dir_mismatch' };
-  }
   if (!input.isPidAlive) {
     return { action: 'drop', reason: 'pid_dead' };
   }
+  if (!isTrustedManagedOpenCodeStateV2(input.state)) {
+    return { action: 'defer', reason: 'state_untrusted' };
+  }
+  if (input.state.activeServerDir !== input.currentActiveServerDir) {
+    return { action: 'defer', reason: 'active_server_dir_mismatch' };
+  }
   const stateProcessInstanceFingerprint = readNonEmptyString(input.state.processInstanceFingerprint);
+  if (!input.processInfo?.cmd || (stateProcessInstanceFingerprint
+    ? !readNonEmptyString(input.observedProcessInstanceFingerprint)
+    : input.observedStartTimeMs === null || !Number.isFinite(input.observedStartTimeMs))) {
+    return { action: 'defer', reason: 'process_identity_unknown' };
+  }
   const processBirthMatches = stateProcessInstanceFingerprint
     ? processInstanceFingerprintMatches(
       stateProcessInstanceFingerprint,
@@ -612,11 +614,15 @@ export function decideManagedOpenCodeStartupScanOrphanReapAction(input: Readonly
   stateDecision: ManagedOpenCodeStartupScanStateDecision;
   trackedClaimCount: number;
   hasUnknownOpenCodeTrackedClaims: boolean;
+  hasInFlightTurn?: boolean;
 }>): ManagedOpenCodeStartupScanOrphanReapDecision {
+  if (input.stateDecision.action === 'defer') {
+    return { action: 'keep', reason: input.stateDecision.reason };
+  }
   if (input.stateDecision.action === 'drop') {
     return { action: 'drop', reason: input.stateDecision.reason };
   }
-  if (Number.isFinite(input.trackedClaimCount) && input.trackedClaimCount > 0) {
+  if (input.hasInFlightTurn || (Number.isFinite(input.trackedClaimCount) && input.trackedClaimCount > 0)) {
     return { action: 'keep', reason: 'tracked_session_claimed' };
   }
   if (input.hasUnknownOpenCodeTrackedClaims) {
@@ -625,16 +631,16 @@ export function decideManagedOpenCodeStartupScanOrphanReapAction(input: Readonly
   return { action: 'reap', reason: 'no_tracked_claims' };
 }
 
-async function hasTrustedManagedOpenCodeStateIdentityForTermination(
+async function readManagedOpenCodeStateIdentityForTermination(
   state: SharedManagedOpenCodeServerState,
   deps: Pick<
     ResolveDeps,
     'currentActiveServerDir' | 'readProcessStartTimeMs' | 'readProcessInstanceFingerprint'
   >,
   processInfo: ManagedServerProcessInfo | null,
-): Promise<boolean> {
+): Promise<ManagedOpenCodeStartupScanStateDecision> {
   const currentActiveServerDir = readNonEmptyString(deps.currentActiveServerDir ?? null);
-  if (!currentActiveServerDir) return false;
+  if (!currentActiveServerDir) return { action: 'defer', reason: 'process_identity_unknown' };
 
   const observedStartTimeMs = await Promise.resolve(
     deps.readProcessStartTimeMs
@@ -646,7 +652,7 @@ async function hasTrustedManagedOpenCodeStateIdentityForTermination(
       ? deps.readProcessInstanceFingerprint(state.pid)
       : readProcessInstanceFingerprintSync(state.pid),
   ).catch(() => null));
-  const decision = decideManagedOpenCodeStartupScanStateAction({
+  return decideManagedOpenCodeStartupScanStateAction({
     state,
     currentActiveServerDir,
     isPidAlive: true,
@@ -654,7 +660,6 @@ async function hasTrustedManagedOpenCodeStateIdentityForTermination(
     observedStartTimeMs,
     observedProcessInstanceFingerprint,
   });
-  return decision.action === 'keep';
 }
 
 function resolveManagedServersDirectory(): string {
@@ -752,8 +757,8 @@ function isMarkerPidAliveBestEffort(pid: unknown): boolean {
   try {
     process.kill(numericPid, 0);
     return true;
-  } catch {
-    return false;
+  } catch (error) {
+    return !(error && typeof error === 'object' && 'code' in error && error.code === 'ESRCH');
   }
 }
 
@@ -784,7 +789,7 @@ async function readTrackedOpenCodeLaunchFingerprintClaimsBestEffort(): Promise<T
         const existing = counts.get(launchFingerprint) ?? 0;
         counts.set(launchFingerprint, existing + 1);
         const happySessionId = tryReadNonEmptyString(markerRecord.happySessionId);
-        if (happySessionId && isTurnInFlight?.(happySessionId)) {
+        if (readNonEmptyString(markerRecord.activeTurnId) || (happySessionId && isTurnInFlight?.(happySessionId))) {
           inFlightTurnLaunchFingerprints.add(launchFingerprint);
         }
         continue;
@@ -882,16 +887,9 @@ export async function resolveSharedManagedOpenCodeServerBaseUrl(
           .catch(() => false);
       if (healthy) {
         if (state.status === 'failed') {
-          await deps.writeState({
-            baseUrl: state.baseUrl,
-            pid: state.pid,
-            startedAtMs: state.startedAtMs,
-            status: 'ready',
-            ...(state.launchEnvFingerprint ? { launchEnvFingerprint: state.launchEnvFingerprint } : {}),
-            ...(state.brokerLoadNonce ? { brokerLoadNonce: state.brokerLoadNonce } : {}),
-            ...(state.apiGeneration ? { apiGeneration: state.apiGeneration } : {}),
-            ...(state.authPassword ? { authPassword: state.authPassword } : {}),
-          });
+          const recoveredState = { ...state, status: 'ready' as const };
+          delete recoveredState.lastFailureAtMs;
+          await deps.writeState(recoveredState);
         }
         return {
           baseUrl: state.baseUrl,
@@ -900,18 +898,18 @@ export async function resolveSharedManagedOpenCodeServerBaseUrl(
         };
       }
 
-      if (state.status === 'failed' || launchFingerprintMismatch) {
-        if (deps.getProcessInfo && deps.killPid) {
-          const info = await deps.getProcessInfo(state.pid).catch(() => null);
-          if (await hasTrustedManagedOpenCodeStateIdentityForTermination(state, deps, info)) {
-            await invokeKillPidBestEffort(deps.killPid, state.pid);
-          }
-        }
-      } else if (deps.getProcessInfo && deps.killPid) {
-        const info = await deps.getProcessInfo(state.pid).catch(() => null);
-        if (await hasTrustedManagedOpenCodeStateIdentityForTermination(state, deps, info)) {
-          await invokeKillPidBestEffort(deps.killPid, state.pid);
-        }
+      const info = await deps.getProcessInfo?.(state.pid).catch(() => null) ?? null;
+      const identity = await readManagedOpenCodeStateIdentityForTermination(state, deps, info);
+      const canReplace = identity.action === 'drop' && identity.reason === 'process_identity_mismatch'
+        ? true
+        : identity.action === 'keep' && deps.killPid
+          ? await invokeKillPidBestEffort(deps.killPid, state.pid)
+          : false;
+      if (!canReplace) {
+        throw new Error(
+          'Cannot release the previous managed OpenCode server. Its process identity could not be verified or it did not stop. '
+          + 'Verify that server on this machine, resolve its shutdown, then retry.',
+        );
       }
     }
 
@@ -1279,47 +1277,29 @@ export async function releaseForAuthSwitchFromState(
     const state = await deps.readState();
     if (!state) return { released: false, reason: 'state_missing' };
 
-    if (!isTrustedManagedOpenCodeStateV2(state)) {
-      await deps.removeState().catch(() => {});
-      return { released: false, reason: 'state_untrusted' };
-    }
-
-    if (state.ownerToken !== deps.expectedOwnerToken) {
-      await deps.removeState().catch(() => {});
-      return { released: false, reason: 'owner_token_mismatch' };
-    }
-
-    if (state.activeServerDir !== deps.currentActiveServerDir) {
-      await deps.removeState().catch(() => {});
-      return { released: false, reason: 'active_server_dir_mismatch' };
-    }
-
     if (!deps.isPidAlive(state.pid)) {
       await deps.removeState().catch(() => {});
       return { released: false, reason: 'pid_dead' };
     }
-
     const info = await deps.getProcessInfo(state.pid).catch(() => null);
-    const observedStartTimeMs = await Promise.resolve(deps.readProcessStartTimeMs(state.pid)).catch(() => null);
-    const observedProcessInstanceFingerprint = readNonEmptyString(await Promise.resolve(
-      deps.readProcessInstanceFingerprint
-        ? deps.readProcessInstanceFingerprint(state.pid)
-        : readProcessInstanceFingerprintSync(state.pid),
-    ).catch(() => null));
-    if (decideManagedOpenCodeStartupScanStateAction({
-      state,
-      currentActiveServerDir: deps.currentActiveServerDir,
-      isPidAlive: true,
-      processInfo: info,
-      observedStartTimeMs,
-      observedProcessInstanceFingerprint,
-    }).action !== 'keep') {
+    const identityDecision = await readManagedOpenCodeStateIdentityForTermination(state, deps, info);
+    if (identityDecision.action === 'defer') {
+      return { released: false, reason: identityDecision.reason === 'process_identity_unknown'
+        ? 'evidence_unavailable' : identityDecision.reason };
+    }
+    if (identityDecision.action !== 'keep') {
       await deps.removeState().catch(() => {});
       return { released: false, reason: 'process_identity_mismatch' };
     }
+    if (state.ownerToken !== deps.expectedOwnerToken) {
+      return { released: false, reason: 'owner_token_mismatch' };
+    }
 
     if (deps.trackedClaimCountForLaunchFingerprint) {
-      const claimCountRaw = await Promise.resolve(deps.trackedClaimCountForLaunchFingerprint()).catch(() => 0);
+      const claimCountRaw = await Promise.resolve(deps.trackedClaimCountForLaunchFingerprint()).catch(() => null);
+      if (claimCountRaw === null || !Number.isFinite(claimCountRaw) || claimCountRaw < 0) {
+        return { released: false, reason: 'evidence_unavailable' };
+      }
       const claimCount = Number.isFinite(claimCountRaw) && claimCountRaw > 0
         ? Math.floor(claimCountRaw)
         : 0;
@@ -1336,17 +1316,22 @@ export async function releaseForAuthSwitchFromState(
     // still has an in-flight OpenCode turn. Multi-session claims are already protected by the claim
     // count; this closes the sole-claimant window (OQ-2) where the current session's claim is
     // subtracted to zero yet a turn is still streaming. Leave BOTH the process and the state file
-    // intact: the turn finishes against the live server, which the orphan-reap startup scan then
-    // releases once it has no remaining claims (release deferred to turn quiescence, never wedged).
+    // intact: the turn finishes against the live server, which a later acquisition-triggered
+    // orphan scan can release once it has no remaining claims.
     if (deps.hasInFlightTurnForLaunchFingerprint) {
       const hasInFlightTurn = await Promise.resolve(deps.hasInFlightTurnForLaunchFingerprint())
-        .catch(() => false);
+        .catch(() => null);
+      if (hasInFlightTurn === null) return { released: false, reason: 'evidence_unavailable' };
       if (hasInFlightTurn === true) {
         return { released: false, reason: 'in_flight_turn' };
       }
     }
 
-    await Promise.resolve(deps.killPid(state.pid, deps.drainMs)).catch(() => false);
+    const didTerminate = await Promise.resolve(deps.killPid(state.pid, deps.drainMs)).catch(() => false);
+    if (!didTerminate) {
+      logger.warn('[OpenCodeServer] Managed server did not terminate; retaining custody', { pid: state.pid });
+      return { released: false, reason: 'termination_failed' };
+    }
     await deps.removeState().catch(() => {});
     return { released: true, reason: 'released' };
   });
@@ -1364,7 +1349,6 @@ export async function releaseForAuthSwitch(
   const statePath = resolveManagedServerStatePathByFingerprint(normalizedFingerprint);
   const lockFile = `${statePath}.lock`;
   const drainMs = readPositiveIntEnv('HAPPIER_OPENCODE_AUTH_SWITCH_DRAIN_MS') ?? 10_000;
-  const trackedClaims = await readTrackedOpenCodeLaunchFingerprintClaimsBestEffort();
   return await releaseForAuthSwitchFromState({
     withLock: async (fn) => await withOpenCodeServerFileLock(lockFile, fn),
     readState: async () => await readStateFile(statePath),
@@ -1384,7 +1368,8 @@ export async function releaseForAuthSwitch(
     currentActiveServerDir: configuration.activeServerDir,
     expectedOwnerToken: normalizedOwnerToken,
     drainMs,
-    trackedClaimCountForLaunchFingerprint: () => {
+    trackedClaimCountForLaunchFingerprint: async () => {
+      const trackedClaims = await readTrackedOpenCodeLaunchFingerprintClaimsBestEffort();
       const explicitClaimCount = trackedClaims.countsByLaunchFingerprint.get(normalizedFingerprint) ?? 0;
       if (trackedClaims.hasUnknownOpenCodeTrackedClaims) {
         return Math.max(2, explicitClaimCount);
@@ -1392,9 +1377,36 @@ export async function releaseForAuthSwitch(
       return explicitClaimCount;
     },
     allowCurrentSessionClaim: true,
-    hasInFlightTurnForLaunchFingerprint: () =>
-      trackedClaims.inFlightTurnLaunchFingerprints.has(normalizedFingerprint),
+    hasInFlightTurnForLaunchFingerprint: async () => {
+      const trackedClaims = await readTrackedOpenCodeLaunchFingerprintClaimsBestEffort();
+      return trackedClaims.hasUnknownOpenCodeTrackedClaims
+        || (trackedClaims.countsByLaunchFingerprint.get(normalizedFingerprint) ?? 0) > 1
+        || trackedClaims.inFlightTurnLaunchFingerprints.has(normalizedFingerprint);
+    },
   });
+}
+
+/** Bounded direct reads share the acquisition/cleanup lock without creating Session claims. */
+export async function withSharedManagedOpenCodeServerAccess<T>(
+  operation: () => Promise<T>,
+  baseUrl?: string | null,
+  managedServerLaunchFingerprint?: string | null,
+): Promise<T> {
+  let statePath = resolveStatePathFromEnv();
+  const pinnedFingerprint = readNonEmptyString(managedServerLaunchFingerprint);
+  if (pinnedFingerprint && isOpenCodeManagedServerLaunchFingerprint(pinnedFingerprint)) {
+    statePath = resolveManagedServerStatePathByFingerprint(pinnedFingerprint);
+  } else if (baseUrl) {
+    const state = await readSharedManagedOpenCodeServerStateByBaseUrlBestEffort(baseUrl);
+    if (!state) return await operation();
+    const currentState = await readStateFile(statePath);
+    if (currentState?.baseUrl !== state.baseUrl || currentState.pid !== state.pid) {
+      const fingerprint = state.launchEnvFingerprint;
+      if (!fingerprint || !isOpenCodeManagedServerLaunchFingerprint(fingerprint)) return await operation();
+      statePath = resolveManagedServerStatePathByFingerprint(fingerprint);
+    }
+  }
+  return await withOpenCodeServerFileLock(`${statePath}.lock`, operation);
 }
 
 export async function ensureSharedManagedOpenCodeServerBaseUrl(params: Readonly<{
@@ -1411,12 +1423,10 @@ export async function ensureSharedManagedOpenCodeServerBaseUrl(params: Readonly<
 
   void (async () => {
     const managedServersDir = resolveManagedServersDirectory();
-    const trackedClaims = await readTrackedOpenCodeLaunchFingerprintClaimsBestEffort();
     const drainMs = readPositiveIntEnv('HAPPIER_OPENCODE_AUTH_SWITCH_DRAIN_MS') ?? 10_000;
     let entries: readonly string[] = [];
     try {
-      entries = (await readdir(managedServersDir))
-        .filter((entry) => entry.endsWith('.json'));
+      entries = (await readdir(managedServersDir)).filter((entry) => entry.endsWith('.json'));
     } catch {
       return;
     }
@@ -1424,50 +1434,42 @@ export async function ensureSharedManagedOpenCodeServerBaseUrl(params: Readonly<
       const launchFingerprint = basename(entry, '.json').trim();
       if (!launchFingerprint || launchFingerprint === currentLaunchFingerprint) continue;
       const statePathByFingerprint = resolveManagedServerStatePathByFingerprint(launchFingerprint);
-      const lockFileByFingerprint = `${statePathByFingerprint}.lock`;
-      await withOpenCodeServerFileLock(lockFileByFingerprint, async () => {
+      await withOpenCodeServerFileLock(`${statePathByFingerprint}.lock`, async () => {
         const state = await readStateFile(statePathByFingerprint);
-        if (!state) {
-          await rm(statePathByFingerprint, { force: true }).catch(() => {});
-          return;
-        }
+        if (!state) return;
         const pidAlive = isOpenCodeServerPidAlive(state.pid);
         const processInfo = pidAlive ? await getProcessInfoBestEffort(state.pid).catch(() => null) : null;
-        const observedStartTimeMs = pidAlive
-          ? await readProcessStartTimeMsBestEffort(state.pid).catch(() => null)
-          : null;
-        const observedProcessInstanceFingerprint = pidAlive
-          ? readProcessInstanceFingerprintSync(state.pid)
-          : null;
-        const decision = decideManagedOpenCodeStartupScanStateAction({
-          state,
-          currentActiveServerDir: configuration.activeServerDir,
-          isPidAlive: pidAlive,
-          processInfo,
-          observedStartTimeMs,
-          observedProcessInstanceFingerprint,
+        const observedStartTimeMs = pidAlive ? await readProcessStartTimeMsBestEffort(state.pid).catch(() => null) : null;
+        const observedProcessInstanceFingerprint = pidAlive ? readProcessInstanceFingerprintSync(state.pid) : null;
+        const stateDecision = decideManagedOpenCodeStartupScanStateAction({
+          state, currentActiveServerDir: configuration.activeServerDir, isPidAlive: pidAlive,
+          processInfo, observedStartTimeMs, observedProcessInstanceFingerprint,
         });
-        const reapDecision = decideManagedOpenCodeStartupScanOrphanReapAction({
-          stateDecision: decision,
-          trackedClaimCount: trackedClaims.countsByLaunchFingerprint.get(launchFingerprint) ?? 0,
-          hasUnknownOpenCodeTrackedClaims: trackedClaims.hasUnknownOpenCodeTrackedClaims,
+        // Read current claims only after acquiring this server's lock and observing its process.
+        const claims = await readTrackedOpenCodeLaunchFingerprintClaimsBestEffort();
+        const decision = decideManagedOpenCodeStartupScanOrphanReapAction({
+          stateDecision,
+          trackedClaimCount: claims.countsByLaunchFingerprint.get(launchFingerprint) ?? 0,
+          hasUnknownOpenCodeTrackedClaims: claims.hasUnknownOpenCodeTrackedClaims,
+          hasInFlightTurn: claims.inFlightTurnLaunchFingerprints.has(launchFingerprint),
         });
-        if (reapDecision.action === 'drop') {
-          await rm(statePathByFingerprint, { force: true }).catch(() => {});
-          return;
-        }
-        if (reapDecision.action === 'reap') {
+        if (decision.action === 'drop') {
+          await rm(statePathByFingerprint, { force: true });
+        } else if (decision.action === 'reap') {
           const didTerminate = await terminateManagedOpenCodeServerPidBestEffortWithOptions(state.pid, {
             graceMs: Math.max(250, Math.floor(drainMs)),
           }).catch(() => false);
-          if (didTerminate) {
-            await rm(statePathByFingerprint, { force: true }).catch(() => {});
-          }
+          if (didTerminate) await rm(statePathByFingerprint, { force: true });
+          else logger.warn('[OpenCodeServer] Managed server did not terminate; retaining custody', { pid: state.pid });
+        } else if (stateDecision.action === 'defer') {
+          logger.warn('[OpenCodeServer] Managed server ownership or identity unavailable; retaining custody', { pid: state.pid });
         }
-      }).catch(() => {});
+      }).catch(() => {
+        logger.warn('[OpenCodeServer] Managed server startup cleanup failed; retaining custody', { statePath: statePathByFingerprint });
+      });
     }
   })().catch((error) => {
-    logger.debug('[OpenCodeServer] managed-server startup scan failed (non-fatal)', error);
+    logger.warn('[OpenCodeServer] Managed server startup scan failed', error);
   });
 
   // By default, preserve the user's HOME/USERPROFILE and XDG config directory for OpenCode so the
@@ -1706,7 +1708,7 @@ export async function stopSharedManagedOpenCodeServerFromState(
       }
       if (deps.isPidAlive(state.pid)) {
         const info = await deps.getProcessInfo(state.pid).catch(() => null);
-        hasVerifiedDaemonOwnership = await hasTrustedManagedOpenCodeStateIdentityForTermination(state, deps, info);
+        hasVerifiedDaemonOwnership = (await readManagedOpenCodeStateIdentityForTermination(state, deps, info)).action === 'keep';
         if (!hasVerifiedDaemonOwnership) return { didKill: false };
       }
     }
@@ -1728,12 +1730,14 @@ export async function stopSharedManagedOpenCodeServerFromState(
       allowBroadHeuristicFallback: false,
     })) {
       const didKill = await invokeKillPidBestEffort(deps.killPid, state.pid);
-      if (didKill || !isDaemonStop) await deps.removeState().catch(() => {});
+      if (didKill) await deps.removeState().catch(() => {});
       else logger.warn('[OpenCodeServer] Managed server did not terminate; retaining custody', { pid: state.pid });
       return { didKill };
     }
 
-    await deps.removeState().catch(() => {});
+    const identity = await readManagedOpenCodeStateIdentityForTermination(state, deps, info);
+    if (identity.action === 'drop') await deps.removeState().catch(() => {});
+    else logger.warn('[OpenCodeServer] Managed server ownership or identity unavailable; retaining custody', { pid: state.pid });
     return { didKill: false };
   });
 }

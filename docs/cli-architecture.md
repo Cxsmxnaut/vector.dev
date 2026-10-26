@@ -1588,6 +1588,17 @@ unreadable custody and unsuccessful termination retain evidence and produce
 diagnostics. The tracked-runner guard
 also covers accepted runners whose durable session marker is not written yet.
 
+In development source, acquisition-triggered OpenCode pool cleanup and auth-switch
+release read current Session claims under the server's existing lock. Live records
+with unverified ownership or process identity, unavailable claim or turn evidence,
+and unsuccessful termination retain custody. A proved-dead PID or exact process
+identity mismatch permits discarding its stale record.
+Acquisition refuses to overwrite a live server's record when it cannot verify or
+terminate that server, and reports an error for operator verification before retry.
+Bounded direct-session, catalog, and native-fork operations hold that same lock through client disposal,
+so cleanup cannot retire their managed server during an outstanding read. This does
+not add periodic pool reclamation or certify unmarked execution-run lifetimes.
+
 ```mermaid
 graph TB
     subgraph "Daemon Process"
