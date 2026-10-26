@@ -631,6 +631,27 @@ describe('SelectionListRenderPlan (R14 extracted)', () => {
         expect(plan[0].options.map((o) => o.id)).toEqual(['2']);
     });
 
+    it('matches dynamic-section rows by subtitle by default, after label matches', async () => {
+        const { synthesizeSelectionListRenderPlan } = await import('../SelectionListRenderPlan');
+        const states = new Map<string, DynamicSectionState>();
+        states.set('dyn', {
+            status: 'success',
+            options: [
+                { id: '1', label: 'foo', subtitle: '/Users/leeroy/Documents/de' },
+                { id: '2', label: 'desktop', subtitle: '/Users/leeroy/' },
+                { id: '3', label: 'bar', subtitle: '/tmp' },
+            ],
+        });
+        const plan = synthesizeSelectionListRenderPlan({
+            sections: [{ kind: 'dynamic', id: 'dyn', resolve: async () => ({ options: [] }) }],
+            inputValue: 'de',
+            filterQuery: 'de',
+            dynamicSectionStates: states,
+        });
+        expect(plan).toHaveLength(1);
+        expect(plan[0].options.map((o) => o.id)).toEqual(['2', '1']);
+    });
+
     /**
      * RUX-11.2: when a dynamic section is in loading state on first fetch
      * (no lastSuccessOptions), drop the section entirely from the plan so
