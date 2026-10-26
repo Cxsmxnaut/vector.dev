@@ -359,14 +359,16 @@ export function resolveClaudeRemoteLaunchErrorDisposition(params: Readonly<{
     if (params.exitReason !== null) return 'ignore';
     if (params.runtimeTerminationStarted) return 'terminate';
 
+    if (params.error instanceof ClaudeResumeSessionUnavailableError) {
+        return params.error.providerSessionId === params.currentSessionId
+            ? 'preserve-resume-and-exit'
+            : 'surface';
+    }
     const resumeSessionId = params.sessionIdAtLaunchStart?.trim();
     const isSameResumeSession = Boolean(
         resumeSessionId
         && params.currentSessionId === params.sessionIdAtLaunchStart,
     );
-    if (isSameResumeSession && params.error instanceof ClaudeResumeSessionUnavailableError) {
-        return 'preserve-resume-and-exit';
-    }
     if (isSameResumeSession && (params.userAbort === true || params.exitCode === 1)) {
         return 'preserve-resume-and-wait';
     }

@@ -226,12 +226,28 @@ describe.sequential('claudeRemoteLauncher legacy Runtime Activity subscriber', (
     }
   });
 
-  it('exits once without consuming input when a provisional transcript inspection is denied', async () => {
+  it.each(['before launch', 'during launch'] as const)('exits once without consuming input when transcript inspection is denied for an identity observed %s', async observation => {
     const { session } = createHarness(undefined, { providerSessionId: null });
     const transcriptDir = await mkdtemp(join(tmpdir(), 'claude-denied-resume-'));
     const transcriptPath = join(transcriptDir, 'claude-observed.jsonl');
-    session.onSessionFound('claude-observed', { transcript_path: transcriptPath });
-    await session.drainCriticalMetadataWrites({ timeoutMs: 500 });
+    const observeIdentity = async () => {
+      session.onSessionFound('claude-observed', { transcript_path: transcriptPath });
+      await session.drainCriticalMetadataWrites({ timeoutMs: 500 });
+    };
+    const echoSeedStarted = createDeferred<void>();
+    const finishEchoSeed = createDeferred<void>();
+    if (observation === 'before launch') {
+      await observeIdentity();
+    } else {
+      Object.assign(session.client, {
+        fetchRecentTranscriptTextItemsForAcpImport: vi.fn(async () => {
+          // This transport read runs after launch-start identity capture, before the resume decision.
+          echoSeedStarted.resolve(undefined);
+          await finishEchoSeed.promise;
+          return [];
+        }),
+      });
+    }
     const denied = Object.assign(new Error('Transcript access denied'), { code: 'EACCES' });
     const actualFs = await vi.importActual<typeof import('node:fs')>('node:fs');
     const stat = vi.mocked(fs.statSync).mockImplementation((...args) => {
@@ -253,7 +269,13 @@ describe.sequential('claudeRemoteLauncher legacy Runtime Activity subscriber', (
     }, { userMessageLocalId: 'denied-resume-input' });
 
     try {
-      await expect(claudeRemoteLauncher(session, { signal: termination.signal })).resolves.toBe('exit');
+      const launcher = claudeRemoteLauncher(session, { signal: termination.signal });
+      if (observation === 'during launch') {
+        await echoSeedStarted.promise;
+        await observeIdentity();
+        finishEchoSeed.resolve(undefined);
+      }
+      await expect(launcher).resolves.toBe('exit');
       expect(launchErrors).toBe(1);
       expect(termination.signal.aborted).toBe(false);
       expect(session.sessionId).toBe('claude-observed');
@@ -268,6 +290,7 @@ describe.sequential('claudeRemoteLauncher legacy Runtime Activity subscriber', (
         type: 'message', message: expect.stringContaining('transcript is unavailable'),
       }));
     } finally {
+      finishEchoSeed.resolve(undefined);
       stat.mockImplementation(actualFs.statSync);
       infoFile.mockRestore();
       await rm(transcriptDir, { recursive: true, force: true });
