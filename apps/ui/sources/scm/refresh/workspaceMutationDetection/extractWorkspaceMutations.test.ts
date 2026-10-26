@@ -235,18 +235,6 @@ describe('extractWorkspaceMutationsFromNormalizedMessages', () => {
         expect(result.hasUnknownMutations).toBe(false);
     });
 
-    it('treats canonical Task and SubAgent tool calls as containers until nested mutating tools provide evidence', () => {
-        const result = extractWorkspaceMutationsFromNormalizedMessages({
-            messages: [
-                toolCallMessage('Task', { description: 'delegate workspace changes' }),
-                toolCallMessage('SubAgent', { prompt: 'update files in parallel' }),
-            ],
-        });
-
-        expect(Array.from(result.paths)).toEqual([]);
-        expect(result.hasUnknownMutations).toBe(false);
-    });
-
     it('prefers canonical normalized file mutation tool names from _happier metadata', () => {
         const result = extractWorkspaceMutationsFromNormalizedMessages({
             messages: [
@@ -268,17 +256,21 @@ describe('extractWorkspaceMutationsFromNormalizedMessages', () => {
         expect(result.hasUnknownMutations).toBe(false);
     });
 
-    it('treats provider tool calls whose canonical metadata resolves to Task or SubAgent as containers', () => {
-        const result = extractWorkspaceMutationsFromNormalizedMessages({
-            messages: [
-                toolCallMessageWithCanonicalToolName('DelegateTask', 'Task', {
-                    description: 'delegate without direct command payload',
-                }),
-                toolCallMessageWithCanonicalToolName('SpawnWorker', 'SubAgent', {
-                    role: 'implement',
-                }),
-            ],
-        });
+    it.each([
+        ['named Task and SubAgent', [
+            toolCallMessage('Task', { description: 'delegate workspace changes' }),
+            toolCallMessage('SubAgent', { prompt: 'update files in parallel' }),
+        ]],
+        ['whose canonical metadata resolves to Task or SubAgent', [
+            toolCallMessageWithCanonicalToolName('DelegateTask', 'Task', {
+                description: 'delegate without direct command payload',
+            }),
+            toolCallMessageWithCanonicalToolName('SpawnWorker', 'SubAgent', {
+                role: 'implement',
+            }),
+        ]],
+    ])('treats tool calls %s as containers until nested mutating tools provide evidence', (_label, messages) => {
+        const result = extractWorkspaceMutationsFromNormalizedMessages({ messages });
 
         expect(Array.from(result.paths)).toEqual([]);
         expect(result.hasUnknownMutations).toBe(false);
