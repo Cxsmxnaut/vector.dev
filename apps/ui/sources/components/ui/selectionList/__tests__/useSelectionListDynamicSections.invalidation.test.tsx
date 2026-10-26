@@ -8,7 +8,7 @@ import type {
     SelectionListOption,
 } from '../_types';
 import {
-    createTestDynamicSectionCache,
+    createDefaultDynamicSectionCache,
     type SelectionListDynamicSectionCache,
 } from '../selectionListDynamicSectionCache';
 
@@ -105,7 +105,7 @@ describe('useSelectionListDynamicSections — resolverKey-driven invalidation (R
     it('retires removed sections and prevents their late work from repopulating state or cache', async () => {
         let resolveRemoved!: (value: { options: ReadonlyArray<SelectionListOption> }) => void;
         let removedSignal: AbortSignal | undefined;
-        const cache = createTestDynamicSectionCache();
+        const cache = createDefaultDynamicSectionCache();
         const removedSection: SelectionListDynamicSection = {
             id: 'removed',
             resolverKey: 'target-a',
