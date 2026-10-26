@@ -131,6 +131,55 @@ describe('acquireEligibleHomeCarrier', () => {
         expect(acquireBrowserSpy).not.toHaveBeenCalled();
     });
 
+    it('prefers Iroh over an HTTPS endpoint the descriptor lists before it', async () => {
+        const lease = {
+            leaseId: 'native-lease-https-first',
+            homeServerIdentityId: baseInput.descriptor.homeServerIdentityId,
+            endpointId: endpoint.endpointId,
+            runtimeOrigin: 'http://127.0.0.1:43123',
+            status: 'ready',
+            release: vi.fn(async () => {}),
+        };
+        browserHostSpy.mockReturnValue({ eligible: false, reason: 'desktop_host' });
+        acquireNativeSpy.mockResolvedValue(lease);
+
+        const acquired = await acquireEligibleHomeCarrier({
+            ...baseInput,
+            descriptor: {
+                ...baseInput.descriptor,
+                endpoints: [
+                    { kind: 'https', url: 'https://public.example.test' },
+                    { kind: 'iroh', ...endpoint },
+                ],
+            },
+        });
+        expect(acquired).toMatchObject({ kind: 'native_iroh', lease: { leaseId: 'native-lease-https-first' } });
+        expect(acquireNativeSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('retries a failed native lease release on the next explicit release, then stays released', async () => {
+        const release = vi.fn()
+            .mockRejectedValueOnce(new Error('native release failed'))
+            .mockResolvedValueOnce(undefined);
+        browserHostSpy.mockReturnValue({ eligible: false, reason: 'desktop_host' });
+        acquireNativeSpy.mockResolvedValue({
+            leaseId: 'native-release-retry',
+            homeServerIdentityId: baseInput.descriptor.homeServerIdentityId,
+            endpointId: endpoint.endpointId,
+            runtimeOrigin: 'http://127.0.0.1:43123',
+            status: 'ready',
+            release,
+        });
+
+        const acquired = await acquireEligibleHomeCarrier(baseInput);
+        expect(acquired.kind).toBe('native_iroh');
+        if (acquired.kind !== 'native_iroh') return;
+        await expect(acquired.release()).rejects.toThrow('native release failed');
+        await expect(acquired.release()).resolves.toBeUndefined();
+        await expect(acquired.release()).resolves.toBeUndefined();
+        expect(release).toHaveBeenCalledTimes(2);
+    });
+
     it('fails closed and releases a browser carrier whose returned endpoint differs from the requested endpoint', async () => {
         const release = vi.fn(async () => {});
         browserHostSpy.mockReturnValue({ eligible: true });
@@ -317,6 +366,27 @@ describe('acquireEligibleHomeCarrier', () => {
         await expect(acquireEligibleHomeCarrier(baseInput)).resolves.toEqual({
             kind: 'https',
             runtimeOrigin: 'https://public.example.test',
+        });
+        expect(acquireBrowserSpy).not.toHaveBeenCalled();
+        expect(acquireNativeSpy).not.toHaveBeenCalled();
+    });
+
+    it('treats an eligible browser host without relay reachability as unavailable without attempting either carrier', async () => {
+        browserHostSpy.mockReturnValue({ eligible: true });
+        browserEligibilitySpy.mockReturnValue({ eligible: false, reason: 'relays_missing' });
+
+        const result = await acquireEligibleHomeCarrier({
+            ...baseInput,
+            descriptor: {
+                ...baseInput.descriptor,
+                endpoints: [{ kind: 'iroh', ...endpoint }],
+            },
+        });
+
+        expect(result).toMatchObject({
+            kind: 'fail_closed',
+            fallbackAllowed: true,
+            error: { name: 'IrohError', code: 'unavailable' },
         });
         expect(acquireBrowserSpy).not.toHaveBeenCalled();
         expect(acquireNativeSpy).not.toHaveBeenCalled();
