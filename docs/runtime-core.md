@@ -2398,6 +2398,22 @@ focused Account. Credential retirement withdraws the private context rather than
 borrowing the focused Account's Role policy. This is a development-source contract,
 not certification of an already-loaded daemon or exported UI.
 
+Public Session-owned Run starts with an explicit role, including Second opinion,
+prepare that same private Account context before the shared agent-start policy
+resolves and stamps the role. The request carries role identity only; installed
+Agents use the same host preparation. A live Session supplies freshly resolved
+roles from its retained role owner; its runner's cold built-in Agent inventory
+cannot replace that installed-source observation. Standalone callers retain
+their Account-backed inventory and the same Protocol role resolver. An unavailable
+context returns `target_unavailable`; typed role-owner refusals retain their
+error code. Both carry `details.executionRunStart.runCreation: 'noRunCreated'`
+and a closed `refusal: { code, phase: 'agent_start_context' }`. The refusal code reuses
+the existing availability reasons, including `role_overrides_unavailable` and
+`role_source_incomplete`; role text, credentials and source payloads never enter
+that evidence. The existing start-failure projection retains it through RPC
+normalization. Loaded-runtime verification remains separate from this source
+contract.
+
 Creation origin, current turn initiator and causal work depth are separate host
 facts. The [turn stamper](../apps/cli/src/agent/runtime/session/turn/stampTurnFacts.ts)
 distinguishes user, agent-session, workflow and host input; a user turn has depth

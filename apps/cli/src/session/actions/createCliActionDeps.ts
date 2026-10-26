@@ -1312,9 +1312,14 @@ export function createCliActionDeps(params: Readonly<{
     const scopeOnly = options?.purpose === 'session_scope';
     const requiresBoundStartPolicy = !scopeOnly && (Boolean(params.readAgentStartPolicy)
       || (params.actionsSettingsProvider ? !params.actionsSettingsProvider.getAccountSettings : !params.credentials));
+    const sessionRoleContext = !scopeOnly ? params.getSessionRoleContext?.() : undefined;
     const prepareStartReads = async () => {
       if (!scopeOnly) await measureActionStartPhaseV1(context, 'role_overrides', () => prepareAccountRoleOverrides(context.signal));
-      const roleSources = scopeOnly ? undefined
+      // The live Session owns fresh Role resolution, including its installed
+      // Agent sources. A runner's cold built-in inventory cannot re-admit it.
+      const roles = sessionRoleContext ? await measureActionStartPhaseV1(context, 'role_sources',
+        () => sessionRoleContext.resolveRoles(context.signal)) : undefined;
+      const roleSources = scopeOnly || sessionRoleContext ? undefined
         : await measureActionStartPhaseV1(context, 'role_sources', () => readRoleSources(context.signal));
       const settings = scopeOnly ? null : await measureActionStartPhaseV1(context, 'account_settings', async () =>
         {
@@ -1331,15 +1336,15 @@ export function createCliActionDeps(params: Readonly<{
         try { appliedChildSelection = await runWithoutRequesterSessionCurrentnessCheckpoint(async () => params.getCurrentAppliedChildSelection!()); }
         catch { appliedChildSelection = { status: 'unavailable' }; }
       }
-      const availableAgents = scopeOnly ? undefined : await measureActionStartPhaseV1(context, 'agent_inventory',
+      const availableAgents = scopeOnly || sessionRoleContext ? undefined : await measureActionStartPhaseV1(context, 'agent_inventory',
         () => (readEffectiveDeps?.() ?? actionDeps).agentsBackendsList({ includeDisabled: false }));
-      return { roleSources, settings, appliedChildSelection, availableAgents };
+      return { roles, roleSources, settings, appliedChildSelection, availableAgents };
     };
     // Built-in Role/Artifact, captured Settings and ACP reads join one bounded
     // observation. Their owners exclude migrations, source/history maintenance
     // and private publication; injected preparation above also leaves the scope.
     const [{ runWithRequesterSessionCurrentnessCheckpoint }, { resolveCliAgentStartContextV1 }] = await Promise.all([import("@/daemon/sessionEncryption/requesterCurrentness"), import("./resolveCliAgentStartContextV1")]);
-    const { roleSources, settings, appliedChildSelection, availableAgents } = await (params.savedSecretOperationContext && !scopeOnly
+    const { roles, roleSources, settings, appliedChildSelection, availableAgents } = await (params.savedSecretOperationContext && !scopeOnly
       ? runWithRequesterSessionCurrentnessCheckpoint(prepareStartReads, { readOnly: true }) : prepareStartReads());
     context.signal?.throwIfAborted();
     if (!scopeOnly && params.savedSecretOperationContext && !await params.savedSecretOperationContext.isCurrent()) {
@@ -1357,7 +1362,7 @@ export function createCliActionDeps(params: Readonly<{
       turnDepth,
       callerPermissionMode: context.callerPermissionMode ?? null, settings,
       accountRoleOverrides: scopeOnly ? undefined : await readReadyAccountRoleOverrides(context.signal),
-      ...(scopeOnly ? { roles: {} } : {}),
+      ...(scopeOnly ? { roles: {} } : roles ? { roles } : {}),
       availableAgentTargetKeys: availableAgents?.items
         .filter((item) => item.enabled).map((item) => item.targetKey),
       roleSourceInventory: roleSources,
