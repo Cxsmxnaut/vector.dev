@@ -2637,7 +2637,6 @@
     "sources/components/ui/markdown/editor/core/tiptap/seedMarkdown.ts",
     "sources/components/ui/markdown/editor/markdownEditorEngine.web.ts",
     "sources/components/ui/markdown/editor/surfaces/TiptapEditorSurface.web.tsx",
-    "sources/components/ui/media/mediaTestHelpers.ts",
     "sources/components/ui/navigation/FloatingTabBarSurface.tsx",
     "sources/components/ui/navigation/HeaderLogo.tsx",
     "sources/components/ui/navigation/TabBarNewSessionButton.tsx",

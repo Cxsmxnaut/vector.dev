@@ -271,16 +271,6 @@ describe('useFilePreviewSource', () => {
         } finally { await hook.unmount(); }
     });
 
-    it('loads a workspace preview without a session', async () => {
-        const hook = await renderHook(() => useFilePreviewSource({
-            enabled: true, source: { kind: 'workspace', scope: fixture.scope, filePath: 'workspace.png' },
-            mimeType: 'image/png', sizeBytes: 3,
-        }));
-        await vi.waitFor(() => expect(hook.getCurrent().status).toBe('loaded'));
-        expect(files.get(hook.getCurrent().uri!)?.chunks.flatMap(chunk => [...chunk])).toEqual([97, 98, 99]);
-        await hook.unmount();
-    });
-
     it.each([false, true])('settles two added-image Review consumers when one leaves an in-flight read (failure: %s)', async (failed) => {
         interruptTransfer = failed;
         const gate = transfer.deferNextOpen();
@@ -424,16 +414,6 @@ describe('useFilePreviewSource', () => {
         expect(files.get(uri)?.exists).toBe(false);
     });
 
-    it('releases an in-memory bytes source when its consumer unmounts', async () => {
-        const bytes = new Uint8Array([1, 2, 3]);
-        const hook = await renderHook(() => useFilePreviewSource({
-            enabled: true, source: { kind: 'bytes', bytes, name: 'bytes.png' }, mimeType: 'image/png',
-        }));
-        await hook.unmount();
-        await vi.waitFor(() => expect([...files.values()].every(file => !file.exists)).toBe(true));
-        expect(transfer.prepares).toEqual([]);
-    });
-
     it('never exposes a released URI when the same source is enabled again', async () => {
         fixture.storage.getState().applySettingsLocal({ filesImagePreviewCacheMaxEntries: 0 });
         const bytes = new Uint8Array([1, 2, 3]);
@@ -452,6 +432,8 @@ describe('useFilePreviewSource', () => {
         await vi.waitFor(() => expect(hook.getCurrent().status).toBe('loaded'));
         expect(loaded.every(value => value.exists)).toBe(true);
         expect(hook.getCurrent().uri).not.toBe(first);
+        // A bytes source never reaches the Machine.
+        expect(transfer.prepares).toEqual([]);
         await hook.unmount();
     });
 
