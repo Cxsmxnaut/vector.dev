@@ -178,3 +178,59 @@ describe('useTranscriptEntryHost identity stability', () => {
         await hook.unmount();
     });
 });
+
+describe('useTranscriptEntryHost session-open reset plans', () => {
+    it('applies the real latch arm and dispose reset plans once through the committed effects ref', async () => {
+        // The session-entry resets have one owner: the latch's arm/dispose plans, applied by the
+        // entry host. The lifecycle arms the latch and hands its effects to this committed ref.
+        const members = createStableMembers();
+        const hook = await renderHook(
+            (deps: EntryHostDeps) => useTranscriptEntryHost(deps),
+            { wrapper: TranscriptHostTestProvider, initialProps: buildDeps(members) },
+        );
+        // The fixture's ref is widened to a no-argument callback; read it through the host's own type.
+        const applyLatchEffectsRef: EntryHostDeps['applySessionOpenLatchEffectsRef'] = members.applySessionOpenLatchEffectsRef;
+        const arm = (sessionId: string) => applyLatchEffectsRef.current(
+            members.sessionOpenLatch.arm({
+                entryKind: 'bottom',
+                nativeFirstPaintFallbackDelayMs: 450,
+                nowMs: 1_000,
+                platform: 'web',
+                sessionId,
+                shouldFollowBottom: true,
+                webOpenPhaseDeadlineDelayMs: 30_000,
+            }).effects,
+        );
+
+        arm('s1');
+        expect(members.applySessionOpenArmResetPlan).toHaveBeenCalledTimes(1);
+        expect(members.applySessionOpenArmResetPlan).toHaveBeenLastCalledWith({
+            entryKind: 'bottom',
+            sessionId: 's1',
+            shouldFollowBottom: true,
+        });
+        expect(members.applySessionOpenDisposeResetPlan).not.toHaveBeenCalled();
+
+        // Re-arming the same open (a re-render) applies no second reset.
+        arm('s1');
+        expect(members.applySessionOpenArmResetPlan).toHaveBeenCalledTimes(1);
+
+        // A session switch disposes the previous session before arming the next one.
+        arm('s2');
+        expect(members.applySessionOpenDisposeResetPlan).toHaveBeenCalledTimes(1);
+        expect(members.applySessionOpenDisposeResetPlan).toHaveBeenLastCalledWith({
+            reason: 'session-switch',
+            sessionId: 's1',
+        });
+        expect(members.applySessionOpenArmResetPlan).toHaveBeenCalledTimes(2);
+        expect(members.applySessionOpenArmResetPlan).toHaveBeenLastCalledWith({
+            entryKind: 'bottom',
+            sessionId: 's2',
+            shouldFollowBottom: true,
+        });
+        expect(members.applySessionOpenDisposeResetPlan.mock.invocationCallOrder[0])
+            .toBeLessThan(members.applySessionOpenArmResetPlan.mock.invocationCallOrder[1]);
+
+        await hook.unmount();
+    });
+});

@@ -2529,7 +2529,6 @@
     "sources/components/sessions/transcript/viewport/prepend/prependCloseEffects.test.ts",
     "sources/components/sessions/transcript/viewport/prepend/prependTransaction.test.ts",
     "sources/components/sessions/transcript/viewport/sessionOpen/sessionOpenLatch.test.ts",
-    "sources/components/sessions/transcript/viewport/sessionOpen/sessionOpenLatchBoundary.test.ts",
     "sources/components/sessions/transcript/viewport/shell/TranscriptListShell.test.tsx",
     "sources/components/sessions/transcript/viewport/shell/mainTranscriptRendererFrameHost.test.ts",
     "sources/components/sessions/transcript/viewport/shell/renderer/legendEndAnchoredContentSize.real.integration.test.tsx",

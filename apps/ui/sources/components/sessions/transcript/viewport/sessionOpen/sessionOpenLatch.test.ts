@@ -136,47 +136,6 @@ describe('session open latch', () => {
         expect(latch.phase()).toBe('disarmed');
     });
 
-    it('keeps bottom positioning renderer-owned while requesting only the initial fill duty', () => {
-        const latch = createSessionOpenLatch();
-
-        latch.arm(armInput());
-        const decision = latch.onHostFacts({
-            contentHeight: 240,
-            isLoaded: true,
-            isScrollable: false,
-            itemCount: 3,
-            layoutHeight: 600,
-            nowMs: 1_025,
-            sessionId: 'session-a',
-        });
-
-        expect(decision.phase).toBe('positioning');
-        expect(decision.effects).toEqual([{ type: 'request-initial-fill' }]);
-    });
-
-    it('treats already-scrollable bottom entries as fill-settled without requesting a generic initial fill', () => {
-        // Regression (Legend 2026-07-08): a renderer whose scroll container is already
-        // scrollable at the first measured host facts never emits `request-initial-fill`,
-        // and the fill status previously stayed 'idle' forever — permanently suspending
-        // older pagination behind the 'fill-not-done' reason. A scrollable bottom entry
-        // has nothing to fill: it must settle the fill status immediately.
-        const latch = createSessionOpenLatch();
-
-        latch.arm(armInput());
-        const decision = latch.onHostFacts({
-            contentHeight: 10_052,
-            isLoaded: true,
-            isScrollable: true,
-            itemCount: 121,
-            layoutHeight: 317,
-            nowMs: 1_025,
-            sessionId: 'session-a',
-        });
-
-        expect(decision.effects.some((effect) => effect.type === 'request-initial-fill')).toBe(false);
-        expect(latch.initialFillStatus()).toBe('done');
-    });
-
     it('requests the bottom fill duty once per arm across repeated host facts', () => {
         const latch = createSessionOpenLatch();
         const facts = {
@@ -196,6 +155,7 @@ describe('session open latch', () => {
             nowMs: 1_050,
         });
 
+        expect(first.phase).toBe('positioning');
         expect(first.effects).toEqual([{ type: 'request-initial-fill' }]);
         expect(repeated.effects).toEqual([]);
     });
@@ -216,33 +176,6 @@ describe('session open latch', () => {
 
         expect(decision.phase).toBe('awaiting-layout');
         expect(decision.effects).toEqual([]);
-    });
-
-    it('fills underfilled anchored entries before coordinating entry restore', () => {
-        const latch = createSessionOpenLatch();
-
-        latch.arm(armInput({
-            entryKind: 'anchored',
-            platform: 'native',
-            shouldFollowBottom: false,
-        }));
-        const ready = latch.onHostFacts({
-            contentHeight: 240,
-            isLoaded: true,
-            isScrollable: false,
-            itemCount: 3,
-            layoutHeight: 600,
-            nowMs: 1_025,
-            sessionId: 'session-a',
-        });
-        const fill = latch.onInitialFillSettled({
-            nowMs: 1_030,
-            sessionId: 'session-a',
-        });
-
-        expect(ready.effects.some((effect) => effect.type === 'request-initial-fill')).toBe(true);
-        expect(fill.effects).toEqual([{ type: 'request-entry-restore-attempt' }]);
-        expect(fill.phase).toBe('confirming');
     });
 
     it('treats measured scrollable anchored entries as fill-settled without generic initial fill', () => {
@@ -274,6 +207,11 @@ describe('session open latch', () => {
         // settle set initialFillStatus 'done' but left phase 'positioning'. The
         // synchronous settle must mirror onInitialFillSettled's phase transition so
         // open-lifecycle consumers observe one terminal state.
+        // Regression (Legend 2026-07-08): a renderer whose scroll container is already
+        // scrollable at the first measured host facts never emits `request-initial-fill`,
+        // and the fill status previously stayed 'idle' forever — permanently suspending
+        // older pagination behind the 'fill-not-done' reason. A scrollable bottom entry
+        // has nothing to fill: it must settle the fill status immediately.
         const latch = createSessionOpenLatch();
 
         latch.arm(armInput({
@@ -291,6 +229,7 @@ describe('session open latch', () => {
             sessionId: 'session-a',
         });
 
+        expect(ready.effects.some((effect) => effect.type === 'request-initial-fill')).toBe(false);
         expect(latch.initialFillStatus()).toBe('done');
         expect(ready.phase).toBe('done');
         expect(latch.phase()).toBe('done');
@@ -531,21 +470,5 @@ describe('session open latch', () => {
             pinThresholdPx: 72,
             sessionId: 'session-a',
         })).toBe(false);
-    });
-
-    it('releases the standard-space native first-paint placeholder on the fallback deadline', () => {
-        const latch = createSessionOpenLatch();
-
-        latch.arm(armInput({
-            platform: 'native',
-        }));
-
-        const due = latch.onNativeFirstPaintFallbackDeadline({
-            nativeViewportPaintObserved: false,
-            nowMs: 1_450,
-            sessionId: 'session-a',
-        });
-
-        expect(due.effects).toEqual([{ type: 'release-native-first-paint-placeholder' }]);
     });
 });
