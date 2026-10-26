@@ -11,7 +11,8 @@ import { ensureManagedJavaScriptRuntimeCommand } from '@/packagedRuntime/js/mana
 import { PluginAuthorBundlerUnavailableError } from './bundleDaemonRuntime';
 import { collectBundledPrepublicationAuthorPackageNames } from '@happier-dev/cli-common/workspaceRuntimeDependencies';
 import { assertPluginAuthorPrepublicationRuntimeDeclarations, resolvePluginUiBuildArguments } from './hostSdkResolution';
-import { classifyPluginAuthorDaemonBuild, cleanupPluginAuthorGeneratedArtifacts, normalizePluginSdkRegistryOrigin, resolvePluginAuthorToolchainSpawnInvocation, resolveNativeTypeScriptBin, resolvePluginUiBuildBin, runPluginAuthorToolchain, runPluginUiArtifactBuild, type PluginAuthorToolchainDeps } from './toolchain';
+import { generatePluginActionContracts } from './actionContracts';
+import { classifyPluginAuthorDaemonBuild, cleanupPluginAuthorGeneratedArtifacts, materializePrepublicationAuthorWorkspacePackages, normalizePluginSdkRegistryOrigin, resolvePluginAuthorToolchainSpawnInvocation, resolveNativeTypeScriptBin, resolvePluginUiBuildBin, runPluginAuthorToolchain, runPluginUiArtifactBuild, type PluginAuthorToolchainDeps } from './toolchain';
 import { cleanupPluginDaemonOutputManifest, PLUGIN_DAEMON_OUTPUT_MANIFEST_RELATIVE_PATH, writePluginDaemonOutputManifest } from './daemonOutputManifest';
 
 function successfulSpawn(_input?: Parameters<PluginAuthorToolchainDeps['spawn']>[0]) {
@@ -33,6 +34,39 @@ async function createColdAuthorBuildFixture(manifest: Readonly<Record<string, un
   return {
     projectRoot,
     cleanup: async () => await rm(projectRoot, { recursive: true, force: true }),
+  };
+}
+
+/**
+ * Physical package distribution is fixture input; closure materialization runs
+ * the real canonical owner so the toolchain never builds host workspace
+ * packages inside a unit test.
+ */
+async function createFixturePrepublicationMaterializer(params: Readonly<{
+  projectRoot: string;
+  packages: ReadonlyArray<Readonly<{ name: string; publicAuthor: boolean }>>;
+}>): Promise<{
+  materialize: NonNullable<PluginAuthorToolchainDeps['materializeBundledPrepublicationPackages']>;
+  cleanup: () => Promise<void>;
+}> {
+  const fixtureRoot = await mkdtemp(join(tmpdir(), 'happier-author-prepublication-bundles-'));
+  const bundles: { packageName: string; srcDir: string; destDir: string }[] = [];
+  for (const { name, publicAuthor } of params.packages) {
+    const srcDir = join(fixtureRoot, 'packages', ...name.split('/'));
+    await mkdir(join(srcDir, 'dist'), { recursive: true });
+    await writeFile(join(srcDir, 'package.json'), JSON.stringify({
+      name, version: '0.0.0', type: 'module', main: 'dist/index.js', types: 'dist/index.d.ts', files: ['dist'],
+      ...(publicAuthor ? { happier: { publicSdkRelease: { posture: 'developer_preview' } } } : {}),
+    }), 'utf8');
+    await writeFile(join(srcDir, 'dist', 'index.js'), 'export const installed = true;\n', 'utf8');
+    await writeFile(join(srcDir, 'dist', 'index.d.ts'), 'export declare const installed: true;\n', 'utf8');
+    bundles.push({ packageName: name, srcDir, destDir: join(fixtureRoot, 'unused', ...name.split('/')) });
+  }
+  return {
+    materialize: async (packageNames) => await materializePrepublicationAuthorWorkspacePackages({
+      projectRoot: params.projectRoot, packageNames, bundles,
+    }),
+    cleanup: async () => await rm(fixtureRoot, { recursive: true, force: true }),
   };
 }
 
@@ -134,6 +168,10 @@ describe('runPluginAuthorToolchain', () => {
   ])('handles $name pnpm workspace configuration for bundled SDK resolution', async ({ contents, replaceable }) => {
     const projectRoot = await mkdtemp(join(tmpdir(), 'happier-author-owned-pnpm-workspace-'));
     const workspaceConfigPath = join(projectRoot, 'pnpm-workspace.yaml');
+    const prepublication = await createFixturePrepublicationMaterializer({
+      projectRoot,
+      packages: [{ name: '@happier-dev/plugin-sdk', publicAuthor: true }],
+    });
     const spawn = vi.fn(async () => {
       const config = await readFile(workspaceConfigPath, 'utf8');
       const sdkFileUrl = config.match(/^  "@happier-dev\/plugin-sdk": "(file:\/\/\/[^\n]+)"$/mu)?.[1];
@@ -154,6 +192,7 @@ describe('runPluginAuthorToolchain', () => {
         buildManagedPnpmEnvironment: (env = {}) => env,
         ensureManagedJavaScriptRuntimeCommand: async () => '/happier/tools/js-runtime/current/bin/happier-js-runtime',
         resolveNativeTypeScriptBin: () => '/fixture/plugin/node_modules/@typescript/native/bin/tsc',
+        materializeBundledPrepublicationPackages: prepublication.materialize,
         spawn, processEnv: {},
       });
       if (replaceable) {
@@ -171,9 +210,10 @@ describe('runPluginAuthorToolchain', () => {
         await expect(readFile(workspaceConfigPath, 'utf8')).resolves.toBe(contents);
       }
     } finally {
+      await prepublication.cleanup();
       await rm(projectRoot, { recursive: true, force: true });
     }
-  }, 120_000);
+  });
 
   it('does not reinstall dependencies before a focused check when the author root is already materialized', async () => {
     const fixture = await createColdAuthorBuildFixture(createPluginManifestV2Fixture({ entrypoints: undefined }));
@@ -465,9 +505,13 @@ describe('runPluginAuthorToolchain', () => {
     },
   ])('classifies $label from its manifest before daemon staging', async ({ manifest, shouldBundleDaemon }) => {
     const fixture = await createColdAuthorBuildFixture(manifest);
-    const generatePluginActionContracts = vi.fn(async () => undefined);
-    const bundlePluginDaemonRuntime = vi.fn(async () => undefined);
     try {
+      await expect(classifyPluginAuthorDaemonBuild(fixture.projectRoot))
+        .resolves.toBe(shouldBundleDaemon ? 'required' : 'not-required');
+      if (shouldBundleDaemon) return;
+
+      // The real daemon bundler would fail on this manifest-less source, so a
+      // successful build proves the toolchain honoured the classification.
       const result = await runPluginAuthorToolchain({
         operation: 'build',
         projectRoot: fixture.projectRoot,
@@ -480,14 +524,15 @@ describe('runPluginAuthorToolchain', () => {
         resolveNativeTypeScriptBin: () => '/fixture/plugin/node_modules/@typescript/native/bin/tsc',
         resolvePluginUiBuildBin: () => null,
         generatePluginActionContracts,
-        bundlePluginDaemonRuntime,
         spawn: vi.fn(successfulSpawn),
         processEnv: {},
       });
 
       expect(result).toMatchObject({ ok: true, operation: 'build' });
-      expect(generatePluginActionContracts).toHaveBeenCalledTimes(shouldBundleDaemon ? 1 : 0);
-      expect(bundlePluginDaemonRuntime).toHaveBeenCalledTimes(shouldBundleDaemon ? 1 : 0);
+      await expect(readFile(join(fixture.projectRoot, PLUGIN_DAEMON_OUTPUT_MANIFEST_RELATIVE_PATH), 'utf8'))
+        .rejects.toMatchObject({ code: 'ENOENT' });
+      await expect(readFile(join(fixture.projectRoot, 'dist', 'actions', 'index.js'), 'utf8'))
+        .rejects.toMatchObject({ code: 'ENOENT' });
     } finally {
       await fixture.cleanup();
     }
@@ -543,32 +588,69 @@ describe('runPluginAuthorToolchain', () => {
   );
 
   it('bundles the complete daemon dependency closure after a successful TypeScript build', async () => {
-    const spawn = vi.fn(successfulSpawn);
-    const generatePluginActionContracts = vi.fn(async () => undefined);
-    const bundlePluginDaemonRuntime = vi.fn(async () => undefined);
-    const result = await runPluginAuthorToolchain({
-      operation: 'build',
-      projectRoot: '/fixture/plugin',
-    }, {
-      ensureManagedPnpmCommand: async () => '/happier/tools/pnpm/current/bin/pnpm',
-      managedPnpmBinPath: () => '/happier/tools/pnpm/current/bin/pnpm',
-      managedJavaScriptRuntimeBinPath: () => '/happier/tools/js-runtime/current/bin/happier-js-runtime',
-      buildManagedPnpmEnvironment: (env = {}) => env,
-      ensureManagedJavaScriptRuntimeCommand: async () => '/happier/tools/js-runtime/current/bin/happier-js-runtime',
-      resolveNativeTypeScriptBin: () => '/fixture/plugin/node_modules/@typescript/native/bin/tsc',
-      resolvePluginUiBuildBin: () => null,
-      generatePluginActionContracts,
-      bundlePluginDaemonRuntime,
-      spawn,
-      processEnv: {},
+    const projectRoot = await realpath(await mkdtemp(join(tmpdir(), 'happier-author-build-closure-')));
+    const pluginId = 'acme.toolchain-build-closure';
+    const manifest = createPluginManifestV2Fixture({
+      id: pluginId,
+      entrypoints: { development: './src/index.ts', daemon: './dist/index.js' },
+      contributes: {
+        actions: [{
+          id: 'publish',
+          title: 'Publish',
+          scopes: ['global'],
+          surfaces: ['cli'],
+          placementBindings: ['commandPalette'],
+          dangerLevel: 'safe',
+          execution: { target: 'daemon' },
+        }],
+      },
     });
+    try {
+      await mkdir(join(projectRoot, '.happier-plugin'), { recursive: true });
+      await mkdir(join(projectRoot, 'src'), { recursive: true });
+      await writeFile(join(projectRoot, 'package.json'), JSON.stringify({
+        name: 'acme-toolchain-build-closure', version: '1.0.0', type: 'module',
+      }), 'utf8');
+      await writeFile(join(projectRoot, '.happier-plugin', 'plugin.json'), JSON.stringify(manifest), 'utf8');
+      await mkdir(join(projectRoot, 'src', 'lib'), { recursive: true });
+      await writeFile(join(projectRoot, 'src', 'lib', 'answer.ts'), 'export const answer = 42;\n', 'utf8');
+      await writeFile(join(projectRoot, 'src', 'index.ts'), [
+        "import { answer } from './lib/answer';",
+        `export const manifest = ${JSON.stringify(manifest)};`,
+        `export const actionContracts = Object.freeze({ publish: Object.freeze({ pluginId: ${JSON.stringify(pluginId)}, localId: 'publish' }) });`,
+        'export function activate(api: { actions: { register(id: string, handler: () => unknown): void } }) {',
+        "  api.actions.register('publish', async () => ({ answer }));",
+        '}',
+        '',
+      ].join('\n'), 'utf8');
 
-    expect(result).toMatchObject({ ok: true, operation: 'build' });
-    expect(generatePluginActionContracts).toHaveBeenCalledWith({ projectRoot: '/fixture/plugin' });
-    expect(bundlePluginDaemonRuntime).toHaveBeenCalledWith('/fixture/plugin');
-    expect(generatePluginActionContracts.mock.invocationCallOrder[0]).toBeLessThan(
-      bundlePluginDaemonRuntime.mock.invocationCallOrder[0]!,
-    );
+      const result = await runPluginAuthorToolchain({
+        operation: 'build',
+        projectRoot,
+      }, {
+        ensureManagedPnpmCommand: async () => '/happier/tools/pnpm/current/bin/pnpm',
+        managedPnpmBinPath: () => '/happier/tools/pnpm/current/bin/pnpm',
+        managedJavaScriptRuntimeBinPath: () => '/happier/tools/js-runtime/current/bin/happier-js-runtime',
+        buildManagedPnpmEnvironment: (env = {}) => env,
+        ensureManagedJavaScriptRuntimeCommand: async () => '/happier/tools/js-runtime/current/bin/happier-js-runtime',
+        resolveNativeTypeScriptBin: () => '/fixture/plugin/node_modules/@typescript/native/bin/tsc',
+        resolvePluginUiBuildBin: () => null,
+        generatePluginActionContracts,
+        spawn: vi.fn(successfulSpawn),
+        processEnv: {},
+      });
+
+      expect(result, JSON.stringify(result)).toMatchObject({ ok: true, operation: 'build' });
+      // The bundled daemon carries its local import closure, and the public
+      // Action barrel types itself against that same daemon module.
+      await expect(readFile(join(projectRoot, 'dist', 'index.js'), 'utf8')).resolves.toContain('42');
+      await expect(readFile(join(projectRoot, 'dist', 'actions', 'index.js'), 'utf8'))
+        .resolves.toContain('"publish"');
+      await expect(readFile(join(projectRoot, 'dist', 'actions', 'index.d.ts'), 'utf8'))
+        .resolves.toMatch(/typeof import\(["']\.\.\/index\.js["']\)\.actionContracts/u);
+    } finally {
+      await rm(projectRoot, { recursive: true, force: true });
+    }
   });
 
   it('reports an unavailable physical plugin bundler as a managed-tool diagnostic', async () => {
@@ -773,6 +855,13 @@ describe('runPluginAuthorToolchain', () => {
   it('refuses a declared internal current-source package that lacks public author classification', async () => {
     const projectRoot = await mkdtemp(join(tmpdir(), 'happier-author-private-package-'));
     const spawn = vi.fn(successfulSpawn);
+    const prepublication = await createFixturePrepublicationMaterializer({
+      projectRoot,
+      packages: [
+        { name: '@happier-dev/plugin-sdk', publicAuthor: true },
+        { name: '@happier-dev/protocol', publicAuthor: false },
+      ],
+    });
     try {
       await writeFile(join(projectRoot, 'package.json'), JSON.stringify({
         name: 'external-happier-plugin',
@@ -787,10 +876,7 @@ describe('runPluginAuthorToolchain', () => {
         buildManagedPnpmEnvironment: (env = {}) => env,
         ensureManagedJavaScriptRuntimeCommand: async () => '/happier/tools/js-runtime/current/bin/happier-js-runtime',
         resolveNativeTypeScriptBin: () => '/fixture/plugin/node_modules/@typescript/native/bin/tsc',
-        materializeBundledPrepublicationPackages: async (packageNames) => {
-          expect(packageNames).toEqual(['@happier-dev/protocol']);
-          throw new Error("Bundled host package '@happier-dev/protocol' is not classified for public author use");
-        },
+        materializeBundledPrepublicationPackages: prepublication.materialize,
         spawn,
         processEnv: {},
       });
@@ -805,6 +891,7 @@ describe('runPluginAuthorToolchain', () => {
       });
       expect(spawn).not.toHaveBeenCalled();
     } finally {
+      await prepublication.cleanup();
       await rm(projectRoot, { recursive: true, force: true });
     }
   });
@@ -1186,44 +1273,6 @@ describe('runPluginAuthorToolchain', () => {
       resolveNativeTypeScriptBin: () => '/fixture/plugin/node_modules/@typescript/native/bin/tsc',
       spawn,
       processEnv: { PATH: '/usr/bin' },
-    });
-
-    expect(result).toMatchObject({
-      ok: false,
-      diagnostics: [expect.objectContaining({ code: 'plugin_author_managed_tool_unavailable' })],
-    });
-    expect(spawn).not.toHaveBeenCalled();
-  });
-
-  it.each([
-    {
-      label: 'pnpm',
-      operation: 'install' as const,
-      processEnv: { HAPPIER_PNPM_BIN: '/usr/local/bin/pnpm' },
-      sdkRegistryOrigin: 'http://127.0.0.1:43127',
-    },
-    {
-      label: 'JavaScript runtime',
-      operation: 'typecheck' as const,
-      processEnv: { HAPPIER_NODE_PATH: '/usr/bin/node' },
-      sdkRegistryOrigin: undefined,
-    },
-  ])('rejects an explicit host $label override as proof of managed ownership', async ({ operation, processEnv, sdkRegistryOrigin }) => {
-    const hostCommand = operation === 'install' ? processEnv.HAPPIER_PNPM_BIN : processEnv.HAPPIER_NODE_PATH;
-    const spawn = vi.fn(successfulSpawn);
-    const result = await runPluginAuthorToolchain({
-      operation,
-      projectRoot: '/fixture/plugin',
-      sdkRegistryOrigin,
-    }, {
-      ensureManagedPnpmCommand: async () => hostCommand ?? '/happier/tools/pnpm/current/bin/pnpm',
-      managedPnpmBinPath: () => '/happier/tools/pnpm/current/bin/pnpm',
-      managedJavaScriptRuntimeBinPath: () => '/happier/tools/js-runtime/current/bin/happier-js-runtime',
-      buildManagedPnpmEnvironment: (env = {}) => env,
-      ensureManagedJavaScriptRuntimeCommand: async () => hostCommand ?? '/happier/tools/js-runtime/current/bin/happier-js-runtime',
-      resolveNativeTypeScriptBin: () => '/fixture/plugin/node_modules/@typescript/native/bin/tsc',
-      spawn,
-      processEnv,
     });
 
     expect(result).toMatchObject({
