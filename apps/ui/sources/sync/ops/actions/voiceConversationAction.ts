@@ -213,7 +213,7 @@ export async function executeVoiceConversationAction(
                 if (!current.navigation) return unavailable('voice_conversation_navigation_unavailable');
                 await deps.navigate(current.navigation.href); break;
             case 'ui.voice_global.end':
-                if (!current.voice.canStop || !sessionId) return unavailable('voice_end_unavailable');
+                if ((!current.voice.canStop && !current.voice.canDismissFailedAttempt) || !sessionId) return unavailable('voice_end_unavailable');
                 await voiceSessionManager.stop(sessionId); break;
             case 'ui.voice_global.set_muted':
                 if (!current.voice.canMute || !sessionId || !('muted' in value) || typeof value.muted !== 'boolean') return unavailable('voice_mute_unavailable');

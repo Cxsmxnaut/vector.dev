@@ -1529,7 +1529,7 @@ export function createVoiceSessionLifecycleController(deps?: Readonly<{
             recoveryBinding = null;
             if (cancelPendingStart()) return;
             const cancelledSwitchStart = cancelPendingAdapterSwitch();
-            const owned = resolveOwnedAdapter();
+            let owned = resolveOwnedAdapter();
             if (!owned) {
                 if (cancelledSwitchStart) {
                     await stopAdapter(cancelledSwitchStart.adapter, cancelledSwitchStart.sessionId, true);
@@ -1538,8 +1538,18 @@ export function createVoiceSessionLifecycleController(deps?: Readonly<{
                 const startAttempt = startingAdapter;
                 if (startAttempt) {
                     await stopAdapter(startAttempt.adapter, startAttempt.sessionId, true);
+                    return;
                 }
-                return;
+                // A failed turn has already released capture and projects
+                // disconnected, but its adapter may still retain execution
+                // custody. Explicit End retires that same attempt so the next
+                // Start reaches initialization instead of its terminal handle.
+                const failed = publishedSnapshot;
+                const failedAdapter = canDismissVoiceSessionFailedAttempt(failed) && failed.adapterId
+                    ? resolveAttemptAdapter(failed.adapterId)
+                    : null;
+                if (!failedAdapter) return;
+                owned = { adapter: failedAdapter, snapshot: failed };
             }
             const ownedSessionId = owned.snapshot.sessionId ?? sessionId;
             recordVoiceSessionEndReason(owned.adapter.id, ownedSessionId, reason);

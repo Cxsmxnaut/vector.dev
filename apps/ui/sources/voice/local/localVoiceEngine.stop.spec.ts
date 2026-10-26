@@ -20,6 +20,7 @@ import {
   registerLocalVoiceEngineHarnessHooks,
   speechRecStart,
   speechRecStop,
+  setLocalVoiceHttpResponder,
   waitForLocalVoiceBoundaryEvent,
 } from './localVoiceEngine.testHarness';
 
@@ -28,6 +29,158 @@ afterAll(() => restoreHarnessModuleLoader());
 
 describe('local voice engine stop', () => {
   registerLocalVoiceEngineHarnessHooks();
+
+  it.each([
+    { prewarmOnConnect: true, freshStartup: 'ready', fixedGlobalAgent: false },
+    { prewarmOnConnect: false, freshStartup: 'ready', fixedGlobalAgent: false },
+    { prewarmOnConnect: false, freshStartup: 'failed', fixedGlobalAgent: false },
+    { prewarmOnConnect: false, freshStartup: 'ready', fixedGlobalAgent: true },
+  ] as const)('retires a terminal Run through public End and uses the actual fresh startup outcome (prewarm=$prewarmOnConnect, startup=$freshStartup, fixedGlobalAgent=$fixedGlobalAgent)', async ({ prewarmOnConnect, freshStartup, fixedGlobalAgent }) => {
+    const storage = await getStorage();
+    const local = readLocalConversationVoiceSettings(storage.getState().settings.voice);
+    storage.__setState({ settings: { ...storage.getState().settings, voice: {
+      ...storage.getState().settings.voice, providerId: 'local_conversation',
+      welcome: { ...storage.getState().settings.voice.welcome, enabled: false },
+      providers: { ...storage.getState().settings.voice.providers,
+        local_conversation: { schemaVersion: 1, config: { ...local, conversationMode: 'agent',
+          agent: { ...local.agent, prewarmOnConnect, ...(fixedGlobalAgent ? {
+            agentSource: 'agent', agentId: 'codex', agentTargetKey: 'agent:happier.agent.codex/codex', agentIdentity: null,
+          } : {}) },
+          tts: { ...local.tts, autoSpeakReplies: false },
+        } },
+      },
+    } } });
+    const { createLocalConversationVoiceAdapter } = await import('@/voice/adapters/localConversation/localConversationAdapter');
+    const { registerVoiceAdapters } = await import('@/voice/session/voiceAdapterRegistry');
+    const { createVoiceSessionLifecycleController } = await import('@/voice/session/voiceSessionLifecycleController');
+    const { voiceAgentSessions } = await import('@/voice/agent/voiceAgentSessions');
+    const { sessionRpcWithServerScope, localVoiceHomeId } = await import('./localVoiceEngine.testHarness');
+    registerVoiceAdapters([createLocalConversationVoiceAdapter()]);
+    const lifecycle = createVoiceSessionLifecycleController();
+    const { setVoiceSessionLifecycleController } = await import('@/voice/session/voiceSessionLifecycleControllerStore');
+    const { getVoiceSessionPresentedAttemptId, setVoiceSessionSnapshot } = await import('@/voice/session/voiceSessionStore');
+    const { executeVoiceConversationAction } = await import('@/sync/ops/actions/voiceConversationAction');
+    setVoiceSessionLifecycleController(lifecycle);
+    const unsubscribe = lifecycle.subscribe(() => setVoiceSessionSnapshot(lifecycle.getSnapshot()));
+    lifecycle.setConfiguredProviderId('local_conversation');
+    const target = fixedGlobalAgent ? null : { serverId: localVoiceHomeId, sessionId: 's1' };
+    const responder = sessionRpcWithServerScope.getMockImplementation()!;
+    const { createRetainedVoiceAgentRpcBoundary } = await import('@/dev/testkit/harness/voiceAgentRpcBoundary');
+    const freshDaemon = await createRetainedVoiceAgentRpcBoundary({ runId: 'fresh-recovered-run',
+      async handleOtherRpc(method, payload) {
+        if (method === SESSION_RPC_METHODS.EXECUTION_RUN_STREAM_START || method === SESSION_RPC_METHODS.EXECUTION_RUN_STREAM_START_V2) {
+          const { ExecutionRunTurnStreamStartRequestSchema, ExecutionRunTurnStreamStartV2RequestSchema } = await import('@happier-dev/protocol/execution/runs/streaming');
+          const input = (method === SESSION_RPC_METHODS.EXECUTION_RUN_STREAM_START_V2
+            ? ExecutionRunTurnStreamStartV2RequestSchema : ExecutionRunTurnStreamStartRequestSchema).parse(payload);
+          expect(input.runId).toBe('fresh-recovered-run');
+          if (freshDaemon.readRetainedRun()?.status !== 'running') {
+            return { ok: false, errorCode: 'execution_run_not_allowed', error: 'Not running' };
+          }
+        }
+        return responder({ sessionId: 's1', serverId: localVoiceHomeId, method, payload });
+      },
+    });
+    let recovered = false;
+    // The external daemon rejects input and Stop against its terminal Run.
+    sessionRpcWithServerScope.mockImplementation(async request => {
+      if (recovered) return freshDaemon.dispatch(request.method, request.payload);
+      if (localVoiceAgentRpc.readRetainedRun()?.status === 'cancelled'
+        && (request.method === SESSION_RPC_METHODS.EXECUTION_RUN_ENSURE_OR_START
+          || request.method === SESSION_RPC_METHODS.EXECUTION_RUN_ENSURE_OR_START_PROVIDER_SAFE_V1)) {
+        recovered = true;
+        const response = await freshDaemon.dispatch(request.method, request.payload);
+        if (freshStartup === 'failed') {
+          const run = freshDaemon.readRetainedRun();
+          if (!run) throw new Error('Expected acknowledged fresh Voice Run');
+          // Row7 retains this failed startup outcome but not its Get payload.
+          // Exercise the reachable case where initialization observes it.
+          run.status = 'failed';
+          run.error = { code: 'VOICE_AGENT_START_FAILED', message: 'preparation_pending: unavailable' };
+        }
+        return response;
+      }
+      if (localVoiceAgentRpc.readRetainedRun()?.status === 'cancelled'
+        && (request.method === SESSION_RPC_METHODS.EXECUTION_RUN_STOP
+          || request.method === SESSION_RPC_METHODS.EXECUTION_RUN_STREAM_START
+          || request.method === SESSION_RPC_METHODS.EXECUTION_RUN_STREAM_START_V2)) {
+        return { ok: false, errorCode: 'execution_run_not_allowed', error: 'Not running' };
+      }
+      return responder(request);
+    });
+    try {
+      await expect(lifecycle.toggle(target), 'initial Start with a ready catalog').resolves.toBeUndefined();
+      await voiceAgentSessions.ensureRunning(VOICE_AGENT_GLOBAL_SESSION_ID);
+      const stopped = localVoiceAgentRpc.readRetainedRun();
+      if (!stopped) throw new Error('Expected admitted Voice Run');
+      stopped.status = 'cancelled';
+      const admissions = localVoiceAgentRpc.requests.filter(request => request.method.includes('ensure')).length;
+      const { sendLocalVoiceAgentTextTurn } = await import('./localVoiceEngine');
+      const ordinary = { localId: 'ordinary-terminal-input', deliveryCommand: 'interrupt_and_send' as const };
+      await expect(sendLocalVoiceAgentTextTurn(VOICE_AGENT_GLOBAL_SESSION_ID, 'Ordinary input', ordinary))
+        .rejects.toMatchObject({ rpcErrorCode: 'execution_run_not_allowed' });
+      expect(localVoiceAgentRpc.requests.filter(request => request.method.includes('ensure'))).toHaveLength(admissions);
+      expect(stopped.status).toBe('cancelled');
+      expect(lifecycle.getSnapshot()).toMatchObject({ status: 'disconnected', errorMessage: 'execution_run_not_allowed' });
+      const expectedAttempt = getVoiceSessionPresentedAttemptId();
+      expect(expectedAttempt).toEqual(expect.any(String));
+      await expect(executeVoiceConversationAction('ui.voice_global.end', { expectedAttempt: 'stale-attempt' }, { navigate() {} }))
+        .resolves.toMatchObject({ status: 'unavailable', code: 'stale_voice_attempt' });
+      await expect(executeVoiceConversationAction('ui.voice_global.end', { expectedAttempt }, { navigate() {} }))
+        .resolves.toMatchObject({ status: 'completed' });
+      expect(lifecycle.getSnapshot()).toMatchObject({ status: 'disconnected', canStop: false });
+      expect(voiceAgentSessions.isActive(VOICE_AGENT_GLOBAL_SESSION_ID)).toBe(false);
+      let acpReads = 0;
+      if (fixedGlobalAgent) {
+        const { ACP_CATALOG_ROWS_ROUTE_V1 } = await import('@happier-dev/protocol/acp/catalog/catalogRowsV1');
+        const { refreshAcpCatalog } = await import('@/sync/engine/settings/acpCatalogEngine');
+        const { getAcpCatalogSnapshot } = await import('@/sync/store/settings/acpCatalogSnapshot');
+        setLocalVoiceHttpResponder(request => {
+          if (request.path !== ACP_CATALOG_ROWS_ROUTE_V1) return undefined;
+          acpReads += 1;
+          return new Response(null, { status: 503 });
+        });
+        const scope = storage.getState().settingsScope!;
+        await refreshAcpCatalog(scope);
+        expect(getAcpCatalogSnapshot(scope)?.catalog.status).toBe('unavailable');
+        acpReads = 0;
+      }
+      if (fixedGlobalAgent) {
+        await expect(executeVoiceConversationAction('ui.voice_global.start', {
+          target: { kind: 'global' }, expectedAttempt: null,
+        }, { navigate() {} }), 'public Global Start after public End').resolves.toMatchObject({ status: 'completed' });
+      } else {
+        await expect(lifecycle.toggle(target), 'restart after public End with the unchanged configured Agent').resolves.toBeUndefined();
+      }
+      expect(lifecycle.getSnapshot().status).toBe('connected');
+      const freshQuestion = voiceAgentSessions.sendTurn(VOICE_AGENT_GLOBAL_SESSION_ID, 'Fresh question', {
+        userTranscript: { mode: 'suppress' },
+      });
+      if (freshStartup === 'failed') {
+        await expect(freshQuestion).rejects.toMatchObject({ rpcErrorCode: 'VOICE_AGENT_START_FAILED',
+          message: 'preparation_pending: unavailable' });
+        expect(freshDaemon.requests.filter(request => request.method === SESSION_RPC_METHODS.EXECUTION_RUN_STREAM_START
+          || request.method === SESSION_RPC_METHODS.EXECUTION_RUN_STREAM_START_V2)).toHaveLength(0);
+      } else {
+        await expect(freshQuestion).resolves.toMatchObject({ assistantText: 'Daemon reply' });
+        expect(freshDaemon.requests.filter(request => request.method === SESSION_RPC_METHODS.EXECUTION_RUN_STREAM_START_V2))
+          .toHaveLength(1);
+      }
+      expect(stopped.status).toBe('cancelled');
+      expect(freshDaemon.readRetainedRun()).toMatchObject({ runId: 'fresh-recovered-run',
+        status: freshStartup === 'failed' ? 'failed' : 'running' });
+      if (fixedGlobalAgent) {
+        expect(acpReads).toBe(0);
+        expect(freshDaemon.readRetainedRun()?.backendTarget).toMatchObject({ kind: 'builtInAgent', agentId: 'codex' });
+        expect(readLocalConversationVoiceSettings(storage.getState().settings.voice).agent).toMatchObject({
+          agentSource: 'agent', agentId: 'codex', agentTargetKey: 'agent:happier.agent.codex/codex', agentIdentity: null,
+        });
+      }
+    } finally {
+      await lifecycle.dispose();
+      unsubscribe();
+      setVoiceSessionLifecycleController(null);
+    }
+  });
 
   it.each(['end', 'close', 'provider', 'remount', 'account', 'dismiss'] as const)('cancels a pending Start waiting for an unanswered Stop on %s, then retries cleanup before Start', async (cancel) => {
     const storage = await getStorage();
