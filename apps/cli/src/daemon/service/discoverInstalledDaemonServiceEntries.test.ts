@@ -790,7 +790,11 @@ describe('discoverInstalledDaemonServiceEntries', () => {
     });
   });
 
-  it('recognizes a validated versioned native launcher action as current', async () => {
+  it.each([
+    ['single native action', '', false],
+    ['additional executable action', '<Exec><Command>cmd.exe</Command><Arguments>/c exit 0</Arguments></Exec>', true],
+    ['additional COM action', '<ComHandler><ClassId>{00000000-0000-0000-0000-000000000000}</ClassId></ComHandler>', true],
+  ])('checks the complete registered action set for a %s', async (_case, additionalAction, upgradeNeeded) => {
     await withTempDir('happier-discover-native-launcher-', async (homeDir) => {
       const happierHomeDir = join(homeDir, '.happier');
       const wrapperPath = join(happierHomeDir, 'services', 'happier-daemon.default.ps1');
@@ -824,7 +828,7 @@ describe('discoverInstalledDaemonServiceEntries', () => {
         if (command === 'schtasks' && args?.includes('/XML')) {
           return {
             status: 0,
-            stdout: `<Task><Actions><Exec><Command>${launcher.launcherPath}</Command><Arguments>--wrapper &quot;${wrapperPath}&quot; --diagnostic-log &quot;${launcher.diagnosticLogPath}&quot;</Arguments></Exec></Actions></Task>`,
+            stdout: `<Task><Actions><Exec><Command>${launcher.launcherPath}</Command><Arguments>--wrapper &quot;${wrapperPath}&quot; --diagnostic-log &quot;${launcher.diagnosticLogPath}&quot;</Arguments></Exec>${additionalAction}</Actions></Task>`,
             stderr: '',
           } as never;
         }
@@ -840,7 +844,7 @@ describe('discoverInstalledDaemonServiceEntries', () => {
       });
       expect(entries).toEqual([expect.objectContaining({
         path: wrapperPath,
-        windowsLauncherUpgradeNeeded: false,
+        windowsLauncherUpgradeNeeded: upgradeNeeded,
       })]);
     });
   });

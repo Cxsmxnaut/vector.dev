@@ -225,6 +225,24 @@ describe('Windows scheduled task PowerShell status helper', () => {
 });
 
 describe('Windows scheduled task lifecycle PowerShell helpers', () => {
+  it.each([false, true])('refuses tasks with multiple actions before stopping any process (native launcher: %s)', (native) => {
+    const command = buildStopWindowsScheduledTaskIfRunningPowerShellCommand({
+      qualifiedTaskName: 'Happier\\happier-daemon.default',
+      definitionPath: 'C:\\Users\\test\\.happier\\services\\happier-daemon.default.ps1',
+      ...(native ? {
+        launcherPath: 'C:\\Users\\test\\.happier\\services\\happier-daemon.default\\launcher-1\\happier-service-launcher.exe',
+        diagnosticLogPath: 'C:\\Users\\test\\.happier\\services\\happier-daemon.default.launcher.log',
+      } : {}),
+    });
+
+    const actionCountGuard = command.indexOf('if ($registeredActions.Count -ne 1)');
+    expect(actionCountGuard).toBeGreaterThanOrEqual(0);
+    expect(command).toContain('$registeredActions = @($task.Actions)');
+    expect(actionCountGuard).toBeLessThan(command.indexOf('$registeredAction = $registeredActions[0]'));
+    expect(actionCountGuard).toBeLessThan(command.indexOf('Stop-ScheduledTask'));
+    expect(actionCountGuard).toBeLessThan(command.indexOf('Get-CimInstance Win32_Process'));
+  });
+
   it('stops only an existing running task through typed scheduler state', () => {
     const command = buildStopWindowsScheduledTaskIfRunningPowerShellCommand({
       qualifiedTaskName: 'Happier\\happier-daemon.default',

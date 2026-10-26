@@ -41,7 +41,7 @@ export type InstalledDaemonServiceEntry = Readonly<{
   targetMode: DaemonServiceTargetMode;
   /** `desktop` when the definition carries the desktop marker; `null` (user-owned) otherwise. */
   managedBy?: DaemonServiceManagedBy | null;
-  /** True when the registered task still invokes PowerShell instead of the native GUI launcher. */
+  /** True when the registered task does not have a validated current native launcher action. */
   windowsLauncherUpgradeNeeded?: boolean;
 }>;
 
@@ -212,6 +212,8 @@ type WindowsScheduledTaskDefinition = Readonly<{
   launcherPath?: string;
   /** Registered arguments of a native-launcher action, compared exactly against the expected action. */
   launcherArguments?: string;
+  /** XML proves the full action set; the localized LIST fallback does not expose its shape. */
+  hasSingleExecAction?: boolean;
 }>;
 
 function decodeWindowsTaskXmlText(value: string): string {
@@ -246,15 +248,19 @@ function parseWindowsScheduledTaskDefinitionFromAction(executable: string, argum
 }
 
 function parseWindowsScheduledTaskDefinitionFromXml(contents: string): WindowsScheduledTaskDefinition | null {
+  const actions = /<Actions\b[^>]*>([\s\S]*?)<\/Actions>/iu.exec(String(contents ?? ''))?.[1];
+  const execAction = /<Exec\b[^>]*>([\s\S]*?)<\/Exec>/iu.exec(actions ?? '');
+  if (!execAction) return null;
   const executable = decodeWindowsTaskXmlText(
-    /<Command>([\s\S]*?)<\/Command>/iu.exec(String(contents ?? ''))?.[1] ?? '',
+    /<Command>([\s\S]*?)<\/Command>/iu.exec(execAction[1] ?? '')?.[1] ?? '',
   );
-  const argumentsMatch = /<Arguments>([\s\S]*?)<\/Arguments>/iu.exec(String(contents ?? ''));
+  const argumentsMatch = /<Arguments>([\s\S]*?)<\/Arguments>/iu.exec(execAction[1] ?? '');
   if (!argumentsMatch) return null;
-  return parseWindowsScheduledTaskDefinitionFromAction(
+  const definition = parseWindowsScheduledTaskDefinitionFromAction(
     executable,
     decodeWindowsTaskXmlText(argumentsMatch[1] ?? ''),
   );
+  return definition ? { ...definition, hasSingleExecAction: actions?.trim() === execAction[0] } : null;
 }
 
 function parseWindowsScheduledTaskDefinitionFromTaskToRun(taskToRunText: string): WindowsScheduledTaskDefinition | null {
@@ -272,7 +278,7 @@ function parseWindowsScheduledTaskDefinitionFromTaskToRun(taskToRunText: string)
 }
 
 function isInstalledWindowsLauncherActionHealthy(definition: WindowsScheduledTaskDefinition): boolean {
-  if (definition.actionKind !== 'native-launcher' || !definition.launcherPath) return false;
+  if (definition.actionKind !== 'native-launcher' || !definition.launcherPath || definition.hasSingleExecAction === false) return false;
   const expected = resolveInstalledWindowsServiceLauncherPaths({
     definitionPath: definition.wrapperPath,
     label: win32Path.basename(definition.wrapperPath, '.ps1'),
