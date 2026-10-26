@@ -2731,6 +2731,15 @@ Agent-specific protocol leaves live in `packages/plugins/<agentId>/src/agent/**`
 
 ### Session Account-action authority (0.3 development)
 
+Experimental native Realtime Start is Session-owner-only in 0.3 development;
+it runs on that owner's Agent account. The canonical Protocol RPC classification
+requires `sessionOwner`, while shared editors retain ordinary input and question
+answers. The server issues `authority: 'sessionOwner'` in the closed,
+exact-Session `session.write` context only after verifying owner-classified Start.
+The host requires that literal proof plus `present_user` before native Start or
+input admission. Ordinary `session.write` and human authentication alone are not
+owner proof; older relays without the proof fail only native Start closed.
+
 The daemon's existing
 [`createDaemonSessionAccountActionExecutor`](../apps/cli/src/daemon/agentRuntime/createDaemonSessionAccountActionExecutor.ts)
 does not treat process/Session custody as permission to use its Account

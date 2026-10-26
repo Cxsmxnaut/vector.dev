@@ -416,6 +416,14 @@ export function registerAgentSessionRealtimeVoiceRpc(input: Readonly<{
         return unavailable('invalid_parameters', 'Invalid Agent realtime start request.');
       }
       const happierSessionId = input.getHappierSessionId();
+      if (context?.callerAuthority !== 'present_user'
+        || context.authorization?.kind !== 'session.write'
+        || context.authorization.sessionId !== happierSessionId
+        || context.authorization.authority !== 'sessionOwner'
+        || context.sessionActionOrigin) {
+        return unavailable('agent_realtime_owner_required', 'Authenticated Session owner input is required.',
+          'unavailable', 'authentication_required');
+      }
       retireStaleAttempts(happierSessionId);
       const resolved = resolveRuntime(parsed.data.provider);
       if (!resolved) {

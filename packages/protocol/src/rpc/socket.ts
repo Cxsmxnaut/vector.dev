@@ -293,6 +293,8 @@ export type SocketRpcAuthorizationContextKind =
 export type SocketRpcSessionWriteAuthorizationContext = Readonly<{
   kind: typeof SOCKET_RPC_AUTHORIZATION_CONTEXT_KINDS.SESSION_WRITE;
   sessionId: string;
+  /** Server-proven owner classification for an operation that requires this fact. Never caller-authored. */
+  authority?: 'sessionOwner';
 }>;
 
 /**
@@ -527,7 +529,7 @@ const SESSION_RPC_DECLARED_AUTHORITIES = Object.freeze({
   [SESSION_RPC_METHODS.SESSION_CHECKPOINT]: 'submitAgentInput',
   [SESSION_RPC_METHODS.SESSION_RESTORE]: 'submitAgentInput',
   [SESSION_RPC_METHODS.SESSION_AGENT_REALTIME_INSPECT]: 'readTranscript',
-  [SESSION_RPC_METHODS.SESSION_AGENT_REALTIME_START]: 'submitAgentInput',
+  [SESSION_RPC_METHODS.SESSION_AGENT_REALTIME_START]: 'sessionOwner',
   [SESSION_RPC_METHODS.SESSION_AGENT_REALTIME_STOP]: 'submitAgentInput',
   [SESSION_RPC_METHODS.SESSION_AGENT_REALTIME_WATCH]: 'readTranscript',
   [SESSION_RPC_METHODS.SESSION_MANAGED_SERVICE_ENDPOINT_READ_OPEN_V1]: 'readTranscript',
@@ -777,20 +779,22 @@ export function isSocketRpcCurrentSessionPresentationOriginAuthorizationContext(
 
 export function parseSocketRpcAuthorizationContext(value: unknown): SocketRpcSessionAuthorizationContext | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  const candidate = value as { kind?: unknown; sessionId?: unknown; actor?: unknown; authentication?: unknown };
+  const candidate = value as { kind?: unknown; sessionId?: unknown; actor?: unknown; authentication?: unknown; authority?: unknown };
   if (candidate.kind === SOCKET_RPC_AUTHORIZATION_CONTEXT_KINDS.SESSION_ACTION) {
     const parsed = SocketRpcSessionActionAuthorizationContextSchema.safeParse(value);
     return parsed.success ? parsed.data : null;
   }
   if (candidate.kind === SOCKET_RPC_AUTHORIZATION_CONTEXT_KINDS.SESSION_WRITE) {
     if (!Object.hasOwn(candidate, 'kind') || !Object.hasOwn(candidate, 'sessionId')
-      || Object.keys(candidate).some((key) => key !== 'kind' && key !== 'sessionId')) return null;
+      || Object.keys(candidate).some((key) => key !== 'kind' && key !== 'sessionId' && key !== 'authority')) return null;
+    if ('authority' in candidate && (!Object.hasOwn(candidate, 'authority') || candidate.authority !== 'sessionOwner')) return null;
     if (typeof candidate.sessionId !== 'string') return null;
     const sessionId = candidate.sessionId.trim();
     if (!sessionId || sessionId.length > SOCKET_RPC_AUTHORIZATION_SESSION_ID_MAX_LENGTH) return null;
     return {
       kind: SOCKET_RPC_AUTHORIZATION_CONTEXT_KINDS.SESSION_WRITE,
       sessionId,
+      ...(candidate.authority === 'sessionOwner' ? { authority: 'sessionOwner' as const } : {}),
     };
   }
   if (candidate.kind !== SOCKET_RPC_AUTHORIZATION_CONTEXT_KINDS.SESSION_PERMISSION_RESPOND) return null;
