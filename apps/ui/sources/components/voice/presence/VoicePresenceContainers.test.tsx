@@ -6,7 +6,7 @@ import { act } from 'react-test-renderer';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { renderScreen, type RenderScreenResult } from '@/dev/testkit';
-import { readHitArea, type HitArea } from '@/dev/testkit/harness/hitFrameReach';
+import { hitAreaOverlap, readHitArea, type HitArea } from '@/dev/testkit/harness/hitFrameReach';
 import { resolveVoiceAttemptControl } from '@/components/voice/attempt/resolveVoiceAttemptControl';
 import type { VoiceAttemptControlProjection } from '@/components/voice/attempt/useVoiceAttemptControl';
 import type { VoiceSurfaceState } from '@/components/voice/surface/resolveVoiceSurfaceState';
@@ -113,12 +113,31 @@ describe('physical Voice targets', () => {
 
     /** Measures the drawn control once, as the layout would, and returns the hit area it then has around it. */
     async function hitAreaOf(testID: string): Promise<HitArea> {
-        const drawn = frameOf(screen!, testID) as { width: number; height: number };
+        const frame = frameOf(screen!, testID);
+        const drawn = { width: Number(frame.width), height: Number(frame.height) };
         await act(async () => {
             screen!.findHostByTestId(testID)!.props.onLayout({ nativeEvent: { layout: { x: 0, y: 0, width: drawn.width, height: drawn.height } } });
         });
         return readHitArea(screen!.findHostByTestId(testID)!, drawn);
     }
+
+    it.each([['ios', 44], ['android', 48], ['web', 44]] as const)('keeps the external-plugin touch transport at its design size with a non-overlapping enlarged %s hit area', async (os, floor) => {
+        host.os = os;
+        const { HappierUiPlatformProvider } = await import('@happier-dev/plugin-ui/environment');
+        screen = await renderScreen(<HappierUiPlatformProvider platform={{ platform: os, colorScheme: 'light' }}>
+            <VoiceTransport voice={projection('listening')} size="touch" />
+        </HappierUiPlatformProvider>);
+        const mute = await hitAreaOf('voice-transport-mute');
+        const end = await hitAreaOf('voice-transport-end');
+        for (const area of [mute, end]) {
+            expect(area.drawn).toEqual({ width: 34, height: 34 });
+            expect(area.height).toBe(floor);
+            expect(area.width).toBeGreaterThan(area.drawn.width);
+        }
+        const gap = frameOf(screen, 'voice-transport').gap;
+        expect(gap).toBe(8);
+        expect(hitAreaOverlap(mute, end, { axis: 'horizontal', gap })).toBe(0);
+    });
 
     it.each([['ios', 44], ['android', 48]] as const)('draws the native %s tablet mark at the pill and reaches the physical touch floor by hit area', async (os, floor) => {
         host.os = os;
