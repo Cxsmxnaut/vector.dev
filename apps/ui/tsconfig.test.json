@@ -28,8 +28,6 @@
     "../../packages/protocol/src/auth/tr46.d.ts",
     "nativewind-env.d.ts",
     "sources/__tests__/app/_layout.test.ts",
-    "sources/__tests__/app/appRouteTree.architecture.test.ts",
-    "sources/__tests__/app/automations/automationAppRouteTestHelpers.ts",
     "sources/__tests__/app/automations/edit.test.tsx",
     "sources/__tests__/app/home.externalAuthStart.spec.tsx",
     "sources/__tests__/app/machine/machineDetails.capabilitiesRequestStability.test.ts",

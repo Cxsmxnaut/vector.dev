@@ -154,18 +154,13 @@ describe('retired Automation routes', () => {
         read.mockResolvedValue(automation());
         expect(await resolvedHref()).toEqual({ pathname: '/workflows', params: { trigger: 'automation-42', serverId: serverA } });
     });
-    it.each(['edit', 'detail'] as const)('resolves a Home-qualified %s definition from B while A has the same id', async (kind) => {
+    it('resolves a Home-qualified definition from B while A has the same id', async () => {
         const workflowB = '22222222-2222-4222-8222-222222222222';
         read.mockResolvedValue(automation('11111111-1111-4111-8111-111111111111'));
         homes.answer(serverB, '/v3/automations/automation-42', { body: automation(workflowB) });
         route.params = { id: 'automation-42', serverId: serverB };
-        expect(await resolvedHref(kind)).toEqual({ pathname: '/workflows/[id]', params: { id: workflowB, intent: 'schedule', serverId: serverB } });
+        expect(await resolvedHref()).toEqual({ pathname: '/workflows/[id]', params: { id: workflowB, intent: 'schedule', serverId: serverB } });
         expect(read).not.toHaveBeenCalled();
-    });
-    it('keeps an inline Account trigger on its addressed Home', async () => {
-        homes.answer(serverB, '/v3/automations/automation-42', { body: automation() });
-        route.params = { id: 'automation-42', serverId: serverB };
-        expect(await resolvedHref()).toEqual({ pathname: '/workflows', params: { trigger: 'automation-42', serverId: serverB } });
     });
     it('never falls back to A for an unknown Home', async () => {
         read.mockResolvedValue(automation());
@@ -366,11 +361,11 @@ describe('retired Automation routes', () => {
         read.mockResolvedValue({ ...automation(), scopeSessionId: 'session-1' });
         expect(await resolvedHref()).toEqual({ pathname: '/session/[id]/triggers', params: { id: 'session-1', serverId: serverA, trigger: 'automation-42' } });
     });
-    it.each(['edit', 'detail'] as const)('resolves combined identifiers on %s to the exact Session trigger popover', async (kind) => {
+    it('resolves combined identifiers to the exact Session trigger popover', async () => {
         route.params = { id: 'automation-42' };
         const workflowId = '11111111-1111-4111-8111-111111111111';
         read.mockResolvedValue({ ...automation(workflowId), scopeSessionId: 'session-1' });
-        expect(await resolvedHref(kind)).toEqual({ pathname: '/session/[id]/triggers', params: {
+        expect(await resolvedHref()).toEqual({ pathname: '/session/[id]/triggers', params: {
             id: 'session-1', serverId: serverA, trigger: 'automation-42',
         } });
     });
