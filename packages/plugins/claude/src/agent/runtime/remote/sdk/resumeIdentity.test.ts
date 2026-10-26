@@ -9,8 +9,49 @@ import {
     createTerminalHostFixture,
 } from '../../engine.testkit.js';
 import { createClaudeAgentSdkResumeIdentityOwner } from './resumeIdentity.js';
+import { createDeferred } from '../../../../../../../../apps/cli/src/testkit/async/deferred.js';
 
 describe('createClaudeAgentSdkResumeIdentityOwner', () => {
+    it.each(['acquire', 'onError', 'drain', 'healthy'] as const)('settles the replacement candidate after a retired drain completes (%s)', async phase => {
+        const follows: TranscriptFileFollowInputV1[] = [];
+        const drains: string[] = [];
+        const denied = Object.assign(new Error('Current candidate access denied'), { code: 'EACCES' });
+        const stale = Object.assign(new Error('Retired candidate access denied'), { code: 'EACCES' });
+        const pendingDrain = createDeferred();
+        const drainEntered = createDeferred();
+        const ctx = createPluginContextFixture(createTerminalHostFixture().service, createEventsFixture().service, {
+            transcripts: {
+                append: vi.fn(async () => undefined),
+                defineSource: vi.fn(async () => ({ id: 'unused', dispose: vi.fn(async () => undefined) })),
+                fileFollow: { follow: vi.fn(async (input: TranscriptFileFollowInputV1) => {
+                    follows.push(input);
+                    const previous = input.path.endsWith('/previous.jsonl');
+                    if (!previous && phase === 'acquire') throw denied;
+                    return { id: input.path, close: async () => {}, drainNow: async () => {
+                        drains.push(input.path);
+                        if (previous) { drainEntered.resolve(); await pendingDrain.promise; throw stale; }
+                        if (phase === 'drain') throw denied;
+                    } };
+                }) },
+            },
+        });
+        const owner = createClaudeAgentSdkResumeIdentityOwner({ ctx, onProviderSessionId: () => {}, onTranscriptPromoted: async () => {} });
+        const start = (id: string) => owner.observeSessionHook(id, { hook_event_name: 'SessionStart', session_id: id,
+            transcript_path: `/tmp/${id}.jsonl` }, 'local_terminal');
+        try {
+            await start('previous');
+            const settlement = owner.settleCurrentCandidate();
+            const result = phase === 'healthy' ? expect(settlement).resolves.toBeUndefined() : expect(settlement).rejects.toBe(denied);
+            await drainEntered.promise;
+            await start('current');
+            await owner.observeSessionHook('current', { hook_event_name: 'UserPromptSubmit', session_id: 'current', prompt: 'Local context' }, 'local_terminal');
+            if (phase === 'onError') await follows[1]?.onError?.(denied);
+            pendingDrain.resolve();
+            await result;
+            expect(drains).toEqual(phase === 'acquire' ? ['/tmp/previous.jsonl'] : ['/tmp/previous.jsonl', '/tmp/current.jsonl']);
+        } finally { pendingDrain.resolve(); await owner.dispose(); }
+    });
+
     it('retains unexpected proof read failures until matched proof or candidate retirement', async () => {
         const follows: TranscriptFileFollowInputV1[] = [];
         const promotions: string[] = [];

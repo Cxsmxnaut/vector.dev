@@ -429,19 +429,22 @@ export function createClaudeAgentSdkResumeIdentityOwner(params: Readonly<{
             promptIntents.push({ text: prompt, submittedAtMs, acceptedAtMs: null, acceptedCandidate: null });
         },
         async settleCurrentCandidate() {
-            if (disposed) return;
-            await Promise.allSettled(Array.from(inFlightHookOperations));
-            const candidate = activeCandidate;
-            if (!candidate || candidate.invalidated || candidate.promoted) return;
-            await candidate.followHandle?.drainNow().catch((error) => {
-                recordProofReadFailure(candidate, error);
-            });
-            await candidate.promotionInFlight?.catch((error) => {
-                params.ctx.logger.debug('[ClaudeAgentSdk] transcript identity promotion failed', { error });
-            });
-            // Host drains can resolve after reporting onError; only matched proof retires that failure.
-            if (activeCandidate === candidate && !candidate.invalidated && !candidate.promoted && candidate.proofReadFailure !== null) {
-                throw candidate.proofReadFailure;
+            while (!disposed) {
+                await Promise.allSettled(Array.from(inFlightHookOperations));
+                const candidate = activeCandidate;
+                if (!candidate || candidate.invalidated || candidate.promoted) return;
+                await candidate.followHandle?.drainNow().catch((error) => {
+                    recordProofReadFailure(candidate, error);
+                });
+                await candidate.promotionInFlight?.catch((error) => {
+                    params.ctx.logger.debug('[ClaudeAgentSdk] transcript identity promotion failed', { error });
+                });
+                // A hook may replace the identity during either await. Settle its candidate before takeover.
+                if (activeCandidate !== candidate) continue;
+                if (disposed || candidate.invalidated || candidate.promoted) return;
+                // Host drains can resolve after reporting onError; only matched proof retires that failure.
+                if (candidate.proofReadFailure !== null) throw candidate.proofReadFailure;
+                return;
             }
         },
         async observeSessionHook(providerSessionId, payload, origin = 'sdk') {

@@ -36,6 +36,7 @@ import {
   computeClaudeSubscriptionAccessTokenFingerprint,
 } from '../../../auth/services/cloud/refreshBridge.js';
 import { createSessionProviderInputOutcomeNormalizer } from '../../../../../../../../apps/cli/src/agent/runtime/session/input/providerInputOutcome.js';
+import { createDeferred } from '../../../../../../../../apps/cli/src/testkit/async/deferred.js';
 import { projectClaudeJsonlLineToDirectMessages } from '../../../transcripts/projection.js';
 import { mergeProviderCatalogV1 } from '@happier-dev/protocol/providers/catalog/merge';
 import { resolveClaudeEffortForModel, resolveClaudeEffortLevelsForProviderModel } from '../../reasoningEffort.js';
@@ -380,6 +381,52 @@ describe('bindClaudeAgentSdkFallbackSession', () => {
         expect(args?.[args.indexOf('--resume') + 1]).toBe('local-proof-denied-native');
       }
     } finally { await operations.resetOrDisposeRuntime(); }
+  });
+
+  it.each(['sdk', 'terminal'] as const)('checks the current transcript candidate before %s takeover when identity changes during settlement', async target => {
+    const exec = createSdkExecFixture();
+    const sessionHooks = createSessionHooksFixture();
+    const denied = Object.assign(new Error('Current transcript proof access denied'), { code: 'EACCES' });
+    const pendingDrain = createDeferred();
+    const drainEntered = createDeferred();
+    const ctx = createPluginContextFixture(createTerminalHostFixture().service, createEventsFixture().service, {
+      exec: exec.service, sessionHooks: sessionHooks.service,
+      transcripts: {
+        append: vi.fn(async () => undefined),
+        defineSource: vi.fn(async () => ({ id: 'candidate-change-proof', dispose: vi.fn(async () => undefined) })),
+        fileFollow: { follow: vi.fn(async (input: TranscriptFileFollowInputV1) => {
+          if (input.path.endsWith('/current.jsonl')) throw denied;
+          return { id: 'previous-proof-follow', close: async () => {}, drainNow: async () => {
+            drainEntered.resolve();
+            await pendingDrain.promise;
+          } };
+        }) },
+      },
+    });
+    const operations = createClaudeAgentSdkTurnOperations({
+      nativeOperationsOnly: true, ctx, directory: '/tmp/claude-project', launchEnv: {},
+      permissionMode: 'default', happierSessionId: 'candidate-change-session', enableSessionResumability: true,
+    });
+    try {
+      const presentation = await operations.prepareTerminalPresentation();
+      await operations.observeTerminalExecution({ kind: 'started', plan: presentation.plan });
+      const hook = sessionHooks.service.startServer.mock.calls[0]?.[0].onSessionHook;
+      if (!hook) throw new Error('native session hook server did not start');
+      await hook('previous', { hook_event_name: 'SessionStart', session_id: 'previous',
+        source: 'startup', transcript_path: '/tmp/previous.jsonl' });
+      const takeover = target === 'sdk' ? operations.sendTurnPrompt('Continue from the app') : operations.prepareTerminalPresentation();
+      const result = target === 'sdk'
+        ? expect(takeover).resolves.toMatchObject({ kind: 'rejected_before_effect', reason: expect.stringContaining('Current transcript proof access denied') })
+        : expect(takeover).rejects.toMatchObject({ code: 'EACCES' });
+      await drainEntered.promise;
+      await hook('current', { hook_event_name: 'SessionStart', session_id: 'current',
+        source: 'startup', transcript_path: '/tmp/current.jsonl' });
+      await hook('current', { hook_event_name: 'UserPromptSubmit', session_id: 'current', prompt: 'Preserve this conversation' });
+      pendingDrain.resolve();
+      await result;
+      expect(exec.spawnClient).not.toHaveBeenCalled();
+      expect(operations.readSessionIdentity()).toEqual({ sessionId: 'current' });
+    } finally { pendingDrain.resolve(); await operations.resetOrDisposeRuntime(); }
   });
 
   it.each([undefined, 0])('witnesses native MCP inventory and deduplicated calls through successful SDK completion (queued count %s)', async queuedTurnCount => {
