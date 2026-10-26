@@ -668,25 +668,6 @@ function normalizeRawMessageFromRaw(
                   const sidechainId = metaSidechainId ?? getOutputSidechainId(raw.content.data) ?? claudeParentToolUseId;
                 const isSidechain = Boolean(sidechainId) || getOutputIsSidechain(raw.content.data) || metaIsSidechain;
 
-	                // Handle sidechain user messages
-	                if (isSidechain && raw.content.data.message && typeof raw.content.data.message.content === 'string') {
-	                    // Return as a special agent message with sidechain content
-	                      return filterNormalizedEventRoleOutput({
-	                          id,
-	                          ...(seq !== undefined ? { seq } : {}),
-	                          localId,
-	                          createdAt,
-	                          role: 'agent',
-	                          isSidechain: true,
-	                          sidechainId,
-	                        content: [{
-	                            type: 'sidechain',
-	                            uuid: outputUuid,
-	                            prompt: raw.content.data.message.content
-	                        }]
-	                    }, opts?.messageRole);
-	                }
-
                 // Another agent's delivery belongs to the Agent's conversation, not the user's.
                 const legacyPeer = readLegacyClaudePeerOutput(raw.content.data);
                 if (legacyPeer) {
@@ -707,6 +688,25 @@ function normalizeRawMessageFromRaw(
                         }],
                     }, opts?.messageRole);
                 }
+
+	                // Handle sidechain user messages
+	                if (isSidechain && raw.content.data.message && typeof raw.content.data.message.content === 'string') {
+	                    // Return as a special agent message with sidechain content
+	                      return filterNormalizedEventRoleOutput({
+	                          id,
+	                          ...(seq !== undefined ? { seq } : {}),
+	                          localId,
+	                          createdAt,
+	                          role: 'agent',
+	                          isSidechain: true,
+	                          sidechainId,
+	                        content: [{
+	                            type: 'sidechain',
+	                            uuid: outputUuid,
+	                            prompt: raw.content.data.message.content
+	                        }]
+	                    }, opts?.messageRole);
+	                }
 
                 // Handle regular user messages
                 if (raw.content.data.message && typeof raw.content.data.message.content === 'string') {

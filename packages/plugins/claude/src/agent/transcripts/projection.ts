@@ -1,4 +1,4 @@
-import { projectClaudeTaskNotificationToolResult } from './taskNotification.js';
+import { projectClaudeTaskLifecycleToolResult } from './taskNotification.js';
 
 import {
     AgentExternalSessionTranscriptRawRecordSchema,
@@ -273,7 +273,7 @@ function projectClaudeJsonlLine(params: Readonly<{
     // File paths stay private paging state; transcript item ids are source-local and recipient-safe.
     const { id: stableId, createdAtMs } = readClaudeJsonlLineIdentity(params);
 
-    const classification = classifyClaudeNativeTranscriptRow(projectClaudeTaskNotificationToolResult(params.lineValue) ?? params.lineValue);
+    const classification = classifyClaudeNativeTranscriptRow(projectClaudeTaskLifecycleToolResult(params.lineValue) ?? params.lineValue);
     const localId = classification.row
         ? buildClaudeJsonlProviderFactLocalId(classification.row, {
             fileRelPath: params.fileRelPath,

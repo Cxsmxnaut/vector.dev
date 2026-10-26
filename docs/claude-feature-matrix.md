@@ -42,10 +42,12 @@ copied human wrappers remain internal or human input. Native peer input cannot
 accept a queued human prompt or start a human turn.
 
 A hand-back from an async Agent launch the task projector has already correlated
-becomes that tool call's result, so the report appears on the Agent card, and
-Claude's following `completed` task notification, which only points back at the
-hand-back, is not projected again. Hand-backs without a known launch (after a
-resume, a CLI restart, or in stateless history paging) stay standalone peer cards.
+waits for Claude's terminal task notification or task-status evidence. That outcome
+puts the report on the Agent card while preserving success, failure or cancellation;
+the report alone does not settle the task. A stopped `SendMessage` response keeps
+its own tool result alongside the child's outcome. Hand-backs without a known launch
+(after a resume, a CLI restart, terminal settlement or in stateless history paging)
+stay standalone peer cards.
 
 The remote SDK runtime applies permission configuration changes to its live
 queries through the existing native control transport. Normal sessions permit

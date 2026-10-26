@@ -23,7 +23,7 @@ import {
     prefilterExternalSessionContentPaths,
 } from '@happier-dev/plugin-sdk/sessions/file-stores';
 
-import { readClaudeTaskLifecycleEnvelope } from '../../../transcripts/taskNotification.js';
+import { isClaudeTaskLifecycleResultEnvelope, readClaudeTaskLifecycleEnvelope } from '../../../transcripts/taskNotification.js';
 import { parseClaudeWorkflowFacts } from '../../../workflowRecords/correlation.js';
 import { classifyClaudeNativeTranscriptRow, projectClaudeNativeTranscriptObservation } from '../../../transcripts/nativeSemanticProjection.js';
 import {
@@ -108,7 +108,7 @@ function projectForwardLine(params: Parameters<typeof projectClaudeJsonlLineReco
             && !classification.semanticParts.some((part) => part.kind === 'tool_result' || part.kind === 'tool_use');
         const workflowEvidence = parseClaudeWorkflowFacts(params.lineValue).length > 0;
         // Replay and live alike: the runtime's ordered task projector owns task results and hand-backs.
-        const runtimeDecidesTask = runtimeDecidesPeer || readClaudeTaskLifecycleEnvelope(params.lineValue)?.subtype === 'task_notification';
+        const runtimeDecidesTask = runtimeDecidesPeer || isClaudeTaskLifecycleResultEnvelope(readClaudeTaskLifecycleEnvelope(params.lineValue));
         if (runtimeDecidesTask || userPrompt || classification.rawType === 'queue-operation' || (classification.rawType === 'attachment' && queuedCommand)) {
             const parsed = nativeObservationContent.safeParse(projectClaudeNativeTranscriptObservation(params.lineValue));
             if (!parsed.success) return { disposition: 'unsupported', items: [] };

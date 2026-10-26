@@ -3,7 +3,7 @@ import { isGenericSubagentToolName } from '@happier-dev/plugin-sdk/sessions/suba
 
 import { isClaudeAsyncAgentLaunchToolResult, normalizeClaudeActivityStatusSignal, type ClaudeActivityStatusSignal } from '../activityStatus.js';
 import { readClaudeProviderIdentityValue } from '../../protocol/providerIdentity.js';
-import { readClaudeNativePeerMessage } from './nativeSemanticProjection.js';
+import { readClaudeNativePeerMessage, withClaudeNativeToolResultMetadata } from './nativeSemanticProjection.js';
 
 export type ClaudeTaskNotification = Readonly<{
   taskId: string | null;
@@ -199,17 +199,36 @@ export function readClaudeTaskLifecycleEnvelope(value: unknown): ClaudeTaskLifec
   };
 }
 
-/** Project an authenticated settled notification onto its original conversation tool call. */
-export function projectClaudeTaskNotificationToolResult(value: unknown, correlatedToolUseId?: string | null,
-  observedSidechain?: Readonly<{ sidechainId: string }>): RawJSONLines | null {
+/** Native notifications and task-status responses share the same conversation outcome owner. */
+export function isClaudeTaskLifecycleResultEnvelope(envelope: ClaudeTaskLifecycleEnvelope | null): envelope is ClaudeTaskLifecycleEnvelope {
+  return envelope?.subtype === 'task_notification' || envelope?.subtype === 'task_status';
+}
+
+/** Project an authenticated settled lifecycle fact onto its original conversation tool call. */
+export function projectClaudeTaskLifecycleToolResult(value: unknown, correlatedToolUseId?: string | null,
+  observedSidechain?: Readonly<{ sidechainId: string }>, report?: string): RawJSONLines | null {
   const row = readRecord(value);
   const notification = readClaudeTaskLifecycleEnvelope(value);
-  if (!row || (row.isSidechain === true && !observedSidechain) || notification?.subtype !== 'task_notification'
+  if (!row || (row.isSidechain === true && !observedSidechain) || !isClaudeTaskLifecycleResultEnvelope(notification)
     || !['complete', 'failed', 'cancelled'].includes(notification.status)) return null;
   if (observedSidechain && readString(row.sidechainId) && readString(row.sidechainId) !== observedSidechain.sidechainId) return null;
   const toolUseId = notification.toolUseId ?? correlatedToolUseId;
   if (!toolUseId || !readString(row.uuid)) return null;
-  const result = notification.result ?? notification.summary ?? notification.status;
+  const result = report ?? notification.result ?? notification.summary ?? notification.status;
+  const content = readRecord(row.message)?.content;
+  const existingResult = Array.isArray(content) ? content.map(readRecord).find(block =>
+    block?.type === 'tool_result' && readString(block.tool_use_id) === toolUseId) : null;
+  // A stopped SendMessage response also proves its child's outcome. Retain its
+  // original result and native metadata on that block, not on the child's report.
+  const ownContent = Array.isArray(content) ? content.filter(block => {
+    const result = readRecord(block);
+    return result?.type !== 'tool_result' || readString(result.tool_use_id) !== toolUseId;
+  }).map(block => {
+    const result = readRecord(block);
+    return result?.type === 'tool_result'
+      ? { ...result, content: withClaudeNativeToolResultMetadata(result.content, row) } : block;
+  }) : [];
+  const hasOwnContent = ownContent.length > 0;
   const nativeOrigin = readRecord(row.origin) ?? readRecord(readRecord(row.attachment)?.origin);
   const { attachment: _attachment, rendered: _rendered, isMeta: _isMeta,
     toolUseResult: _toolUseResult, tool_use_result: _toolUseResultSnake, ...base } = row;
@@ -218,35 +237,21 @@ export function projectClaudeTaskNotificationToolResult(value: unknown, correlat
     ...(observedSidechain ? { isSidechain: true, sidechainId: observedSidechain.sidechainId } : {}),
     origin: { ...nativeOrigin, kind: 'task-notification', taskId: notification.taskId,
       toolUseId, status: notification.status === 'complete' ? 'completed' : notification.status === 'cancelled' ? 'stopped' : 'failed', result },
-    ...(notification.status === 'complete' ? {} : { toolUseResult: { status: notification.status, result } }),
-    message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: toolUseId,
-      content: [{ type: 'text', text: result }], is_error: notification.status !== 'complete' }] },
-  });
-  return projected.success ? projected.data : null;
-}
-
-/** A delivered hand-back report is its launching tool's result; the peer origin keeps its lifecycle fact. */
-function projectClaudeHandbackToolResult(row: Record<string, unknown>, toolUseId: string, report: string,
-  observedSidechain?: Readonly<{ sidechainId: string }>): RawJSONLines | null {
-  const nativeOrigin = readRecord(row.origin) ?? readRecord(readRecord(row.attachment)?.origin);
-  const { body: _body, handbackReportText: _reportText, ...origin } = nativeOrigin ?? {};
-  const { attachment: _attachment, rendered: _rendered, isMeta: _isMeta,
-    toolUseResult: _toolUseResult, tool_use_result: _toolUseResultSnake, ...base } = row;
-  const projected = RawJSONLinesSchema.safeParse({
-    ...base, type: 'user', origin,
-    ...(observedSidechain ? { isSidechain: true, sidechainId: observedSidechain.sidechainId } : {}),
-    message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: toolUseId,
-      content: [{ type: 'text', text: report }], is_error: false }] },
+    ...(notification.status === 'complete' || hasOwnContent ? {} : { toolUseResult: { status: notification.status, result } }),
+    message: { role: 'user', content: [...ownContent, { type: 'tool_result', tool_use_id: toolUseId,
+      content: hasOwnContent ? { status: notification.status, result }
+        : report ? [{ type: 'text', text: report }] : existingResult?.content ?? [{ type: 'text', text: result }],
+      is_error: notification.status !== 'complete' }] },
   });
   return projected.success ? projected.data : null;
 }
 
 /** Conversation correlation only; activity admission remains with the native lifecycle owner. */
 export function createClaudeTaskNotificationToolResultProjector() {
-  const tasks = new Map<string, { toolUseId?: string; sidechainId?: string; unroutedNotification?: unknown; reportDelivered?: true }>();
+  const tasks = new Map<string, { toolUseId?: string; sidechainId?: string; unroutedNotification?: unknown; report?: string }>();
   return {
     clear: () => tasks.clear(),
-    project(value: unknown, observedSidechain?: Readonly<{ sidechainId: string }>): RawJSONLines | null {
+    project(value: unknown, observedSidechain?: Readonly<{ sidechainId: string }>): Readonly<{ message: RawJSONLines | null }> | null {
       const row = readRecord(value);
       const fact = readClaudeTaskLifecycleEnvelope(value);
       if (!row || (row.isSidechain === true && !observedSidechain) || !fact) return null;
@@ -254,7 +259,7 @@ export function createClaudeTaskNotificationToolResultProjector() {
       const task = fact.taskId ? tasks.get(fact.taskId) ?? {} : null;
       if (fact.subtype === 'agent-resume' && task) {
         delete task.unroutedNotification;
-        delete task.reportDelivered;
+        delete task.report;
         delete task.toolUseId;
         delete task.sidechainId;
         return null;
@@ -265,29 +270,32 @@ export function createClaudeTaskNotificationToolResultProjector() {
         tasks.set(fact.taskId, task);
         const pending = task.unroutedNotification;
         delete task.unroutedNotification;
-        return pending ? projectClaudeTaskNotificationToolResult(pending, fact.toolUseId, observedSidechain) : null;
+        if (!pending) return null;
+        const message = projectClaudeTaskLifecycleToolResult(pending, fact.toolUseId, observedSidechain, task.report);
+        if (message) tasks.delete(fact.taskId);
+        return { message };
       }
       if (fact.subtype === 'handback') {
-        // Only a hand-back from a launch this projector correlated settles a tool; others stay peer messages.
         const report = task?.toolUseId ? readClaudeNativePeerMessage(row)?.text : null;
-        if (!task?.toolUseId || !report) return null;
-        const projected = projectClaudeHandbackToolResult(row, task.toolUseId,
-          report, observedSidechain ?? (task.sidechainId ? { sidechainId: task.sidechainId } : undefined));
-        if (projected) task.reportDelivered = true;
-        return projected;
+        if (!task?.toolUseId || !report || (fact.toolUseId && fact.toolUseId !== task.toolUseId)) return null;
+        // A report is not terminal evidence. The existing correlation retains it
+        // until Claude supplies the actual success, failure or cancellation.
+        task.report = report;
+        return { message: null };
       }
-      if (fact.subtype !== 'task_notification') return null;
-      // Claude's settled notification after a hand-back only points back at the delivered report.
-      if (task?.reportDelivered && fact.status === 'complete') return null;
+      if (!isClaudeTaskLifecycleResultEnvelope(fact)) return null;
+      const correlatedTask = task && (!fact.toolUseId || fact.toolUseId === task.toolUseId) ? task : null;
       const scope = observedSidechain ?? (task?.sidechainId
         && (!fact.toolUseId || fact.toolUseId === task.toolUseId) ? { sidechainId: task.sidechainId } : undefined);
-      const projected = projectClaudeTaskNotificationToolResult(value, task?.toolUseId, scope);
+      const projected = projectClaudeTaskLifecycleToolResult(value, correlatedTask?.toolUseId, scope, correlatedTask?.report);
       if (!projected && fact.taskId && !fact.toolUseId && task && readString(row.uuid)
         && ['complete', 'failed', 'cancelled'].includes(fact.status)) {
         task.unroutedNotification = value;
         tasks.set(fact.taskId, task);
       }
-      return projected;
+      if (projected && fact.taskId && correlatedTask) tasks.delete(fact.taskId);
+      // A SendMessage response remains visible when its child's launch is not known.
+      return projected || row.type !== 'user' || fact.subtype === 'task_notification' ? { message: projected } : null;
     },
   };
 }

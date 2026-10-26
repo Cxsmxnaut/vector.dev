@@ -67,7 +67,7 @@ export type ClaudeUnifiedProviderTranscriptPublisherParams = Readonly<{
       historicalReplay: boolean;
       phase?: 'initial_replay';
       orderedSource?: true;
-      projectedTaskResult?: RawJSONLines;
+      projectedTaskResult?: RawJSONLines | null;
     }>,
   ) => void | Promise<void>;
 }>;
@@ -543,7 +543,7 @@ export function createClaudeUnifiedProviderTranscriptPublisher(
         await params.onObserveRow?.(row, {
           providerSessionId: activeBinding.providerSessionId, transcriptPath: activeBinding.transcriptPath,
           historicalReplay: true, phase: 'initial_replay',
-          ...(projectedTaskResult ? { projectedTaskResult } : {}),
+          ...(projectedTaskResult ? { projectedTaskResult: projectedTaskResult.message } : {}),
         });
       }
       activeBinding.observedSourceIds.add(input.sourceId);
@@ -570,7 +570,7 @@ export function createClaudeUnifiedProviderTranscriptPublisher(
       providerSessionId: activeBinding.providerSessionId, transcriptPath: activeBinding.transcriptPath,
       historicalReplay: false,
       orderedSource: true,
-      ...(projectedTaskResult ? { projectedTaskResult } : {}),
+      ...(projectedTaskResult ? { projectedTaskResult: projectedTaskResult.message } : {}),
     });
     if (fact) {
       // The row observer publishes an unlinked hand-back as peer text; it is never a prompt or lifecycle row.

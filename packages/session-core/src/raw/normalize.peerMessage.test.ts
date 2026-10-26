@@ -11,6 +11,15 @@ function fold(raw: unknown, messageRole?: 'agent' | 'user') {
 }
 
 describe('typesRaw.normalizeRawMessage (peer deliveries)', () => {
+    it('keeps a nested legacy peer delivery as sender-labelled text instead of a sidechain prompt', () => {
+        const normalized = normalizeRawMessage('nested-peer', null, 1, { role: 'agent', content: { type: 'output', data: {
+            type: 'user', uuid: 'nested-peer', isSidechain: true, sidechainId: 'parent-tool',
+            origin: { kind: 'peer', name: 'general-purpose', handback: true },
+            message: { role: 'user', content: 'From general-purpose:\n\nDelivered report' },
+        } } } as never, { messageRole: 'agent' });
+        expect(normalized).toMatchObject({ role: 'agent', sidechainId: 'parent-tool', isSidechain: true,
+            content: [{ type: 'text', text: 'Delivered report', peer }] });
+    });
     it('shows committed peer-delivered agent text with its sender', () => {
         const messages = fold({ role: 'agent', content: { type: 'acp', agentId: 'claude',
             data: { type: 'message', message: '**Verdict:** fixed.', peer } }, meta: { source: 'cli' } }, 'agent');
