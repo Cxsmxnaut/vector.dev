@@ -2721,7 +2721,6 @@
     "src/plugins/authoring/actionContracts.test.ts",
     "src/plugins/authoring/automationEventDiscordSource.fixture.test.ts",
     "src/plugins/authoring/automationEventExternalSource.fixture.test.ts",
-    "src/plugins/authoring/automationEventObserver.fixture.test.ts",
     "src/plugins/authoring/automationEventTelegramChatSource.test.ts",
     "src/plugins/authoring/bundleDaemonRuntime.integration.test.ts",
     "src/plugins/authoring/bundleDaemonRuntime.test.ts",

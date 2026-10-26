@@ -522,6 +522,20 @@ describe('External plugin as a first-class Automation Event source', () => {
       machineId: 'machine-1',
     })).toBe('abort');
 
+    // The lifecycle observer is one Account-scoped host-event subscription;
+    // it never carries trigger or Run authority of its own.
+    const observerSubscription = parsed.manifest.contributes.events.find((event) => (
+      event.id === 'observe-run-state-changed'
+    ));
+    expect(observerSubscription).toEqual(expect.objectContaining({
+      kind: 'subscription',
+      target: {
+        kind: 'host',
+        eventId: '@happier/automation/run-state-changed',
+        scope: { kind: 'account' },
+      },
+    }));
+    expect(observerSubscription).not.toHaveProperty('automation');
     const observerHandler = testkit.registration('events', 'observe-run-state-changed');
     expect(observerHandler).toEqual(expect.any(Function));
     if (!observerHandler) {
@@ -553,6 +567,8 @@ describe('External plugin as a first-class Automation Event source', () => {
       }),
     });
     try {
+      // Binding alone never synthesizes a lifecycle transition.
+      expect(observed).not.toHaveBeenCalled();
       broker.publishHostEventEnvelope({
         eventId: '@happier/automation/run-state-changed',
         scope: { kind: 'account' },
