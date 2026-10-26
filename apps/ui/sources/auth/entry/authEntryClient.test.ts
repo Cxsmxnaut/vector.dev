@@ -100,21 +100,18 @@ describe('fetchHomeAuthEntry', () => {
         ]);
     });
 
-    it.each([
-        { name: 'an immutable Team scope', scope: { kind: 'team', teamId: 'team_1' } },
-        { name: 'the exact native verification bearer', scope: { kind: 'native_email_verification', token: 'v'.repeat(43) } },
-    ] as const)('posts $name only to the supplied explicit Home endpoint', async ({ scope }) => {
+    const explicitEndpointScopes: ReadonlyArray<{ name: string; input: Parameters<typeof fetchAuthEntry>[0] }> = [
+        { name: 'an immutable Team scope', input: { scope: { kind: 'team', teamId: 'team_1' }, endpointUrl: 'https://home.example.test', serverId: 'home_1' } },
+        { name: 'the exact native verification bearer', input: { scope: { kind: 'native_email_verification', token: 'v'.repeat(43) }, endpointUrl: 'https://home.example.test', serverId: 'home_1' } },
+    ];
+    it.each(explicitEndpointScopes)('posts $name only to the supplied explicit Home endpoint', async ({ input }) => {
         answer = () => unavailableProjection({ kind: 'team' });
 
-        await expect(fetchAuthEntry({
-            scope,
-            endpointUrl: 'https://home.example.test',
-            serverId: 'home_1',
-        })).resolves.toMatchObject({ kind: 'ready' });
+        await expect(fetchAuthEntry(input)).resolves.toMatchObject({ kind: 'ready' });
         expect(entryRequests()).toEqual([{
             url: 'https://home.example.test/v1/auth/entry',
             method: 'POST',
-            body: { v: 1, scope },
+            body: { v: 1, scope: input.scope },
             authorization: null,
         }]);
     });
