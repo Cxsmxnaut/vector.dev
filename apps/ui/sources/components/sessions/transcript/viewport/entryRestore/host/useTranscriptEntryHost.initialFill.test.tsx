@@ -275,20 +275,27 @@ describe('useTranscriptEntryHost initial fill sufficiency (S-L/S-M)', () => {
             loadDurationMs: 700,
         });
         harness.loadOlder.mockResolvedValue({ status: 'in_flight' as const, loaded: 0, hasMore: true });
+        // Only the retry sleep is faked; the harness owns Date.now (it advances per load only).
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+        try {
+            await renderHook(
+                (deps: EntryHostDeps) => useTranscriptEntryHost(deps),
+                { wrapper: TranscriptHostTestProvider, initialProps: harness.deps },
+            );
+            await vi.waitFor(() => {
+                expect(harness.sessionOpenLatch.initialFillStatus()).toBe('done');
+            });
+            await vi.runAllTimersAsync();
 
-        await renderHook(
-            (deps: EntryHostDeps) => useTranscriptEntryHost(deps),
-            { wrapper: TranscriptHostTestProvider, initialProps: harness.deps },
-        );
-        await vi.waitFor(() => {
-            expect(harness.sessionOpenLatch.initialFillStatus()).toBe('done');
-        });
-        await new Promise((resolve) => setTimeout(resolve, 50));
-
-        // Retries a bounded number of times, then stops — never counting these against the
-        // no-progress budget, and never holding on indefinitely.
-        expect(harness.loadOlder.mock.calls.length).toBeGreaterThan(1);
-        expect(harness.loadOlder.mock.calls.length).toBeLessThanOrEqual(8);
+            // Retries a bounded number of times, then stops — never counting these against the
+            // no-progress budget, and never holding on indefinitely: the first answer plus
+            // WEB_FILL_MAX_TRANSIENT_RETRIES (6) re-tests, and nothing once the timers drain.
+            expect(harness.loadOlder).toHaveBeenCalledTimes(1 + 6);
+            await vi.runAllTimersAsync();
+            expect(harness.loadOlder).toHaveBeenCalledTimes(1 + 6);
+        } finally {
+            vi.useRealTimers();
+        }
     });
 
     it('web post-settle fill RESUMES after a transient loader answer, rather than giving up', async () => {
@@ -455,7 +462,7 @@ describe('useTranscriptEntryHost initial fill sufficiency (S-L/S-M)', () => {
         });
 
         // Window expires after ceil(2000 / 700) = 3 loads without displayable growth.
-        expect(harness.loadOlder.mock.calls.length).toBeLessThanOrEqual(3);
+        expect(harness.loadOlder).toHaveBeenCalledTimes(3);
     });
 
     it('stops a perpetually-growing but never-sufficient fill at the absolute ceiling', async () => {
@@ -476,7 +483,8 @@ describe('useTranscriptEntryHost initial fill sufficiency (S-L/S-M)', () => {
             expect(harness.sessionOpenLatch.initialFillStatus()).toBe('done');
         });
 
-        // Absolute ceiling: 5x budget = 10000ms => at most ceil(10000/700) = 15 loads.
-        expect(harness.loadOlder.mock.calls.length).toBeLessThanOrEqual(15);
+        // Absolute ceiling: 5x budget = 10000ms => ceil(10000/700) = 15 loads, far past the
+        // 3-load no-progress window that displayable growth keeps resetting.
+        expect(harness.loadOlder).toHaveBeenCalledTimes(15);
     });
 });
