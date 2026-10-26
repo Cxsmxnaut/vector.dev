@@ -240,8 +240,8 @@ realtime preparation. Adapt their names, descriptions and parameter schemas to
 your native provider. Its `execute` callback is an attempt-bound read boundary,
 not a new plugin registration API: effects must emit canonical `tool_calls` with
 the declared correlation capability so the host Action barrier can authorize,
-cancel and settle them. Never bypass that barrier or turn spoken approval into
-an approval token.
+cancel and settle them. Never bypass that barrier or manufacture an approval
+token; Voice approval delegation is enforced by the host's existing decision owner.
 
 ### Start a conversation or Brief
 
@@ -297,10 +297,23 @@ only start with a literal should wait for the user and declare
 explains that limitation.
 
 Speech can describe a permission request only within the person's context-sharing
-policy. Spoken “yes” or “allow” cannot approve it, create a confirmation token or
-advance approval custody. The existing permission UI owns the tap decision. End
-retirements do not settle pending permissions. Tool effects still enter the host's
-canonical Action barrier with captured attempt identity and currentness.
+policy. In **0.3 development**, **Voice agent can approve requests** defaults on for
+Local Voice and realtime modes exposing host decision tools: the Voice agent can
+approve or deny any pending request on the person's behalf
+through the existing host decision owner. Prompt guidance tells it to read the
+request, ask, and follow the answer. Decisions are attributed to the Voice agent
+acting for the person. With the setting off, decisions require a tap in the request
+UI; a provider must preserve the host's refusal. Other automated callers keep
+their existing authority floors. Plugins cannot create confirmation tokens or
+decide outside that owner. End retirements do not settle pending permissions.
+Tool effects still enter the host's canonical Action barrier with captured attempt
+identity and currentness. This describes development source, not released availability.
+
+Native Codex Realtime is explicitly excluded: it keeps native delegation and
+exposes only current-UI host tools. Its agent should read the request within the
+sharing policy, state that it cannot approve or deny it there, and direct the
+person to tap the request or switch to Local Voice. The setting does not expand
+the provider's tool surface or the attached Agent's authority.
 
 For speech output, declare provider input budgets through the public speech
 declaration. Character and UTF-8 byte limits are distinct. The host uses those facts

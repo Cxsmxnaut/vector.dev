@@ -1532,9 +1532,19 @@ runtime reuse do not refresh it; older metadata remains readable with the field
 absent. Owner change subscriptions invalidate cached Storage facts after a load,
 installation or removal, separately from plugin-reload runtime invalidation.
 
-Voice may describe a pending permission under the current sharing policy. Spoken
-approval cannot decide it: the canonical permission UI owns the tap, and End leaves
-pending requests reachable. Android's ongoing microphone notification opens the
+In 0.3 development, `voice.canApproveRequests` defaults on for Local Voice and
+realtime modes that expose host decision tools: the Voice agent may approve or
+deny any pending request on the person's behalf through the incumbent decision
+owners. Prompt guidance tells it to read the request within the current
+sharing policy, ask, and follow the person's answer. Decisions are attributed to
+the Voice agent acting for the person. Turning off **Voice agent can
+approve requests** requires a tap in the request UI. Other automated callers keep
+their existing authority floors. End leaves pending requests reachable.
+Native Codex Realtime is excluded from this delegation. Its agent should read the
+request within the sharing policy, explain that it cannot decide there, and ask
+the person to tap the request or switch to Local Voice; see
+[plugin platform](plugin-platform.md).
+Android's ongoing microphone notification opens the
 app; it does not own conversation state. The existing iOS Focus activity is
 session-attention delivery. A dedicated Voice Live Activity remains deferred.
 
