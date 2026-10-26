@@ -14,6 +14,7 @@ import type { ActionOperationProjection } from '@/sync/domains/actionOperations/
 import { actionOperationAddressKey } from '@/sync/domains/actionOperations/qualifiedActionOperation';
 import { resolveActionOperationObservation } from '@/sync/domains/actionOperations/actionOperationStore';
 import { canRequestActionOperationStop } from '@/components/inbox/actionOperations/actionOperationPresentation';
+import type { SessionMachineReachability } from '@/sync/domains/machines/reachability/resolveSessionMachineReachability';
 import { t } from '@/text';
 
 /**
@@ -77,18 +78,19 @@ export function resolveWorkReadPresentation(input: Readonly<{
  * line. With nothing started, the empty state explains instead of either line.
  */
 export function resolveWorkMachineNotices(input: Readonly<{
-    machineReachable: boolean;
+    machineReachability: SessionMachineReachability;
     nothingYet: boolean;
     unavailableReason: string | null;
     /** The first read of the workflow runs failed and nothing was retained to show. */
     managedUnavailable: boolean;
     managedStale?: boolean;
 }>): Readonly<{ offline: boolean; unavailable: boolean; runsUnavailable: boolean; runsStale: boolean }> {
-    const offline = !input.machineReachable && !input.nothingYet;
+    // Unknown presence denies execution, but does not establish that this Machine is offline.
+    const offline = input.machineReachability === 'unreachable' && !input.nothingYet;
     return {
         offline,
         unavailable: input.unavailableReason !== null && !input.nothingYet
-            && !(offline && input.unavailableReason === 'machineOffline'),
+            && !((offline || input.machineReachability === 'unknown') && input.unavailableReason === 'machineOffline'),
         // The offline line already says why runs cannot be read, and its one Retry asks again.
         runsUnavailable: input.managedUnavailable && !offline,
         runsStale: input.managedStale === true && !offline,
