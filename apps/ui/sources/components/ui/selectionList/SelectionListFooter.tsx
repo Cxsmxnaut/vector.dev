@@ -10,8 +10,8 @@ import { isHappierPageRowNarrow, useHappierMaterialColorResolver } from '@happie
 
 import { Text } from '@/components/ui/text/Text';
 import { useReducedMotionPreference } from '@/hooks/ui/useReducedMotionPreference';
+import { KeyHint } from '@/components/ui/keyboard/KeyHint';
 
-import { KeyChip } from './accessories/KeyChip';
 import type { SelectionListKeyboardHint } from './_types';
 import { selectionListTestId } from './_shared';
 
@@ -81,7 +81,7 @@ export type SelectionListFooterProps = Readonly<{
 
 /**
  * Persistent footer container for SelectionList. Renders only keyboard hints
- * (KeyChip + description); functional actions live in `inputSuffix`, NOT here.
+ * (KeyHint + description); functional actions live in `inputSuffix`, NOT here.
  *
  * Renders nothing when there are no hints OR when no hardware keyboard is
  * available. The animated cross-fade of the hint set when steps change is
@@ -154,7 +154,7 @@ export function SelectionListFooter(props: SelectionListFooterProps): React.Reac
                         testID={selectionListTestId(props.testID, 'hint', hint.id)}
                         style={styles.hint}
                     >
-                        <KeyChip label={hint.label} />
+                        <KeyHint label={hint.label} />
                         {hint.description ? (
                             <Text style={styles.description}>{hint.description}</Text>
                         ) : null}

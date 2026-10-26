@@ -70,7 +70,6 @@ describe('SelectionListVirtualizedSection', () => {
                 selectedOptionIds={new Set<string>()}
                 onSelect={() => {}}
                 onPushStep={() => {}}
-                virtualization="force"
             />,
         );
 
@@ -78,7 +77,7 @@ describe('SelectionListVirtualizedSection', () => {
         expect(constructVisual).toHaveBeenCalledTimes(60);
     });
 
-    it('renders FlashList path when row count exceeds the threshold (auto mode)', async () => {
+    it('renders the section through the virtualized list with every option as data', async () => {
         legendListState.reset();
         const { VirtualizedList } = await import('@/components/ui/lists/virtualized/VirtualizedList');
         const { SelectionListVirtualizedSection } = await import('../SelectionListVirtualizedSection');
@@ -114,7 +113,6 @@ describe('SelectionListVirtualizedSection', () => {
                 selectedOptionIds={new Set<string>()}
                 onSelect={() => {}}
                 onPushStep={() => {}}
-                virtualization="force"
             />,
         );
 

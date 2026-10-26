@@ -55,7 +55,7 @@ export type DynamicSectionState = Readonly<{
  * `selectionListDynamicSectionCache.ts`). Production callers continue to
  * share a module-level singleton (zero behavior change). Tests are
  * encouraged to pass an isolated instance via the hook's optional
- * `cache` prop using `createTestDynamicSectionCache()` so cache state
+ * `cache` prop using `createDefaultDynamicSectionCache()` so cache state
  * is fully sandboxed.
  *
  * Invariants:
@@ -66,25 +66,6 @@ export type DynamicSectionState = Readonly<{
  *  - LRU eviction is implemented by the adapter (default cap 64); access
  *    promotes the entry to MRU.
  */
-
-/**
- * @deprecated FR4-12 — prefer `createTestDynamicSectionCache()` plus the
- * hook's `cache` prop for full sandboxing. This helper now only clears the
- * production singleton cache and remains for legacy specs that haven't been
- * migrated yet.
- */
-export function __resetDynamicSectionCacheForTests(): void {
-    getDefaultDynamicSectionCache().clear();
-}
-
-/**
- * @deprecated FR4-12 — prefer asserting against an injected
- * `createTestDynamicSectionCache()` instance for hermetic tests. This helper
- * inspects the production singleton and remains for legacy specs.
- */
-export function __getDynamicSectionCacheSizeForTests(): number {
-    return getDefaultDynamicSectionCache().size();
-}
 
 /**
  * Build a stable empty-state map keyed by section id with status='idle'.
@@ -165,7 +146,7 @@ export function useSelectionListDynamicSections(params: {
      * FR4-12 — optional explicit cache adapter. When omitted, the hook uses
      * the production singleton from `getDefaultDynamicSectionCache()` for
      * back-compat (the original module-level LRU behavior). Tests should pass
-     * `createTestDynamicSectionCache()` to fully isolate cache state and
+     * `createDefaultDynamicSectionCache()` to fully isolate cache state and
      * avoid touching the singleton. Identity-stable across re-renders is the
      * caller's responsibility — if `cache` swaps mid-lifetime it changes the
      * underlying storage.

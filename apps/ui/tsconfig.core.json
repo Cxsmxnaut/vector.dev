@@ -2373,7 +2373,6 @@
     "sources/components/ui/selectionList/SelectionListStartEllipsisInputValue.tsx",
     "sources/components/ui/selectionList/SelectionListVirtualizedBody.tsx",
     "sources/components/ui/selectionList/SelectionListVirtualizedSection.tsx",
-    "sources/components/ui/selectionList/accessories/KeyChip.tsx",
     "sources/components/ui/selectionList/accessories/RelativeTimeText.tsx",
     "sources/components/ui/selectionList/accessories/StatusPill.tsx",
     "sources/components/ui/selectionList/index.ts",

@@ -57,7 +57,6 @@ describe('SelectionListVirtualizedSection activation contract (F2)', () => {
                 selectedOptionIds={new Set<string>()}
                 onSelect={onSelect}
                 onPushStep={onPushStep}
-                virtualization="force"
             />,
         );
 
