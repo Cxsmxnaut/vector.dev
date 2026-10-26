@@ -8,6 +8,7 @@ import { raceWithTimeout } from '@happier-dev/plugin-sdk/async';
 import { AgentSessionRealtimeInspectRequestV1Schema, AgentSessionRealtimeStartRequestV1Schema, AgentSessionRealtimeStartResultV1Schema, AgentSessionRealtimeStopRequestV1Schema, AgentSessionRealtimeWatchRequestV1Schema } from '@happier-dev/protocol/voice/realtime/agentSession';
 import type { PluginContributionIdentityV1, VoiceProviderContribution } from '@happier-dev/protocol';
 import { SESSION_RPC_METHODS } from '@happier-dev/protocol/rpc/methods';
+import { HAPPIER_ACTION_DISCOVERY_GUIDANCE_V1 } from '@happier-dev/protocol/prompts/library/skills/firstPartySkillsV1';
 
 import type { RpcHandlerContext, RpcHandlerRegistrar } from '@/api/rpc/types';
 import type { VoicePromptPreparation } from '@/agent/voice/agent/voiceAgentTypes';
@@ -468,7 +469,10 @@ export function registerAgentSessionRealtimeVoiceRpc(input: Readonly<{
         let started;
         try {
           started = await resolved.conversation.start(
-            { transport: parsed.data.transport, ...(preparation ? { systemAppendBlocks: preparation.systemAppendBlocks } : {}) },
+            { transport: parsed.data.transport, systemAppendBlocks: [
+              HAPPIER_ACTION_DISCOVERY_GUIDANCE_V1,
+              ...(preparation?.systemAppendBlocks ?? []),
+            ] },
             startOptions,
           );
         } catch (error) {
