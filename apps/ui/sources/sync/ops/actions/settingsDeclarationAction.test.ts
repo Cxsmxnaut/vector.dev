@@ -2107,24 +2107,23 @@ describe('declared settings owner', () => {
             .toMatchObject({ errorCode: 'setting_value_unavailable' });
         expect(owner.account().voice.providers[providerId]?.config).toMatchObject({ baseUrl: 'https://speech.example/v1/' });
     });
-    it('routes a private credential operation to the incumbent human control without reading or writing secrets', async () => {
+    it('declares the saved credential reference operation and refuses missing input without reading or writing secrets', async () => {
         const owner = createOwner(undefined, true);
         const anchor = 'voiceConversations.provider.happier.voice.openai/realtime-openai.credential';
         const before = owner.account();
         expect(await owner.action({ actionId: 'settings.list', input: { pageId: 'voiceConversations' } }))
             .toMatchObject({ items: expect.arrayContaining([expect.objectContaining({
                 anchor, sensitive: true, readable: false, writable: false,
-                operation: { actionId: 'settings.invoke', requiresHumanInteraction: true },
+                operation: { actionId: 'settings.invoke', requiresHumanInteraction: false, requiresApproval: true },
             })]) });
         expect(await owner.action({ actionId: 'settings.invoke', input: { anchor } }))
-            .toEqual({ anchor, status: 'interaction_opened' });
-        expect(owner.openedInteractions).toEqual([`/settings/voice/conversations?setting=${encodeURIComponent(anchor)}`]);
+            .toEqual({ anchor, status: 'unavailable', reason: 'operation_input_required' });
+        expect(owner.openedInteractions).toEqual([]);
         expect(owner.account()).toBe(before);
         expect(await owner.action({ actionId: 'settings.get', input: { anchor } })).toMatchObject({ errorCode: 'setting_sensitive' });
-        const unavailableOwner = createOwner(undefined, true, false);
-        expect(await unavailableOwner.action({ actionId: 'settings.invoke', input: { anchor } }))
-            .toMatchObject({ errorCode: 'setting_not_bound' });
-        expect(unavailableOwner.openedInteractions).toEqual([]);
+        expect(await owner.action({ actionId: 'settings.set', input: { anchor, value: 'must-not-be-saved' } }))
+            .toMatchObject({ errorCode: 'setting_sensitive' });
+        expect(owner.account()).toBe(before);
     });
     it('requests real human opt-in for the exact contributed moving-alias mutation', async () => {
         storage.setState({ settingsScope: { serverId: 'fixture-home', accountId: 'fixture-account' } });
@@ -2164,8 +2163,9 @@ describe('declared settings owner', () => {
         const owner = createOwner(undefined, true);
         expect(await owner.action({ actionId: 'settings.set', input: { anchor: 'voiceConversations.agent', value: 'codex' } })).toEqual({ anchor: 'voiceConversations.agent', value: 'codex' });
         expect(owner.account().voice.providers.local_conversation?.config).toMatchObject({ agent: {
-            agentId: 'codex', agentTargetKey: expect.any(String), agentIdentity: null, agentProjectionGeneration: null,
+            agentId: 'codex', agentTargetKey: expect.any(String), agentIdentity: null,
         } });
+        expect(readLocalConversationVoiceSettings(owner.account().voice).agent).not.toHaveProperty('agentProjectionGeneration');
     });
     it('discovers an admitted contribution field before selection and writes only its declared strict config', async () => {
         const pluginId = 'fixture.voice';
@@ -2372,30 +2372,33 @@ describe('declared settings owner', () => {
         expect(owner.local().uiItemDensity).toBe(before);
     });
 
-    it('does not open an incumbent human control after its invocation is cancelled', async () => {
+    it('does not write a Voice setting after its human opt-in is cancelled', async () => {
+        storage.setState({ settingsScope: { serverId: 'fixture-home', accountId: 'fixture-account' } });
         let release!: () => void;
         let entered!: () => void;
         const gate = new Promise<void>((resolve) => { release = resolve; });
         const entering = new Promise<void>((resolve) => { entered = resolve; });
-        const opened: string[] = [];
-        // The external navigation boundary delays readiness, as router module loading can.
-        const owner = createOwner(undefined, true, true, settingsDefaults, async (href, signal) => {
+        // Consent is an external modal boundary; the declared mutation and its
+        // cancellation/currentness checks remain the real Voice owners.
+        humanConfirmation.confirm.mockImplementationOnce(async () => {
             entered();
             await gate;
-            signal?.throwIfAborted();
-            opened.push(href);
             return true;
         });
+        const owner = createOwner(undefined, true);
+        const before = owner.account();
         const controller = new AbortController();
-        const pending = owner.action({ actionId: 'settings.invoke', input: {
-            anchor: 'voiceConversations.provider.happier.voice.openai/realtime-openai.credential',
+        const pending = owner.action({ actionId: 'settings.set', input: {
+            anchor: 'voiceConversations.provider.happier.voice.xai/realtime-grok.model',
+            value: JSON.stringify({ kind: 'moving_alias', id: 'grok-voice-latest' }),
         }, context: { signal: controller.signal } });
         void pending.catch(() => undefined);
         await entering;
         controller.abort();
         release();
         await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
-        expect(opened).toEqual([]);
+        expect(owner.openedInteractions).toEqual([]);
+        expect(owner.account()).toBe(before);
     });
 
     it('discovers and changes both Delegation defaults through Account settings', async () => {
