@@ -148,7 +148,7 @@ export async function captureLazyActionAccountContext(serverIdRaw: string, signa
             createArtifact: async (_header: Readonly<Record<string, unknown>>, _body: string) => unavailable(),
             createArtifactDocument: async (_input: ArtifactCreateOperation) => artifactUnavailable(),
             updateArtifactDocument: async (_input: ArtifactUpdateOperation) => artifactUnavailable(),
-            updateArtifact: async (_artifactId: string, _header: ArtifactHeader, _body: string, _basis?: DecryptedArtifact) => unavailable(),
+            updateArtifact: async (_artifactId: string, _header: ArtifactHeader, _body: string, _basis?: DecryptedArtifact, _onIssued?: () => void) => unavailable(),
             workflowArtifacts, artifactAccessGrants, encodeArtifactListCursor,
             homeHubArtifactTransport: { read: artifactUnavailable, create: artifactUnavailable, update: artifactUnavailable } satisfies HomeHubArtifactTransportV1,
             listArtifacts: async (_options: Parameters<WorkflowDefinitionArtifactOperations['list']>[0]) => artifactUnavailable(),
@@ -735,10 +735,15 @@ export async function captureLazyActionAccountContext(serverIdRaw: string, signa
             createArtifact: async (header: Readonly<Record<string, unknown>>, body: string) => (await createArtifactDocument({ header, body })).artifactId,
             // `basis` is the exact read a caller validated its change against; its
             // versions become the CAS expectation. Without one, the latest row is.
-            updateArtifact: async (artifactId: string, header: ArtifactHeader, body: string, basis?: DecryptedArtifact) => {
+            updateArtifact: async (artifactId: string, header: ArtifactHeader, body: string, basis?: DecryptedArtifact, onIssued?: () => void) => {
                 const current = basis ?? await fetchArtifact(artifactId, { fresh: true });
+                const artifactOptions = await artifactParams();
                 await updateArtifactWithHeaderViaApi({
-                    ...await artifactParams(), artifactId, header, body,
+                    ...artifactOptions, artifactId, header, body,
+                    ...(onIssued ? { request: ((path, init, options) => artifactOptions.request(path, init, {
+                        ...options,
+                        ...(init?.method === 'POST' ? { onIssued: () => { onIssued(); options?.onIssued?.(); } } : {}),
+                    })) satisfies ServerFetch } : {}),
                     getArtifact: () => current ?? undefined,
                     updateArtifact: (artifact: DecryptedArtifact) => { if (canPublish()) storage.getState().updateArtifact(artifact); },
                 });
