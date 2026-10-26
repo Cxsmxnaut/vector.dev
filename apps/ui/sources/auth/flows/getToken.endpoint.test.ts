@@ -606,6 +606,25 @@ describe('key-challenge negotiation, typed failures and address trust at an expl
         expect(requestBody('/v1/auth')).not.toHaveProperty('challengeId');
     });
 
+    it('refreshes a cached v1 observation of the endpoint before choosing the login assertion', async () => {
+        serve({
+            '/v1/features': () => jsonResponse({ features: keyChallengeEnabled, capabilities: {} }),
+            '/v1/auth': () => jsonResponse({ token: 'released-v1-token' }),
+        });
+        await expect(authenticate()).resolves.toEqual({ token: 'released-v1-token' });
+        runtimeFetchMock.mockClear();
+        // The Home upgraded since the cached observation; login must not sign the released v1 shape.
+        serve({
+            '/v1/features': () => jsonResponse({ features: keyChallengeEnabled, capabilities: keyChallengeV2Capabilities('srv_upgraded') }),
+            '/v1/auth/challenge': () => issuedChallenge({ origin: homeOrigin, serverIdentityId: 'srv_upgraded' }),
+            '/v1/auth': () => jsonResponse({ token: 'v2-token' }),
+        });
+        await expect(authenticate()).resolves.toEqual({ token: 'v2-token' });
+        expect(requestedPaths()).toEqual(['/v1/features', '/v1/auth/challenge', '/v1/auth']);
+        expect(requestBody('/v1/auth')).toMatchObject({ challengeId: 'challenge-srv_upgraded' });
+        expect(requestBody('/v1/auth')).not.toHaveProperty('challenge');
+    });
+
     it.each([
         { name: 'network failure', features: (): Response => { throw new TypeError('network unavailable'); } },
         { name: 'server failure', features: () => new Response('unavailable', { status: 503 }) },

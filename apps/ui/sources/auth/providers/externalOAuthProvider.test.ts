@@ -434,6 +434,21 @@ describe('createExternalOAuthProvider', () => {
         expect(fetchMock.mock.calls.filter(([input]) => String(input).endsWith('/finalize'))).toHaveLength(1);
     });
 
+    it.each([408, 429])('retries a finalize the server declined to process (HTTP %i)', async (status) => {
+        let attempts = 0;
+        const fetchMock = stubFetch(async () => {
+            attempts += 1;
+            return attempts === 1
+                ? { ok: false, status, body: { error: 'try_again' } }
+                : { ok: true, status: 200, body: { success: true } };
+        });
+
+        await expect(
+            createProvider().finalizeConnect({ token: 't', secret: 's' }, { pending: 'pending-1', username: 'octocat' }),
+        ).resolves.toEqual({});
+        expect(fetchMock.mock.calls.filter(([input]) => String(input).endsWith('/finalize'))).toHaveLength(2);
+    });
+
     it('retries a finalize the server never answered', async () => {
         let attempts = 0;
         const fetchMock = stubFetch(async () => {
