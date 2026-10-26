@@ -4,12 +4,23 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 import { computePluginUiArtifactFileSetSha256DigestV1 } from '@happier-dev/protocol/plugins/ui';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createTestNpmTarball, sriSha512, type TestTarEntry } from '../testkit/npmTarball';
 import { cleanupStagedNpmArtifactCandidate, stageDownloadedNpmArtifactCandidate } from './stage';
 import type { DownloadedNpmArtifactCandidate } from './types';
 import { createPluginManifestV2Fixture } from '@/plugins/testkit/manifestV2Fixture';
+
+// Filesystem boundary observer: passes every read through unchanged and lets a case act at the moment a path is read.
+const fsReads = vi.hoisted(() => ({ onRead: null as null | ((path: string) => void) }));
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>();
+  const readFile = (async (...args: Parameters<typeof actual.readFile>) => {
+    fsReads.onRead?.(String(args[0]));
+    return await actual.readFile(...args);
+  }) as typeof actual.readFile;
+  return { ...actual, readFile };
+});
 
 const tempDirs: string[] = [];
 
@@ -289,29 +300,6 @@ describe('stageDownloadedNpmArtifactCandidate', () => {
     }
   });
 
-  it('accepts the canonical hosted-static artifact emitted by the public SDK builder', async () => {
-    const fixture = await createCandidateFixture();
-
-    await expect(stageDownloadedNpmArtifactCandidate({
-      candidate: fixture.candidate,
-      stagingParentPath: fixture.stagingParentPath,
-    })).resolves.toMatchObject({ ok: true });
-  });
-
-  it('retains the exact tarball SHA-256 from verified acquisition rather than a staged tree digest', async () => {
-    const fixture = await createCandidateFixture();
-
-    await expect(stageDownloadedNpmArtifactCandidate({
-      candidate: fixture.candidate,
-      stagingParentPath: fixture.stagingParentPath,
-    })).resolves.toMatchObject({
-      ok: true,
-      candidate: {
-        archiveDigestSha256: fixture.candidate.archiveDigestSha256,
-      },
-    });
-  });
-
   it('retains one deterministic archive of only the manifest-declared packaged asset Resources', async () => {
     const fixture = await createCandidateFixture({
       packageAssets: [
@@ -548,6 +536,7 @@ describe('stageDownloadedNpmArtifactCandidate', () => {
       ok: true,
       candidate: {
         source: fixture.candidate.source,
+        archiveDigestSha256: fixture.candidate.archiveDigestSha256,
         package: { name: '@acme/happier-plugin', version: '1.2.3' },
         manifest: { id: 'acme.npm-stage', version: '1.2.3' },
         generatedUiArtifacts: { artifactIds: ['panel-web'] },
@@ -812,22 +801,26 @@ describe('stageDownloadedNpmArtifactCandidate', () => {
   it('honors cancellation that arrives after extraction and before candidate validation', async () => {
     const fixture = await createCandidateFixture();
     const controller = new AbortController();
-    const removeEventListener = controller.signal.removeEventListener.bind(controller.signal);
-    Object.defineProperty(controller.signal, 'removeEventListener', {
-      configurable: true,
-      value: (...args: Parameters<AbortSignal['removeEventListener']>) => {
-        removeEventListener(...args);
+    // The first read of the extracted package.json happens only once extraction has returned.
+    let cancelledAtPath: string | null = null;
+    fsReads.onRead = (path) => {
+      if (cancelledAtPath === null && /[/\\]package\.json$/.test(path)) {
+        cancelledAtPath = path;
         controller.abort(new Error('cancel after extraction'));
-      },
-    });
+      }
+    };
+    try {
+      const result = await stageDownloadedNpmArtifactCandidate({
+        candidate: fixture.candidate,
+        stagingParentPath: fixture.stagingParentPath,
+        signal: controller.signal,
+      });
 
-    const result = await stageDownloadedNpmArtifactCandidate({
-      candidate: fixture.candidate,
-      stagingParentPath: fixture.stagingParentPath,
-      signal: controller.signal,
-    });
-
-    expect(result).toMatchObject({ ok: false, rejection: { code: 'staging_aborted' } });
+      expect(result).toMatchObject({ ok: false, rejection: { code: 'staging_aborted' } });
+    } finally {
+      fsReads.onRead = null;
+    }
+    expect(cancelledAtPath).toMatch(/package\.json$/);
   });
 
   it('retains the exact per-file manifest digest without publishing aggregate tree or package JSON digest fields', async () => {

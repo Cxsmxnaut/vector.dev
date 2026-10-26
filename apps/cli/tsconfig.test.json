@@ -2803,7 +2803,6 @@
     "src/plugins/distribution/npm/resolver.test.ts",
     "src/plugins/distribution/npm/stage.test.ts",
     "src/plugins/install/ui/hostedWebAssets.test.ts",
-    "src/plugins/install/ui/reactNativeBundles.test.ts",
     "src/plugins/installations/publisherProof.test.ts",
     "src/plugins/manifest/daemonEntry.test.ts",
     "src/plugins/manifest/ingest.test.ts",

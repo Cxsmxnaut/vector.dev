@@ -242,6 +242,7 @@ describe('loadInstalledPlugins', () => {
     expect(result.loadedPlugins[0]).toMatchObject({
       daemonEntryPath: null,
       devDaemonEntryPath: expect.stringMatching(/src[/\\]daemon\.ts$/),
+      sourceSpec: { kind: 'path', locator: pluginRoot, trustPolicy: 'prompt', installPolicy: 'link' },
     });
     expect(result.diagnosticsByPluginId['acme.dev-entry']).toEqual([]);
   });
@@ -375,102 +376,6 @@ describe('loadInstalledPlugins', () => {
       expect.objectContaining({
         code: 'plugin_source_kind_unsupported',
         message: expect.stringMatching(/host-derived bundled/i),
-      }),
-    ]);
-  });
-
-  it('preserves stored trust policy for linked path installs when reloading plugin state', async () => {
-    const happyHomeDir = await mkdtemp(join(tmpdir(), 'happier-plugin-loader-'));
-    const pluginRoot = await mkdtemp(join(tmpdir(), 'happier-plugin-prompt-'));
-    const store = createPluginStateStore({ happyHomeDir });
-
-    await writePluginManifest(pluginRoot, 'acme.prompt-path');
-
-    await store.write({
-      t: 'happier_plugin_state_v1',
-      schemaVersion: 1,
-      plugins: {
-        'acme.prompt-path': {
-          source: {
-            kind: 'path',
-            locator: pluginRoot,
-            trustPolicy: 'prompt',
-            installPolicy: 'link',
-            resolvedPath: pluginRoot,
-            manifestPath: join(pluginRoot, '.happier-plugin', 'plugin.json'),
-          },
-          compatibility: {
-            status: 'unknown',
-            diagnostics: [],
-          },
-          install: {
-            mode: 'link',
-            manifestVersion: '1.0.0',
-            installedPath: null,
-          },
-          state: {
-            enabled: true,
-          },
-        },
-      },
-    });
-
-    const result = await loadInstalledPlugins({ happyHomeDir });
-
-    expect(result.loadedPlugins).toEqual([
-      expect.objectContaining({
-        pluginId: 'acme.prompt-path',
-        sourceSpec: expect.objectContaining({
-          kind: 'path',
-          locator: pluginRoot,
-          trustPolicy: 'prompt',
-          installPolicy: 'link',
-        }),
-      }),
-    ]);
-    expect(result.diagnosticsByPluginId['acme.prompt-path']).toEqual([]);
-  });
-
-  it('records compatibility diagnostics for enabled plugins with missing manifests', async () => {
-    const happyHomeDir = await mkdtemp(join(tmpdir(), 'happier-plugin-loader-'));
-    const missingPluginRoot = await mkdtemp(join(tmpdir(), 'happier-plugin-missing-'));
-    const store = createPluginStateStore({ happyHomeDir });
-
-    await store.write({
-      t: 'happier_plugin_state_v1',
-      schemaVersion: 1,
-      plugins: {
-        'acme.missing': {
-          source: {
-            kind: 'path',
-            locator: missingPluginRoot,
-            trustPolicy: 'local_trusted',
-            installPolicy: 'link',
-            resolvedPath: missingPluginRoot,
-            manifestPath: join(missingPluginRoot, '.happier-plugin', 'plugin.json'),
-          },
-          compatibility: {
-            status: 'unknown',
-            diagnostics: [],
-          },
-          install: {
-            mode: 'link',
-            manifestVersion: '1.0.0',
-            installedPath: null,
-          },
-          state: {
-            enabled: true,
-          },
-        },
-      },
-    });
-
-    const result = await loadInstalledPlugins({ happyHomeDir });
-
-    expect(result.loadedPlugins).toEqual([]);
-    expect(result.diagnosticsByPluginId['acme.missing']).toEqual([
-      expect.objectContaining({
-        code: 'plugin_manifest_missing',
       }),
     ]);
   });

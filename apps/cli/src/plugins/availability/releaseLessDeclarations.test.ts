@@ -73,7 +73,7 @@ describe('release-less plugin declarations', () => {
         expect(() => projectPluginInstalledAvailabilityInventory({
             inventory: { revision: 1, releasePublications: [], materializations: [] },
             registry: null, registryRevision: null, runtimeMaterializations: [],
-        })).toThrow();
+        })).toThrow('Current installed plugin source census is unavailable');
     });
     it('declares the recorded local-folder installation with its serving manifest so other devices can name it', () => {
         // Live 2026-10-16 (PLUGVIS 2h): local-folder plugins recorded by the install registry reached other

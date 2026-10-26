@@ -23,16 +23,28 @@ describe('resolveAndDownloadNpmArtifact', () => {
     const integrity = `sha512-${createHash('sha512').update(bytes).digest('base64')}`;
     const dir = await mkdtemp(join(tmpdir(), 'happier-npm-explicit-deadline-'));
     dirs.push(dir);
-    const client: NpmRegistryArtifactClient = {
-      getJson: async () => ({ name: 'plugin', versions: {
-        '1.0.0': { name: 'plugin', version: '1.0.0', dist: { integrity, tarball: 'https://registry.example.test/plugin.tgz' } },
-      } }),
-      getBody: async () => ({ body: Readable.from([bytes]) }),
-    };
-    await expect(resolveAndDownloadNpmArtifact({
-      input: { registryOrigin: 'https://registry.example.test', packageName: 'plugin', selector: '1.0.0' },
-      destinationPath: join(dir, 'plugin.tgz'), artifactMaxBytes: 1024, timeoutMs: 600_000, client,
-    })).resolves.toMatchObject({ source: { version: '1.0.0' } });
+    // The acquisition lifetime reads the monotonic clock; drive it from the fake clock.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    const monotonicClock = vi.spyOn(performance, 'now').mockImplementation(() => Date.now());
+    try {
+      const client: NpmRegistryArtifactClient = {
+        // The registry answers only after the former five-minute cutoff has passed.
+        getJson: () => new Promise((resolve) => setTimeout(() => resolve({ name: 'plugin', versions: {
+          '1.0.0': { name: 'plugin', version: '1.0.0', dist: { integrity, tarball: 'https://registry.example.test/plugin.tgz' } },
+        } }), 301_000)),
+        getBody: async () => ({ body: Readable.from([bytes]) }),
+      };
+      const operation = resolveAndDownloadNpmArtifact({
+        input: { registryOrigin: 'https://registry.example.test', packageName: 'plugin', selector: '1.0.0' },
+        destinationPath: join(dir, 'plugin.tgz'), artifactMaxBytes: 1024, timeoutMs: 600_000, client,
+      });
+      void operation.catch(() => undefined);
+      await vi.advanceTimersByTimeAsync(301_001);
+      vi.useRealTimers();
+      await expect(operation).resolves.toMatchObject({ source: { version: '1.0.0' } });
+    } finally {
+      monotonicClock.mockRestore();
+    }
   });
 
   it('hands an exact integrity-verified immutable candidate to staging without executing package logic', async () => {
