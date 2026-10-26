@@ -1481,6 +1481,17 @@ observation use that same root. Project-directory escapes and transcript-file
 symlinks remain refused; a completed turn cannot settle Activity when ordered
 source admission fails.
 
+Claude's metadata reader keeps title interpretation in the plugin and resumes
+from the host's persisted candidate-index checkpoints. Concurrent reads share
+only in-flight JSONL pages for the same path, file identity and byte offset;
+each invocation applies its own prompt interpretation and title precedence.
+Page entries disappear when the read settles, including failures. Root listing,
+exact-id lookup and metadata search use this reader. Caller cancellation,
+deadlines and reply budgets remain owned by their existing invocation paths;
+content search retains its separate query-driven transcript scan. Handoff's
+existing create-if-absent publication rejects differing target transcripts.
+These are 0.3 development-source behaviors.
+
 For a linked Claude store that matches the current configured store, takeover
 preserves the native config environment, including an unset `CLAUDE_CONFIG_DIR`.
 An explicit override retains its value; a different linked store retains its
