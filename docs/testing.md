@@ -788,7 +788,14 @@ the shared Iroh loader check are skipped, and the archive is still published wit
 the CLI readiness stamp, so every unit job still runs and reports. CLI unit tests
 remain fail-closed on the Iroh loader check, which reads iroh-native's built output.
 Dependency caching contains third-party dependencies only; a cache hit
-still runs the canonical frozen installer and required postinstalls. The installer
+still runs the canonical frozen installer and required postinstalls. Separately, v0.3
+push runs save the built `packages/*/dist` and `packages/plugins/*/dist` trees when the
+checked-out `packages` tree has no entry yet, and every Gate preparation restores the
+newest entry of its build epoch (the lockfile, workspace file and build-owner sources
+that every package fingerprint includes) before building. The workspace-build owner
+reuses a restored package only when its recorded input fingerprint and output digests
+still match, so the cache only skips rebuilding unchanged packages; a new epoch starts
+from an empty tree. The installer
 defaults `REDISMS_DISABLE_POSTINSTALL=1` to skip the optional Redis `stable` prefetch,
 preserving explicit overrides; Redis adapter validation uses `REDIS_URL` or lazily
 resolves its pinned runtime version instead. Successful installer output remains

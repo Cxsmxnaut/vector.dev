@@ -2466,6 +2466,88 @@ try {
   t.diagnostic(JSON.stringify({cold, warm, copied}));
 });
 
+test('a restored output tree in a fresh checkout is reused by content and rebuilt only where it differs', async (t) => {
+  // The v0.3 Gate restores package dists from an earlier run into a fresh
+  // checkout at the same path: every source and output file has a new inode,
+  // ctime and source mtime, so reuse must follow recorded content alone.
+  const parent = mkdtempSync(join(tmpdir(), 'happier-workspace-restored-outputs-'));
+  t.after(() => rmSync(parent, { recursive: true, force: true }));
+  const repoRoot = join(parent, 'checkout');
+  const checkOut = (consumerSource = 'export const consumer = 1;\n') => {
+    rmSync(repoRoot, { recursive: true, force: true });
+    mkdirSync(repoRoot);
+    writePnpmWorkspaceFixture(repoRoot, { private: true, workspaces: ['packages/*'] });
+    writeFileSync(join(repoRoot, 'pnpm-lock.yaml'), '# fixture\n');
+    for (const appName of ['ui', 'cli', 'server']) {
+      mkdirSync(join(repoRoot, 'apps', appName), { recursive: true });
+      writeFileSync(join(repoRoot, 'apps', appName, 'package.json'), JSON.stringify({ name: `@fixture/${appName}` }));
+    }
+    for (const [name, source, dependencies] of [
+      ['base', 'export const base = 1;\n', {}],
+      ['consumer', consumerSource, { '@happier-dev/base': 'workspace:*' }],
+    ]) {
+      mkdirSync(join(repoRoot, 'packages', name, 'src'), { recursive: true });
+      writeFileSync(join(repoRoot, 'packages', name, 'package.json'), JSON.stringify({
+        name: `@happier-dev/${name}`, type: 'module', main: './dist/index.js', types: './dist/index.d.ts',
+        dependencies, scripts: { build: 'fixture-build' },
+      }));
+      writeFileSync(join(repoRoot, 'packages', name, 'src', 'index.ts'), source);
+    }
+  };
+  const builds = [];
+  const workspaceBuildBoundary = {
+    async prepareEnv(_packageDir, env) { return { ...env }; },
+    // The compiler is the process boundary; graph, fingerprints and publication stay real.
+    async runPackageBuild(buildDir, { env }) {
+      builds.push(JSON.parse(readFileSync(join(buildDir, 'package.json'), 'utf8')).name);
+      const source = readFileSync(join(buildDir, 'src', 'index.ts'), 'utf8');
+      writeFileSync(join(env.HAPPIER_WORKSPACE_DIST_OUTPUT_DIR, 'index.js'), source);
+      writeFileSync(join(env.HAPPIER_WORKSPACE_DIST_OUTPUT_DIR, 'index.d.ts'), source.replace('= 1;', ': number;'));
+    },
+  };
+  const build = async () => {
+    builds.length = 0;
+    const result = await ensureWorkspacePackagesBuiltByName(repoRoot, ['@happier-dev/consumer'], { workspaceBuildBoundary, quiet: true });
+    return { built: [...result.built].sort(), compiled: [...builds].sort() };
+  };
+  const cache = join(parent, 'cache');
+  const saveDists = () => {
+    rmSync(cache, { recursive: true, force: true });
+    for (const name of ['base', 'consumer']) {
+      cpSync(join(repoRoot, 'packages', name, 'dist'), join(cache, name), { recursive: true, preserveTimestamps: true });
+    }
+  };
+  const restoreDists = () => {
+    for (const name of ['base', 'consumer']) {
+      cpSync(join(cache, name), join(repoRoot, 'packages', name, 'dist'), { recursive: true, preserveTimestamps: true });
+    }
+  };
+
+  checkOut();
+  assert.deepEqual(await build(), { built: ['@happier-dev/base', '@happier-dev/consumer'], compiled: ['@happier-dev/base', '@happier-dev/consumer'] });
+  saveDists();
+  const restoredInode = statSync(join(cache, 'consumer', 'index.js')).ino;
+
+  checkOut();
+  restoreDists();
+  assert.notEqual(statSync(join(repoRoot, 'packages', 'consumer', 'dist', 'index.js')).ino, restoredInode);
+  assert.deepEqual(await build(), { built: [], compiled: [] });
+
+  // A changed input rebuilds only its package over the restored tree.
+  checkOut('export const consumer = 1;\nexport const added = 1;\n');
+  restoreDists();
+  assert.deepEqual(await build(), { built: ['@happier-dev/consumer'], compiled: ['@happier-dev/consumer'] });
+
+  // A partial or damaged restore rebuilds the package it damaged.
+  checkOut();
+  restoreDists();
+  rmSync(join(repoRoot, 'packages', 'base', 'dist', 'index.d.ts'));
+  writeFileSync(join(repoRoot, 'packages', 'consumer', 'dist', 'index.js'), 'export const consumer = 0;\n');
+  const damaged = await build();
+  assert.deepEqual(damaged.compiled, ['@happier-dev/base', '@happier-dev/consumer']);
+  assert.equal(readFileSync(join(repoRoot, 'packages', 'consumer', 'dist', 'index.js'), 'utf8'), 'export const consumer = 1;\n');
+});
+
 test('package admission follows source content and membership rather than timestamps', async (t) => {
   const repoRoot = mkdtempSync(join(tmpdir(), 'happier-workspace-content-currentness-'));
   t.after(() => rmSync(repoRoot, { recursive: true, force: true }));

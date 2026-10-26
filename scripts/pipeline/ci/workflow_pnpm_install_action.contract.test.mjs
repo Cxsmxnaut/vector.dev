@@ -337,6 +337,78 @@ test('a workspace package build failure fails the compiler and artifact gates wh
   assert.equal(fs.readFileSync(path.join(consumer, 'packages/iroh-native/native/iroh.node'), 'utf8'), 'native-output');
 });
 
+test('the Gate reuses package outputs only inside one build epoch and saves them on a push key miss', (t) => {
+  const { root, workspace, runnerTemp } = fixture(t);
+  const workflow = yaml.load(fs.readFileSync(path.join(workflowsDir, 'tests.yml'), 'utf8'));
+  const steps = workflow.jobs['gate-prepare'].steps;
+  const indexOf = (predicate, label) => {
+    const index = steps.findIndex(predicate);
+    assert.notEqual(index, -1, `missing Gate preparation step: ${label}`);
+    return index;
+  };
+  const keyIndex = indexOf((step) => step.id === 'workspace-build-cache-key', 'cache key');
+  const restoreIndex = indexOf((step) => String(step.uses ?? '').startsWith('actions/cache/restore@')
+    && step.id === 'workspace-build-cache', 'cache restore');
+  const installIndex = indexOf((step) => step.id === 'dependencies', 'install');
+  const buildIndex = indexOf((step) => /\bprepare:typecheck:workspaces\b/.test(step.run ?? ''), 'package build');
+  const saveIndex = indexOf((step) => String(step.uses ?? '').startsWith('actions/cache/save@'), 'cache save');
+  // The key hashes checked-out bytes only, and the owner decides reuse at build time.
+  assert.ok(keyIndex < restoreIndex && restoreIndex < installIndex && installIndex < buildIndex && buildIndex < saveIndex);
+  const restore = steps[restoreIndex];
+  const save = steps[saveIndex];
+  const cachedPaths = (step) => String(step.with?.path ?? '').trim().split('\n').map((entry) => entry.trim());
+  assert.deepEqual(cachedPaths(restore), ['packages/*/dist', 'packages/plugins/*/dist']);
+  assert.deepEqual(cachedPaths(save), cachedPaths(restore));
+  const output = (name) => `\${{ steps.workspace-build-cache-key.outputs.${name} }}`;
+  assert.equal(restore.with.key, `${output('prefix')}${output('packages')}`);
+  assert.equal(restore.with['restore-keys'], output('prefix'));
+  assert.equal(save.with.key, '${{ steps.workspace-build-cache.outputs.cache-primary-key }}');
+  assert.equal(save.if, "${{ github.event_name == 'push' && steps.workspace-build-cache.outputs.cache-hit != 'true' }}");
+
+  // The epoch is exactly the build owner's global fingerprint inputs: restoring
+  // across any of them can only rebuild everything over retained files.
+  const owner = fs.readFileSync(path.join(repoRoot, 'scripts/workspaces/ensureWorkspacePackagesBuilt.mjs'), 'utf8');
+  const fingerprint = owner.slice(owner.indexOf('export function readWorkspacePackageInputFingerprint'));
+  const ownerFiles = [...fingerprint.match(/const buildOwnerPaths = \[([^\]]+)\]/)[1].matchAll(/'([^']+)'/g)]
+    .map((match) => `scripts/workspaces/${match[1]}`);
+  const policyFiles = [...fingerprint.match(/const dependencyPolicyPaths = [\s\S]*?\[([^\]]+)\]/)[1].matchAll(/'([^']+)'/g)]
+    .map((match) => match[1]);
+  const epochFiles = [...steps[keyIndex].run.matchAll(/HEAD:([^\s)"]+)/g)].map((match) => match[1]).filter((file) => file !== 'packages');
+  assert.deepEqual([...epochFiles].sort(), [...policyFiles, ...ownerFiles].sort());
+
+  // Execute the real key step: package edits change only the entry, epoch
+  // edits change the restore prefix, and unrelated edits change neither.
+  const git = (...args) => execFileSync('git', args, { cwd: workspace, encoding: 'utf8' }).trim();
+  git('init', '--quiet');
+  for (const file of epochFiles) write(workspace, file, `${file}\n`);
+  write(workspace, 'packages/plugins/zai/src/index.ts', 'export {};\n');
+  write(workspace, 'apps/ui/sources/app.ts', 'export {};\n');
+  const commit = () => {
+    git('add', '--all');
+    git('-c', 'user.name=Gate', '-c', 'user.email=gate@example.invalid', 'commit', '--quiet', '--allow-empty', '-m', 'state');
+    const outputFile = path.join(root, `output-${Math.random()}`);
+    const result = runShellStep(steps[keyIndex], workspace, runnerTemp, { GITHUB_OUTPUT: outputFile, RUNNER_OS: 'Linux' });
+    assert.equal(result.status, 0, result.stderr);
+    return Object.fromEntries(fs.readFileSync(outputFile, 'utf8').trim().split('\n').map((line) => line.split('=')));
+  };
+  const initial = commit();
+  assert.match(initial.prefix, /^gate-workspace-build-v1-Linux-[0-9a-f]{16}-$/);
+  assert.match(initial.packages, /^[0-9a-f]{40}$/);
+  write(workspace, 'apps/ui/sources/app.ts', 'export const app = 1;\n');
+  assert.deepEqual(commit(), initial);
+  write(workspace, 'packages/plugins/zai/src/index.ts', 'export const zai = 1;\n');
+  const packageEdit = commit();
+  assert.equal(packageEdit.prefix, initial.prefix);
+  assert.notEqual(packageEdit.packages, initial.packages);
+  for (const file of epochFiles) {
+    const before = commit();
+    write(workspace, file, `${file} changed\n`);
+    const after = commit();
+    assert.notEqual(after.prefix, before.prefix, `${file} must start a new epoch`);
+    assert.equal(after.packages, before.packages);
+  }
+});
+
 test('GitHub workflows route dependency installs through the shared install-pnpm-dependencies action', () => {
   const actionRaw = fs.readFileSync(installActionPath, 'utf8');
   assert.match(

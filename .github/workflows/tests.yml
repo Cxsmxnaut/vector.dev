@@ -270,6 +270,32 @@ jobs:
       - name: Observe the shared toolchain
         id: toolchain
         run: echo "node_version=$(node -p 'process.versions.node')" >> "$GITHUB_OUTPUT"
+      - name: Key the workspace package output cache
+        id: workspace-build-cache-key
+        # Package input fingerprints include the lockfile and the build owner, so
+        # outputs from another epoch are never reusable: restores stay inside one
+        # epoch, and a new epoch starts from an empty tree. Within an epoch the
+        # checked-out packages tree decides whether a run saves a new entry.
+        run: |
+          set -euo pipefail
+          epoch="$(git rev-parse HEAD:pnpm-lock.yaml HEAD:pnpm-workspace.yaml \
+            HEAD:scripts/workspaces/ensureWorkspacePackagesBuilt.mjs \
+            HEAD:scripts/workspaces/buildTypeScriptPackageDist.mjs \
+            HEAD:scripts/workspaces/workspaceOutputScriptArgs.mjs | sha256sum | cut -c1-16)"
+          echo "prefix=gate-workspace-build-v1-${RUNNER_OS}-${epoch}-" >> "$GITHUB_OUTPUT"
+          echo "packages=$(git rev-parse HEAD:packages)" >> "$GITHUB_OUTPUT"
+      - name: Restore workspace package outputs from an earlier v0.3 run
+        id: workspace-build-cache
+        # The build owner reuses a restored dist only when its recorded input
+        # fingerprint and every recorded output digest still match; a stale,
+        # partial or foreign tree rebuilds. Only package dists are cached.
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: |
+            packages/*/dist
+            packages/plugins/*/dist
+          key: ${{ steps.workspace-build-cache-key.outputs.prefix }}${{ steps.workspace-build-cache-key.outputs.packages }}
+          restore-keys: ${{ steps.workspace-build-cache-key.outputs.prefix }}
       - name: Install canonical frozen dependencies with the dependency-only cache
         id: dependencies
         env:
@@ -298,6 +324,17 @@ jobs:
         # through the workspace_build output; unit gates still run from source.
         continue-on-error: true
         run: pnpm run prepare:typecheck:workspaces
+      - name: Save workspace package outputs for later v0.3 runs
+        # Only push runs save (pull-request caches stay private to their merge
+        # ref), and only on a key miss. A package compiler error still saves the
+        # verified outputs of every package that built.
+        if: ${{ github.event_name == 'push' && steps.workspace-build-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: |
+            packages/*/dist
+            packages/plugins/*/dist
+          key: ${{ steps.workspace-build-cache.outputs.cache-primary-key }}
       - name: Prepare the canonical CLI runtime closure
         if: ${{ steps.workspace-build.outcome == 'success' }}
         # The root preparation has already published current plugin runtimes.
