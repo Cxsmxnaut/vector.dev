@@ -78,10 +78,15 @@ describe('apps/cli/scripts/env-wrapper.cjs', () => {
     const preloadPath = await writeWin32Preload(tree.root);
     const userArgs = ['arg with spaces', 'quote"inside', '$(exit 3)', 'semi;colon&amp'];
 
+    // PATH holds no Node (an unset PATH would fall back to the system default search
+    // path), so only re-entering the absolute running Node delivers the arguments.
+    const envWithoutNodeOnPath = Object.fromEntries(
+      Object.entries(process.env).filter(([key]) => key.toUpperCase() !== 'PATH'),
+    );
     spawnSync(
       process.execPath,
       ['--require', preloadPath, tree.wrapperPath, 'dev', 'auth', ...userArgs],
-      { env: { ...process.env, HOME: tree.homeDir }, encoding: 'utf8' },
+      { env: { ...envWithoutNodeOnPath, PATH: tree.homeDir, HOME: tree.homeDir }, encoding: 'utf8' },
     );
 
     const delivered = JSON.parse(await readFile(tree.reportPath, 'utf8')) as { argv: string[]; execPath: string };

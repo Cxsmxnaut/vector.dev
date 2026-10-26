@@ -1459,7 +1459,7 @@ describe('buildSharedDeps', () => {
     const repoRoot = createTempDirSync('happier-cli-hoisted-plugin-inventory-');
     try {
       writeHoistedPluginFixtureRepo(repoRoot);
-      const publishReadiness = vi.fn(() => ({ stamped: true }));
+      const publishReadiness = vi.fn((_options?: unknown) => ({ stamped: true }));
 
       expect(existsSync(resolve(
         repoRoot,
@@ -1473,6 +1473,8 @@ describe('buildSharedDeps', () => {
       await runSourceDevRuntimeClosure(repoRoot, publishReadiness);
 
       expect(publishReadiness).toHaveBeenCalledTimes(1);
+      // Readiness is published for the requested workspaces, not the default full closure.
+      expect(publishReadiness.mock.calls[0]?.[0]).toMatchObject({ workspaceNames: ['plugins-pi'] });
     } finally {
       removeTempDirSync(repoRoot);
     }

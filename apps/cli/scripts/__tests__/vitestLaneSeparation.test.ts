@@ -114,6 +114,9 @@ describe('Vitest lane separation', () => {
         // The unit lane's post-suite checks (native node:test files + import-cycle guard)
         // run only behind `--unit-checks`; runVitestShards.test.ts proves what that flag runs.
         expect(unitLocal).toContain('node scripts/runVitestShards.mjs --config vitest.config.ts --unit-checks');
+        // Each lane selects its own config; a lane on the unit config silently reruns unit specs.
+        expect(packageJson.scripts?.['test:integration:local']).toContain('--config vitest.integration.config.ts');
+        expect(packageJson.scripts?.['test:slow:local']).toContain('--config vitest.slow.config.ts');
         expect(fastScripts).not.toContain('runPkgrollBuild');
         expect(fastScripts).not.toContain('syncPackageDist');
         expect(fastScripts).not.toContain('syncSharedDepsForDev');

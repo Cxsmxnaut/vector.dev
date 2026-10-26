@@ -35,6 +35,9 @@ describe('apps/cli package publish contract', () => {
     // The internal workspace closure itself (every reachable workspace bundled, and the
     // canonical resolver agreeing with this manifest) is owned by sourceDevBundledPluginClosure.test.ts.
     expect(bundled).not.toContain('@happier-dev/bundled-voice-runtime-contract');
+    // The daemon imports this workspace at runtime (apiMachine.ts) and no other bundled
+    // workspace requires it, so the closure guard cannot notice it leaving the bundle.
+    expect(bundled).toContain('@happier-dev/transfers');
     expect(bundled).toContain('proper-lockfile');
     expect(bundled).toContain('tweetnacl');
 
