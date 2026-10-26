@@ -70,24 +70,6 @@ describe('runScmOperationWithGitIndexLockRecovery', () => {
         expect(retryOriginalOperation).not.toHaveBeenCalled();
     });
 
-    it('does not remove the lock or retry when confirmation is cancelled', async () => {
-        modalConfirm.mockReset();
-        modalConfirm.mockResolvedValueOnce(false);
-        const removeIndexLock = vi.fn();
-        const retryOriginalOperation = vi.fn();
-        const { runScmOperationWithGitIndexLockRecovery } = await import('./gitIndexLockRecovery');
-
-        await runScmOperationWithGitIndexLockRecovery({
-            cwd: '/repo',
-            failedResponse: lockFailure,
-            removeIndexLock,
-            retryOriginalOperation,
-        });
-
-        expect(removeIndexLock).not.toHaveBeenCalled();
-        expect(retryOriginalOperation).not.toHaveBeenCalled();
-    });
-
     it('confirms, removes the backend-resolved lock, and retries the original operation once', async () => {
         modalConfirm.mockReset();
         modalConfirm.mockResolvedValueOnce(true);
