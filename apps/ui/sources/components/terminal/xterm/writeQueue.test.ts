@@ -35,7 +35,7 @@ describe('createXtermWriteQueue', () => {
         expect(completed).toEqual(['one', 'two']);
     });
 
-    it('rejects writes that would exceed the pending-byte cap', () => {
+    it('rejects writes that would exceed the pending-byte cap and frees the budget on clear', () => {
         const onReject = vi.fn();
         const queue = createXtermWriteQueue({
             write: () => {},
@@ -51,6 +51,9 @@ describe('createXtermWriteQueue', () => {
             pendingBytes: 4,
             maxPendingBytes: 4,
         });
+
+        queue.clear();
+        expect(queue.enqueue({ data: 'efgh', byteLength: 4 })).toBe(true);
     });
 
     it('drops stale parser callbacks after clear', () => {

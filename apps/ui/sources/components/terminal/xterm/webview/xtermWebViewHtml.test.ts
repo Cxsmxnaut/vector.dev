@@ -31,7 +31,7 @@ function guestEvent(fields: Record<string, unknown> = {}) {
     return { preventDefault: vi.fn(), stopPropagation: vi.fn(), ...fields };
 }
 
-function keydown(fields: Readonly<{ key: string; ctrlKey?: boolean; metaKey?: boolean }>) {
+function keydown(fields: Readonly<{ key: string; ctrlKey?: boolean; metaKey?: boolean; defaultPrevented?: boolean }>) {
     const event = guestEvent({
         type: 'keydown',
         shiftKey: false,
@@ -296,6 +296,39 @@ describe('buildXtermWebViewHtml', () => {
             expect(guest.ofType('copySelection')).toEqual([
                 { v: 1, type: 'copySelection', payload: { text: 'selected output' } },
             ]);
+        } finally {
+            guest.terminal.dispose();
+        }
+    });
+
+    it('never forwards a chord the WebView already handled, but keeps an unhandled Ctrl+G for the PTY', async () => {
+        const guest = await bootXtermWebViewGuest();
+        try {
+            const handled = keydown({ key: 'g', ctrlKey: true, defaultPrevented: true });
+            expect(guest.keyHandler()?.(handled.keyboardEvent)).toBe(false);
+
+            const unhandled = keydown({ key: 'g', ctrlKey: true });
+            expect(guest.keyHandler()?.(unhandled.keyboardEvent)).toBe(true);
+        } finally {
+            guest.terminal.dispose();
+        }
+    });
+
+    it('clears retained output and refocuses xterm on host clear and focus messages', async () => {
+        const guest = await bootXtermWebViewGuest();
+        try {
+            guest.advance(20);
+            const focusesAfterReady = guest.focusCount();
+            guest.send('write', { data: 'retained output' });
+            await guest.flushParser();
+            expect(guest.terminal.buffer.active.getLine(0)?.translateToString(true)).toBe('retained output');
+
+            guest.send('clear', {});
+            await guest.flushParser();
+            expect(guest.terminal.buffer.active.getLine(0)?.translateToString(true)).toBe('');
+
+            guest.send('focus', {});
+            expect(guest.focusCount()).toBe(focusesAfterReady + 1);
         } finally {
             guest.terminal.dispose();
         }
