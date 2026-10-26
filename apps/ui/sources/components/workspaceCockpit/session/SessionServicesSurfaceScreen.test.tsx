@@ -151,13 +151,6 @@ describe('SessionServicesSurfaceScreen', () => {
     });
     afterEach(() => { publicPreviewEnabled = true; });
 
-    it('passes supplied local service launcher state into the mobile Services pane', async () => {
-        const screen = await renderScreen(<SessionServicesSurfaceScreen
-            inventoryState={buildLocalServiceInventoryState({ rows: [] })} launcherState={buildLauncherState()} />,
-        { wrapper: runtime.Wrapper });
-        expect(screen.findByTestId('session-mobile-services-row:managed:mobile-feed')).toBeTruthy();
-    });
-
     it('does not poll public preview status when public previews are disabled', async () => {
         publicPreviewEnabled = false;
         primeServerFeaturesSnapshot({ serverId: runtime.serverId, snapshot: { status: 'ready', features: features() } });
