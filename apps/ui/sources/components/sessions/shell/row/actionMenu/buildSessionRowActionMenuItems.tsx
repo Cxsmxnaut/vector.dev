@@ -8,8 +8,10 @@ import {
     SESSION_ACTION_MARK_UNREAD_ID,
     SESSION_ACTION_MOVE_TO_FOLDER_ID,
     SESSION_ACTION_RENAME_ID,
+    SESSION_ACTION_SET_APPEARANCE_COLOR_ID,
     SESSION_ACTION_SET_ATTENTION_STANDING_ID,
 } from '@/components/sessions/actions/sessionActionIds';
+import { buildSessionAppearanceColorMenuItem } from '@/components/sessions/shell/appearance/sessionAppearanceColorMenu';
 import { listVisibleSessionActionIds } from '@/components/sessions/actions/sessionActionAvailability';
 import { t } from '@/text';
 
@@ -133,8 +135,16 @@ export function buildSessionRowMoreMenuItems(params: SessionRowMoreMenuBuildPara
         return priority(left.id) - priority(right.id);
     });
 
+    const appearanceItem = params.appearance ? buildSessionAppearanceColorMenuItem({
+        ...params.appearance,
+        menuId: SESSION_ACTION_SET_APPEARANCE_COLOR_ID,
+        iconColor: params.iconColor,
+        base: createSessionActionDropdownItem({ actionId: SESSION_ACTION_SET_APPEARANCE_COLOR_ID, iconColor: params.iconColor }),
+    }) : null;
+
     return [
         ...primaryItems,
+        ...(appearanceItem ? [appearanceItem] : []),
         ...(params.target.attentionStandingAction.visible ? [createReminderPresetItem(
             params.iconColor,
             params.reminderPresets,
