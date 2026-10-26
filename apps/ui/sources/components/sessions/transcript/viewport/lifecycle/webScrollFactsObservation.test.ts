@@ -91,4 +91,26 @@ describe('web scroll facts observation effects', () => {
             },
         ]);
     });
+
+    it('treats a fractional web distance within the pin threshold as reaching the tail', () => {
+        const lifecycle = createTranscriptViewportLifecycle();
+        lifecycle.dispatch({
+            sessionId: 'session-a',
+            platform: 'web',
+            shouldFollowLiveTail: false,
+            type: 'session-entry',
+        });
+
+        const effects = resolveWebScrollFactsObservationEffects({
+            dispatch: lifecycle.dispatch,
+            distanceFromLiveTailPx: 72.6,
+            movedAwayFromLiveTail: false,
+            movedTowardLiveTail: true,
+            pinThresholdPx: 72,
+            sessionId: 'session-a',
+        });
+
+        expect(effects.map((effect) => effect.type)).toEqual(['viewport-change', 'drain-deferred-newer']);
+        expect(lifecycle.getState().bottomFollowState.mode).toBe('following');
+    });
 });
