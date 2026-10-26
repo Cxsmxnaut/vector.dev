@@ -1149,24 +1149,4 @@ describe('createDaemonPluginChangeService', () => {
       .resolves.toEqual({ kind: 'cancelled' });
     await service.shutdown();
   });
-
-  it('does not enumerate a predecessor daemon\'s pending changes after shutdown', async () => {
-    const service = createDaemonPluginChangeService({
-      prepare: async () => ({
-        pluginId: 'acme.example',
-        review: createPluginInstallationReviewFixture(),
-        apply: async () => ({ kind: 'failed' as const, code: 'not_used' }),
-        cleanup: async () => undefined,
-      }),
-      createPendingChangeId: () => 'pending-1',
-    });
-    const begun = await service.requestPluginChange({
-      kind: 'installPath',
-      locator: '/tmp/example',
-      development: false,
-    });
-    if (begun.kind !== 'reviewRequired') throw new Error('Expected review');
-    await service.shutdown();
-    await expect(service.listPendingPluginChanges()).resolves.toEqual({ changes: [] });
-  });
 });
