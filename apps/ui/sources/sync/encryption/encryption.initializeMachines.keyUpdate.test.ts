@@ -2,7 +2,9 @@ import { describe, it, expect, vi } from 'vitest';
 import * as platformCrypto from 'rn-encryption';
 import { createDeferred, createMachineFixture } from '@/dev/testkit';
 import { encodeBase64 } from '@/encryption/base64';
+import sodium from '@/encryption/libsodium.lib';
 import { Encryption } from './encryption';
+import { AES256Encryption } from './encryptor';
 import { callSocketRpc, socketRpcCodec, type SocketRpcSocket } from '@happier-dev/sync-client';
 
 describe('Encryption.initializeMachines (key updates)', () => {
@@ -141,5 +143,18 @@ describe('Encryption.initializeMachines (key updates)', () => {
 
     // After re-initialization, decryption should succeed.
     expect(await after!.decryptRaw(ciphertextB64)).toEqual(payload);
+  });
+
+  it('falls back to the dataKey machineKey for a Machine whose data key cannot be decrypted', async () => {
+    const machineKey = new Uint8Array(32).fill(13);
+    const encryption = await Encryption.createFromContentKeyPair({ publicKey: sodium.crypto_box_keypair().publicKey, machineKey });
+
+    await encryption.initializeMachines(new Map([['machine-1', null]]));
+    const machineEncryption = encryption.getMachineEncryption('machine-1');
+    expect(machineEncryption).not.toBeNull();
+
+    const payload = { type: 'success', sessionId: 'session-123' };
+    const encrypted = await new AES256Encryption(machineKey).encrypt([payload]);
+    expect(await machineEncryption!.decryptRaw(encodeBase64(encrypted[0], 'base64'))).toEqual(payload);
   });
 });
