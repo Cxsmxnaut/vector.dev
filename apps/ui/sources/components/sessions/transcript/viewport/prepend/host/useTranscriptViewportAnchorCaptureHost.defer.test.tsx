@@ -1108,9 +1108,14 @@ describe('useTranscriptViewportAnchorCaptureHost deferral', () => {
                 { initialProps: buildDeps(members) },
             );
 
+            // A capture scheduled before exit must not later persist the teardown DOM either.
+            hook.getCurrent().schedule({ isPinned: false, offsetY: 777, shouldRestoreViewport: true });
             expect(hook.getCurrent().captureAtExit({ deferEmit: false })).toBeNull();
             expect(members.resolveWebScrollMetrics).not.toHaveBeenCalled();
             expect(members.emitViewportChange).not.toHaveBeenCalled();
+            vi.advanceTimersByTime(2_000);
+            expect(members.emitViewportChange).not.toHaveBeenCalled();
+            expect(vi.getTimerCount()).toBe(0);
 
             await hook.unmount();
         } finally {
