@@ -91,6 +91,7 @@ const SCOPED_ENV_KEYS = [
   'HAPPIER_DAEMON_SERVICE_CHANNEL',
   'HAPPIER_DAEMON_SERVICE_TARGET_MODE',
   'HAPPIER_DAEMON_SERVICE_AUTOSTART',
+  'HAPPIER_WINDOWS_SCHTASKS_TIMEOUT_MS',
   'HAPPIER_PUBLIC_RELEASE_CHANNEL',
   'HAPPIER_SERVER_URL',
   'HAPPIER_PUBLIC_SERVER_URL',
@@ -2063,10 +2064,13 @@ describe('runDaemonServiceCliCommand', () => {
     });
   });
 
-  it('preserves a running Windows service across install and retry', async () => {
+  it.each([false, true])('bounds native Windows action verification across install and retry (query timeout: %s)', async (queryTimesOut) => {
     await withTempDir('happier-service-install-win32-same-owner-', async (homeDir) => {
       const happierHomeDir = `${homeDir}/.happier`;
       const lifecycleEvents: string[] = [];
+      const observedQueryTimeouts: Array<number | undefined> = [];
+      const observedTaskStatusTimeouts: Array<number | undefined> = [];
+      const expectedQueryTimeout = queryTimesOut ? 7_300 : 15_000;
       let writeDaemonStateImpl: ((state: DaemonLocallyPersistedState) => void) | null = null;
       envScope.patch({
         HAPPIER_HOME_DIR: happierHomeDir,
@@ -2074,6 +2078,7 @@ describe('runDaemonServiceCliCommand', () => {
         HAPPIER_DAEMON_SERVICE_USER_HOME_DIR: homeDir,
         HAPPIER_DAEMON_SERVICE_HAPPIER_HOME_DIR: happierHomeDir,
         HAPPIER_DAEMON_SERVICE_TARGET_MODE: 'default-following',
+        HAPPIER_WINDOWS_SCHTASKS_TIMEOUT_MS: queryTimesOut ? String(expectedQueryTimeout) : undefined,
         HAPPIER_DAEMON_SERVICE_OWNERSHIP_WAIT_TIMEOUT_MS: '120',
         HAPPIER_DAEMON_SERVICE_OWNERSHIP_WAIT_POLL_MS: '10',
         HAPPIER_DAEMON_SERVICE_OWNERSHIP_STABLE_MS: '20',
@@ -2083,7 +2088,7 @@ describe('runDaemonServiceCliCommand', () => {
         const actual = await importOriginal<typeof import('node:child_process')>();
         return {
           ...actual,
-          spawnSync: vi.fn((command: string, args: readonly string[] = []) => {
+          spawnSync: vi.fn((command: string, args: readonly string[] = [], options?: { timeout?: number }) => {
             if (isHappierTaskFolderListing(command, args)) {
               return { status: 0, stdout: Buffer.from('[]'), stderr: Buffer.from('') };
             }
@@ -2091,6 +2096,14 @@ describe('runDaemonServiceCliCommand', () => {
               lifecycleEvents.push('registerTask');
             }
             if (isWindowsScheduledTaskStatusRead(command, args)) {
+              observedQueryTimeouts.push(options?.timeout);
+              if (queryTimesOut && options?.timeout) {
+                return {
+                  status: null,
+                  error: Object.assign(new Error('query timed out'), { code: 'ETIMEDOUT' }),
+                  stdout: Buffer.from(''), stderr: Buffer.from(''),
+                };
+              }
               return { status: 0, stdout: windowsNativeLauncherTaskStatusStdout(paths), stderr: Buffer.from('') };
             }
             if (command !== 'schtasks') {
@@ -2111,6 +2124,7 @@ describe('runDaemonServiceCliCommand', () => {
               });
             }
             if (action === '/Query') {
+              observedTaskStatusTimeouts.push(options?.timeout);
               return {
                 status: 0,
                 stdout: Buffer.from('Status: Running\nScheduled Task State: Enabled\n'),
@@ -2159,6 +2173,15 @@ describe('runDaemonServiceCliCommand', () => {
 
       const output = captureStdoutJsonOutput<{ ok: boolean; platform: string }>();
       try {
+        if (queryTimesOut) {
+          await expect(runDaemonServiceCliCommand({ argv: ['install', '--yes', '--json'] }))
+            .rejects.toThrow(/did not become the active daemon/i);
+          expect(observedQueryTimeouts.length).toBeGreaterThan(0);
+          expect(new Set(observedQueryTimeouts)).toEqual(new Set([expectedQueryTimeout]));
+          expect(observedTaskStatusTimeouts).not.toContain(undefined);
+          expect(observedTaskStatusTimeouts).toContain(expectedQueryTimeout);
+          return;
+        }
         await runDaemonServiceCliCommand({ argv: ['install', '--yes', '--json'] });
         const payload = output.json();
         expect(payload.ok).toBe(true);
@@ -2183,6 +2206,10 @@ describe('runDaemonServiceCliCommand', () => {
       } finally {
         repeated.restore();
       }
+      expect(observedQueryTimeouts.length).toBeGreaterThan(0);
+      expect(new Set(observedQueryTimeouts)).toEqual(new Set([expectedQueryTimeout]));
+      expect(observedTaskStatusTimeouts).not.toContain(undefined);
+      expect(observedTaskStatusTimeouts).toContain(expectedQueryTimeout);
     });
   });
 

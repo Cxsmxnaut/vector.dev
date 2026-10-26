@@ -28,6 +28,7 @@ describe('collectWindowsServiceLaunchDiagnostics', () => {
   });
 
   afterEach(async () => {
+    vi.unstubAllEnvs();
     if (originalPlatformDescriptor) {
       Object.defineProperty(process, 'platform', originalPlatformDescriptor);
     }
@@ -165,6 +166,34 @@ describe('collectWindowsServiceLaunchDiagnostics', () => {
       expect.any(Array),
       expect.any(Object),
     );
+  });
+
+  it.each([
+    [undefined, 15_000, false],
+    ['2300', 2_300, true],
+  ])('bounds diagnostic queries and keeps log context after timeout (configured budget: %s)', async (configuredTimeout, expectedTimeout, fallbackTimesOut) => {
+    forceWindowsPlatform();
+    vi.stubEnv('HAPPIER_WINDOWS_SCHTASKS_TIMEOUT_MS', configuredTimeout);
+    const observedTimeouts: Array<number | undefined> = [];
+    spawnSyncMock.mockImplementation((command: string, _args: readonly string[], options?: { timeout?: number }) => {
+      observedTimeouts.push(options?.timeout);
+      if (command === 'powershell.exe' || fallbackTimesOut) {
+        return { status: null, error: Object.assign(new Error('query timed out'), { code: 'ETIMEDOUT' }), stdout: '', stderr: '' };
+      }
+      return { status: 0, stdout: 'Status: Ready\nLast Result: 37\n', stderr: '' };
+    });
+    const stderrPath = join(homeDir, 'logs', 'daemon-service.default.err.log');
+    await writeFile(stderrPath, 'MODULE_NOT_FOUND\n', 'utf8');
+
+    const result = collectWindowsServiceLaunchDiagnostics({
+      taskName: 'Happier\\happier-daemon.default',
+      stdoutPath: join(homeDir, 'logs', 'daemon-service.default.out.log'),
+      stderrPath,
+    });
+
+    expect(result).toContain('MODULE_NOT_FOUND');
+    if (!fallbackTimesOut) expect(result).toContain('Last result:   37');
+    expect(observedTimeouts).toEqual([expectedTimeout, expectedTimeout]);
   });
 
   it('decodes UTF-16 LE log files written by PowerShell `>>` redirects', async () => {

@@ -1,8 +1,8 @@
-import { spawnBackgroundSync } from '@happier-dev/cli-common/process';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import {
   buildReadWindowsScheduledTaskStatusPowerShellCommand,
   parseWindowsScheduledTaskStatusPowerShellJson,
+  runWindowsScheduledTaskQuery,
   validateWindowsServiceLauncherPe,
 } from '@happier-dev/cli-common/service';
 
@@ -136,7 +136,7 @@ function splitWindowsScheduledTaskName(taskName: string): { taskPath: string; le
 
 function readScheduledTaskPowerShellInfo(taskName: string): string | null {
   const { taskPath, leafTaskName } = splitWindowsScheduledTaskName(taskName);
-  const result = spawnBackgroundSync('powershell.exe', [
+  const result = runWindowsScheduledTaskQuery('powershell.exe', [
     '-NoProfile',
     '-NonInteractive',
     '-ExecutionPolicy',
@@ -146,9 +146,7 @@ function readScheduledTaskPowerShellInfo(taskName: string): string | null {
       taskPath,
       taskName: leafTaskName,
     }),
-  ], {
-    encoding: 'utf8',
-  });
+  ]);
   if (!result || result.error || result.status !== 0 || !result.stdout) {
     return null;
   }
@@ -175,9 +173,7 @@ function readScheduledTaskPowerShellInfo(taskName: string): string | null {
  * diagnostic source.
  */
 function readScheduledTaskSchtasksListInfo(taskName: string): string | null {
-  const result = spawnBackgroundSync('schtasks', ['/Query', '/TN', taskName, '/FO', 'LIST', '/V'], {
-    encoding: 'utf8',
-  });
+  const result = runWindowsScheduledTaskQuery('schtasks', ['/Query', '/TN', taskName, '/FO', 'LIST', '/V']);
   if (!result || result.error || result.status !== 0 || !result.stdout) {
     return null;
   }

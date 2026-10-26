@@ -1,17 +1,16 @@
 import * as fs from 'node:fs';
-import { spawnBackgroundSync } from '@happier-dev/cli-common/process';
 import {
   buildListWindowsScheduledTaskFolderPowerShellCommand,
   isWindowsScheduledTaskLauncherActionExpected,
   parsePowerShellQuotedString,
   parseWindowsScheduledTaskFolderPowerShellJson,
   resolveInstalledWindowsServiceLauncherPaths,
+  runWindowsScheduledTaskQuery,
   validateWindowsServiceLauncherPe,
 } from '@happier-dev/cli-common/service';
 import { basename, join, win32 as win32Path } from 'node:path';
 
 import type { PublicReleaseRingId } from '@happier-dev/release-runtime/releaseRings';
-import { readPositiveIntEnv } from '@/utils/readPositiveIntEnv';
 import { happierHomeDirsMatch } from '@/daemon/ownership/happierHomeDirComparableKey';
 
 import {
@@ -298,27 +297,15 @@ function isInstalledWindowsLauncherActionHealthy(definition: WindowsScheduledTas
   }
 }
 
-function readWindowsSchtasksTimeoutMs(): number {
-  return readPositiveIntEnv('HAPPIER_WINDOWS_SCHTASKS_TIMEOUT_MS', 15_000);
-}
-
-function runWindowsSchtasksCommand(args: readonly string[]): ReturnType<typeof spawnBackgroundSync> {
-  return spawnBackgroundSync('schtasks', args, {
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe'],
-    timeout: readWindowsSchtasksTimeoutMs(),
-  });
-}
-
 function readWindowsScheduledTaskDefinition(taskName: string): WindowsScheduledTaskDefinition | null {
   const normalizedTaskName = normalizeWindowsScheduledTaskName(taskName);
   if (!normalizedTaskName) return null;
 
-  const result = runWindowsSchtasksCommand(['/Query', '/TN', normalizedTaskName, '/XML']);
+  const result = runWindowsScheduledTaskQuery('schtasks', ['/Query', '/TN', normalizedTaskName, '/XML']);
   const xmlDefinition = !result.error && result.status === 0
     ? parseWindowsScheduledTaskDefinitionFromXml(String(result.stdout ?? '')) : null;
   if (xmlDefinition) return xmlDefinition;
-  const fallback = runWindowsSchtasksCommand(['/Query', '/TN', normalizedTaskName, '/FO', 'LIST', '/V']);
+  const fallback = runWindowsScheduledTaskQuery('schtasks', ['/Query', '/TN', normalizedTaskName, '/FO', 'LIST', '/V']);
   const listDefinition = !fallback.error && fallback.status === 0
     ? parseWindowsScheduledTaskDefinitionFromTaskToRun(String(fallback.stdout ?? '')) : null;
   if (listDefinition) return listDefinition;
@@ -347,18 +334,14 @@ function deriveWindowsServiceHomeDirFromWrapperPath(wrapperPath: string | null):
 
 function listWindowsScheduledTaskNames(): readonly string[] {
   // Only the Happier folder: enumerating every task on the machine can outlast the timeout.
-  const result = spawnBackgroundSync('powershell.exe', [
+  const result = runWindowsScheduledTaskQuery('powershell.exe', [
     '-NoProfile',
     '-NonInteractive',
     '-ExecutionPolicy',
     'Bypass',
     '-Command',
     buildListWindowsScheduledTaskFolderPowerShellCommand({ taskFolder: '\\Happier\\' }),
-  ], {
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe'],
-    timeout: readWindowsSchtasksTimeoutMs(),
-  });
+  ]);
   if (result.error) throw result.error;
   const taskPaths = result.status === 0 ? parseWindowsScheduledTaskFolderPowerShellJson(String(result.stdout ?? '')) : null;
   if (!taskPaths) {

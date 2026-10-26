@@ -7,6 +7,7 @@ import { commandExistsOnPath, spawnBackgroundSync } from '../process/index.js';
 import { buildLaunchdPlistXml } from './launchd.js';
 import { mergeServiceEnvWithPath } from './path.js';
 import { renderSystemdServiceUnit } from './systemd.js';
+import { runWindowsScheduledTaskQuery } from './runWindowsScheduledTaskQuery.js';
 import {
   buildReadWindowsScheduledTaskStatusPowerShellCommand,
   buildRegisterWindowsUserScheduledTaskPowerShellCommand,
@@ -670,7 +671,9 @@ export function inspectServiceRegistration(params: Readonly<{
     args = [...windowsPowerShellCommandArgs(buildReadWindowsScheduledTaskStatusPowerShellCommand({ taskName, taskPath }))];
   }
   if (!commandExistsOnPath(cmd, { path: process.env.PATH })) throw new Error(`[service] command not found: ${cmd}`);
-  const res = spawnBackgroundSync(cmd, args, { encoding: 'utf8', env: buildServiceCommandEnv({ cmd, args, env: process.env, uid }) });
+  const res = cmd === 'powershell.exe'
+    ? runWindowsScheduledTaskQuery(cmd, args)
+    : spawnBackgroundSync(cmd, args, { encoding: 'utf8', env: buildServiceCommandEnv({ cmd, args, env: process.env, uid }) });
   if (res.error) throw new Error(`[service] failed to inspect ${label}: ${res.error.message}`);
   const status = typeof res.status === 'number' ? res.status : null;
   const stdout = String(res.stdout ?? '').trim();

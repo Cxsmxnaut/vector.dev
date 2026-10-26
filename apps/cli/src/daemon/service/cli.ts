@@ -20,6 +20,7 @@ import {
   isWindowsScheduledTaskLauncherActionExpected,
   parseWindowsScheduledTaskStatusPowerShellJson,
   splitQualifiedWindowsScheduledTaskName,
+  runWindowsScheduledTaskQuery,
   validateWindowsServiceLauncherPe,
 } from '@happier-dev/cli-common/service';
 
@@ -448,10 +449,12 @@ async function stopCurrentWindowsServiceOwnerIfNeeded(params: Readonly<{
 
 function runCommandCaptureBestEffort(command: Readonly<{ cmd: string; args: readonly string[] }>): { ok: boolean; out: string | null } {
   try {
-    const res = spawnBackgroundSync(command.cmd, command.args, {
-      stdio: ['ignore', 'pipe', 'pipe'],
-      env: buildServiceCommandEnv({ cmd: command.cmd, args: command.args, env: process.env }),
-    });
+    const res = command.cmd === 'schtasks' && command.args[0]?.toLowerCase() === '/query'
+      ? runWindowsScheduledTaskQuery(command.cmd, command.args)
+      : spawnBackgroundSync(command.cmd, command.args, {
+          stdio: ['ignore', 'pipe', 'pipe'],
+          env: buildServiceCommandEnv({ cmd: command.cmd, args: command.args, env: process.env }),
+        });
     const ok = (res.status ?? 1) === 0;
     const out = (res.stdout ? String(res.stdout) : '') + (res.stderr ? String(res.stderr) : '');
     return { ok, out: out.trim() ? out : null };
@@ -596,14 +599,14 @@ function doesExpectedWindowsLauncherActionMatch(params: WindowsLaunchDiagnostics
     return false;
   }
   const { taskName, taskPath } = splitQualifiedWindowsScheduledTaskName(params.taskName);
-  const result = spawnBackgroundSync('powershell.exe', [
+  const result = runWindowsScheduledTaskQuery('powershell.exe', [
     '-NoProfile',
     '-NonInteractive',
     '-ExecutionPolicy',
     'Bypass',
     '-Command',
     buildReadWindowsScheduledTaskStatusPowerShellCommand({ taskName, taskPath }),
-  ], { encoding: 'utf8' });
+  ]);
   if (result.error || result.status !== 0) return false;
   const status = parseWindowsScheduledTaskStatusPowerShellJson(String(result.stdout ?? ''));
   return Boolean(status?.exists && isWindowsScheduledTaskLauncherActionExpected({
