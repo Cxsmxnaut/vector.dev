@@ -341,4 +341,92 @@ describe('PublicShareViewerScreen (e2ee)', () => {
             await screen.unmount();
         }
     });
+
+    it('suppresses encrypted non-structured event-role output rows while rendering the other decrypted rows', async () => {
+        transcriptListSpy.mockClear();
+        serverFetchSpy.mockReset();
+        decryptDataKeyFromPublicShareSpy.mockReset();
+
+        const dataKey = new Uint8Array(32).fill(4);
+        decryptDataKeyFromPublicShareSpy.mockResolvedValue(dataKey);
+
+        const encryptor = new AES256Encryption(dataKey);
+        const [metadataCiphertextBytes] = await encryptor.encrypt([
+            projectSessionSharedMetadataV1({ metadata: { path: '/repo', host: 'devbox', name: 'E2EE Session' } }),
+        ]);
+        const assistantOutput = (uuid: string, text: string) => ({
+            role: 'agent',
+            content: {
+                type: 'output',
+                data: { type: 'assistant', uuid, message: { role: 'assistant', content: [{ type: 'text', text }] } },
+            },
+        });
+        const [replyCiphertextBytes, eventCiphertextBytes] = await encryptor.encrypt([
+            assistantOutput('reply-uuid', 'Visible reply'),
+            assistantOutput('event-uuid', 'Transport status'),
+        ]);
+
+        serverFetchSpy
+            .mockResolvedValueOnce({
+                ok: true,
+                status: 200,
+                json: async () => ({
+                    session: {
+                        id: 's1',
+                        seq: 2,
+                        encryptionMode: 'e2ee',
+                        createdAt: 1,
+                        updatedAt: 2,
+                        active: true,
+                        activeAt: 2,
+                        metadataLayoutVersion: 1,
+                        metadata: encodeBase64(metadataCiphertextBytes, 'base64'),
+                        metadataVersion: 1,
+                    },
+                    owner: { id: 'u1', username: 'alice', firstName: null, lastName: null, avatar: null },
+                    accessLevel: 'view',
+                    encryptedDataKey: 'encrypted-data-key-placeholder',
+                    isConsentRequired: false,
+                }),
+            })
+            .mockResolvedValueOnce({
+                ok: true,
+                status: 200,
+                json: async () => ({
+                    messages: [
+                        {
+                            id: 'm-reply',
+                            seq: 2,
+                            localId: null,
+                            content: { t: 'encrypted', c: encodeBase64(replyCiphertextBytes, 'base64') },
+                            createdAt: 20,
+                            updatedAt: 20,
+                        },
+                        {
+                            id: 'm-event',
+                            seq: 1,
+                            localId: null,
+                            messageRole: 'event',
+                            content: { t: 'encrypted', c: encodeBase64(eventCiphertextBytes, 'base64') },
+                            createdAt: 10,
+                            updatedAt: 10,
+                        },
+                    ],
+                }),
+            });
+
+        const { default: PublicShareViewerScreen } = await import('@/app/(app)/share/[token]');
+
+        const screen = await renderScreen(<PublicShareViewerScreen />);
+        try {
+            await vi.waitFor(() => {
+                const last = transcriptListSpy.mock.calls[transcriptListSpy.mock.calls.length - 1]?.[0];
+                expect(JSON.stringify(last?.messages ?? [])).toContain('Visible reply');
+            });
+            const last = transcriptListSpy.mock.calls[transcriptListSpy.mock.calls.length - 1]?.[0];
+            expect(JSON.stringify(last?.messages)).not.toContain('Transport status');
+        } finally {
+            await screen.unmount();
+        }
+    });
 });

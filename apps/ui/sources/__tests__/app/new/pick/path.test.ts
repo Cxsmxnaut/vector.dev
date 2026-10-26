@@ -151,6 +151,12 @@ describe('PathPickerScreen', () => {
         return renderScreen(React.createElement(PathPickerScreen));
     }
 
+    it('hands the path list the route machine for browsing', async () => {
+        await renderPathPicker();
+
+        expect(lastPathSelectionListProps?.machineId).toBe('m1');
+    });
+
     it('commits an empty path as the machine home folder when there is no previous route', async () => {
         navigationState = { index: 0, routes: [{ key: 'only' }] };
         localSearchParams = {

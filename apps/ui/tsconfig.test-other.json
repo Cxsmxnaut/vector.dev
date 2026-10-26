@@ -31,6 +31,7 @@
     "sources/__tests__/app/_layout.test.ts",
     "sources/__tests__/app/automations/edit.test.tsx",
     "sources/__tests__/app/home.externalAuthStart.spec.tsx",
+    "sources/__tests__/app/machine/machineDetailSessionQueries.test.ts",
     "sources/__tests__/app/machine/machineDetails.capabilitiesRequestStability.test.ts",
     "sources/__tests__/app/machine/machineDetails.executionRuns.test.tsx",
     "sources/__tests__/app/machine/machineDetails.hydration.test.tsx",
