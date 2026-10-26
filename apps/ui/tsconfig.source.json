@@ -2358,7 +2358,6 @@
     "sources/components/settings/shell/SettingsSearchResults.tsx",
     "sources/components/settings/shell/SettingsShell.tsx",
     "sources/components/settings/shell/SettingsSidebar.tsx",
-    "sources/components/settings/shell/SettingsViewWrapper.tsx",
     "sources/components/settings/shell/settingsRailVisibility.ts",
     "sources/components/settings/shell/settingsSearchRows.ts",
     "sources/components/settings/shell/settingsSidebarSizing.ts",

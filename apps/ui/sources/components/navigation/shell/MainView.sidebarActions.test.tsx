@@ -178,10 +178,6 @@ vi.mock('@/components/navigation/shell/FriendsView', () => ({
     FriendsView: 'FriendsView',
 }));
 
-vi.mock('@/components/settings/shell/SettingsViewWrapper', () => ({
-    SettingsViewWrapper: 'SettingsViewWrapper',
-}));
-
 vi.mock('@/components/projects/ProjectsListView', () => ({
     ProjectsListView: 'ProjectsListView',
 }));
