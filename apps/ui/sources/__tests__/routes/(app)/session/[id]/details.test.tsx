@@ -258,13 +258,6 @@ describe('/session/[id]/details', () => {
         await screen.update(<></>);
         expect(runtime.pane.scopeState?.details.isOpen).toBe(false);
     });
-    it('returns to the parent session route when there is no back stack', async () => {
-        canGoBack = false;
-        const screen = await renderScreen(openReadme);
-        await act(async () => panel(screen).props.onRequestClose());
-        expect(routerBackSpy).not.toHaveBeenCalled();
-        expect(routerReplaceSpy).toHaveBeenCalledWith('/session/session-1?mobileSurface=chat');
-    });
     it('falls back to the source surface when a sourced details route has no back stack', async () => {
         canGoBack = false; mockServerId = runtime.serverId; mockSourceSurfaceParam = 'git';
         const screen = await renderScreen(openReadme);

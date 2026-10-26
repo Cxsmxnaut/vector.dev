@@ -84,20 +84,10 @@ vi.mock('@/hooks/session/useHydrateSessionForRoute', () => ({
     }),
 }));
 
-vi.mock('@/components/sessions/panes/url/sessionPaneUrlState', () => ({
-    serializeSessionPaneUrlState: (state: any) => state?.details?.kind === 'commit'
-        ? { details: 'commit', sha: state.details.sha }
-        : {},
-}));
-
-vi.mock('@/components/sessions/shell/SessionInvalidLinkFallback', () => ({
-    SessionInvalidLinkFallback: () => React.createElement('SessionInvalidLinkFallback', { testID: 'session-invalid-link' }),
-}));
+const { default: CommitScreen } = await import('@/app/(app)/session/[id]/commit');
 
 describe('CommitScreen native route fallback', () => {
     it('renders the invalid link fallback when the sha param is missing', async () => {
-        vi.resetModules();
-        const { default: CommitScreen } = await import('@/app/(app)/session/[id]/commit');
         mockShaParam = '';
         routerMock.state.params = { id: 'session-1', sha: mockShaParam };
         routerReplaceSpy.mockClear();
@@ -119,8 +109,6 @@ describe('CommitScreen native route fallback', () => {
     });
 
     it('re-opens details when the sha param changes on the same native screen instance', async () => {
-        vi.resetModules();
-        const { default: CommitScreen } = await import('@/app/(app)/session/[id]/commit');
         mockShaParam = 'abc123';
         routerMock.state.params = { id: 'session-1', sha: mockShaParam };
         routerReplaceSpy.mockClear();

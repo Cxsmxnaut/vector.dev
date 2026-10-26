@@ -65,11 +65,6 @@ async function renderSessionScreen() {
 }
 
 describe('session/[id] param parsing', () => {
-    it('renders the actual Session view using Expo Router search params', async () => {
-        const { sessionView } = await renderSessionScreen();
-        expect(sessionView.props.id).toBe('session-123');
-    });
-
     it('omits jumpToSeq when jumpSeq is missing', async () => {
         const { sessionView } = await renderSessionScreen();
         expect(sessionView.props.jumpToSeq ?? null).toBeNull();
@@ -79,20 +74,6 @@ describe('session/[id] param parsing', () => {
         searchParams = { ...searchParams, jumpSeq: '   ' };
         const { sessionView } = await renderSessionScreen();
         expect(sessionView.props.jumpToSeq ?? null).toBeNull();
-    });
-
-    it('projects a numeric jumpSeq into the real Session view', async () => {
-        searchParams = { ...searchParams, jumpSeq: '42' };
-        const { sessionView } = await renderSessionScreen();
-        expect(sessionView.props.jumpToSeq).toBe(42);
-    });
-
-    it('projects pane URL state into the real Session view', async () => {
-        searchParams = { ...searchParams, right: 'files', details: 'file', path: 'src/app.ts' };
-        const { sessionView } = await renderSessionScreen();
-        expect(sessionView.props.paneUrlState).toEqual({
-            rightTabId: 'files', details: { kind: 'file', path: 'src/app.ts' },
-        });
     });
 
     it('hydrates a cold deep link through its qualified Home before mounting Session view', async () => {

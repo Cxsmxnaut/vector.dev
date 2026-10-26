@@ -183,6 +183,14 @@ describe('CommitScreen', () => {
         expect(request.commit).toBe('0338a0f');
     });
 
+    it('qualifies the commit view with the route Home and Session id', async () => {
+        const Screen = (await import('@/app/(app)/session/[id]/commit')).default;
+        const screen = await renderCommitScreen(Screen);
+        expect(screen.findByType(SessionCommitDetailsView).props).toEqual(expect.objectContaining({
+            sessionId: 'session-1', serverId: fixture.scope.serverId, sha: 'abc123',
+        }));
+    });
+
     it('hides revert action when git write operations are disabled', async () => {
         scmWriteEnabled = false;
         const Screen = (await import('@/app/(app)/session/[id]/commit')).default;
