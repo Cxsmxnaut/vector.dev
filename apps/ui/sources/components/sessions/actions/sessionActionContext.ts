@@ -1,6 +1,7 @@
 import { resolveSessionReadStateAction } from '@/sync/domains/session/readState/sessionReadState';
 import type { Session } from '@/sync/domains/state/storageTypes';
 import type { SessionListRenderableSession } from '@/sync/domains/session/listing/sessionListRenderable';
+import { readSessionListRenderableOwnerMetadataView } from '@/sync/domains/session/listing/sessionListRenderableSessionProjection';
 import { isSessionTerminalPermanentlyAbsent } from '@happier-dev/protocol/sessions/metadata/terminalMetadata';
 import { readSessionOwnerMetadataView, readSessionOwnerMetadataViewPreferences } from '@/sync/domains/session/readSessionOwnerMetadataView';
 import {
@@ -65,9 +66,9 @@ export function createSessionActionTarget(params: Readonly<{
         terminalControlServiceability?.v === 1
         && terminalControlServiceability.state === 'recoverable_unservable'
     );
-    const hasReadableOwnerMetadataWithoutTerminalLifecycle = ownerSession !== null
-        && ownerMetadata !== null
-        && ownerMetadata.terminal?.controlServiceabilityV1 === undefined;
+    const deleteOwnerMetadata = ownerSession ? ownerMetadata : readSessionListRenderableOwnerMetadataView(session);
+    const hasReadableOwnerMetadataWithoutTerminalLifecycle = deleteOwnerMetadata !== null
+        && terminalControlServiceability === undefined;
     const hasSettledUnavailableEncryptedContent =
         readBlockedSessionContentAvailability(readSessionContentAvailability(session)) !== null;
     const canStop = session.access?.capabilities.stopSession === true;

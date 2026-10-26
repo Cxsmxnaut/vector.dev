@@ -62,7 +62,7 @@ import { buildScopedSessionRouteHref } from '@/hooks/session/sessionRouteServerS
 import { useServerFeaturesSnapshotForServerId } from '@/sync/domains/features/featureDecisionRuntime';
 import { useSessionHandoffSourceReachability } from '@/sync/domains/sessionHandoff/useSessionHandoffSourceReachability';
 import { useSessionReachableMachineTarget } from '@/components/sessions/model/useSessionMachineReachability';
-import { resolveSessionDeleteWarning } from '@/components/sessions/actions/sessionActionPresentation';
+import { confirmSessionDelete } from '@/components/sessions/actions/confirmSessionDelete';
 import { useSessionViewShellSession } from '@/components/sessions/shell/sessionViewStableSession';
 import { safeRouterBack } from '@/utils/navigation/safeRouterBack';
 import { normalizeSessionId } from '@/sync/domains/session/normalizeSessionId';
@@ -1132,46 +1132,26 @@ function SessionInfoContent({
     await performArchive();
   }, [performArchive]);
 
-  const [deletingSession, performDelete] = useHappyAction(async () => {
+  const [deletingSession, performDelete] = useHappyAction(async (target: typeof sessionActionTarget) => {
     await executeSessionAction({
       actionId: SESSION_ACTION_DELETE_ID,
-      target: sessionActionTarget,
+      target,
       context: { presentUserConfirmation: { actionId: 'session.delete' } },
     });
     handleExitAfterSessionMutation();
   });
 
   const handleDeleteSession = React.useCallback(async () => {
-    const confirmed = await Modal.confirm(
-      t('sessionInfo.deleteSession'),
-      resolveSessionDeleteWarning({
-        metadata,
-        machineOnline:
-          currentExecutionMachinePresence.reachability === 'unknown'
-            ? null
-            : currentExecutionMachinePresence.reachability === 'reachable',
-        defaultWarning: t('sessionInfo.deleteSessionWarning'),
-        offlineManagedWarning: t('sessionDirectoryRecovery.offlineDelete', {
-          machine:
-            currentExecutionMachineLabel ??
-            metadata?.host ??
-            t('status.unknown'),
-        }),
-      }),
-      {
-        cancelText: t('common.cancel'),
-        confirmText: t('sessionInfo.deleteSession'),
-        destructive: true,
-      },
-    );
+    const deleteTarget = sessionActionTarget;
+    const confirmed = await confirmSessionDelete({
+      metadata,
+      machineOnline: currentExecutionMachinePresence.reachability === 'unknown'
+        ? null : currentExecutionMachinePresence.reachability === 'reachable',
+      machineLabel: currentExecutionMachineLabel ?? metadata?.host ?? null,
+    });
     if (!confirmed) return;
-    await performDelete();
-  }, [
-    currentExecutionMachinePresence.reachability,
-    currentExecutionMachineLabel,
-    metadata,
-    performDelete,
-  ]);
+    await performDelete(deleteTarget);
+  }, [currentExecutionMachinePresence.reachability, currentExecutionMachineLabel, metadata, performDelete, sessionActionTarget]);
 
   const [, handleRenameSession] = useHappyAction(async () => {
     if (!canRenameSession) return;
