@@ -222,6 +222,65 @@ from this current-work projection.
 ## HTTP endpoints by area
 See `api.md` for the full HTTP endpoint catalog and auth flows.
 
+### Session organization (development)
+
+`GET /v2/session-organization` returns the account-scoped organization snapshot.
+Pins, folders, tags, ordering and workspace/group labels retain their existing
+collections. Per-session appearance uses a separate `sessionAppearances`
+collection; it does not extend the strictly parsed label-kind enum.
+
+Clients request `includeSessionAppearances=true` to receive
+`sessionAppearances: [{ sessionId, display, updatedAt }]`. The server omits the
+field otherwise, preserving older strict snapshot readers. A client receiving
+no field after requesting it treats session appearance as unsupported by that
+server. The snapshot collection is bounded at 1,000 rows per account because
+snapshots are list first-paint payloads. Only visible, unarchived sessions count
+toward the write quota; retained appearances for archived or inaccessible sessions
+do not consume it. Reads include only visible, unarchived sessions.
+
+`PUT /v2/session-organization/appearances/:sessionId` accepts `{ display }` and
+returns `{ appearance: { sessionId, display, updatedAt } }`. The display is the
+existing opaque `{ t: 'encrypted', c }` or `{ t: 'plain', v }` organization
+envelope; plain envelopes require a plain account. The server validates the
+envelope but does not interpret colour or other display contents. `{ display:
+null }` deletes the override idempotently and returns `{ appearance: null }`;
+clearing an archived session remains allowed through the existing session-access
+rule. Malformed request bodies follow the existing Fastify validation path and
+return 400 `invalid-params`; handler-level validation failures return 400
+`invalid-session-appearance`. Inaccessible sessions return 404 `Session not found`, and creating beyond the bound returns
+409 `session-appearance-limit-exceeded`. Updating an existing row or clearing
+one remains allowed at the bound.
+
+The existing organization mutation owner commits the row, increments the account
+organization checkpoint, and publishes a change hint with
+`scope: 'sessionAppearances'` and the affected `sessionIds`. Account and session
+deletion cascade to their appearance rows in PostgreSQL, SQLite and MySQL.
+Project colours remain client-owned display content inside workspace labels.
+These additions describe development source, not released availability.
+
+The UI colour model and inheritance rule live in
+`apps/ui/sources/sync/domains/session/organization/appearanceColor.ts`.
+Display content uses `{ color: { kind: 'accent', key } }` or
+`{ color: { kind: 'custom', hex: '#RRGGBB' } }`; custom hex values normalize to
+opaque uppercase six-digit hex. Session overrides take precedence over workspace
+colours. Workspace display content can carry both `label` and `color`.
+`setWorkspaceDisplay` merges field intents through the existing label operation
+and envelope owner, and removes a workspace label row only when both are empty.
+Legacy import preserves existing server label rows, including colour-only rows.
+
+For UI consumers, `useSessionListViewState` exposes
+`setWorkspaceColor(workspaceKey, colorOrNull, { serverId }?)`,
+`setSessionAppearance(sessionId, colorOrNull, { serverId }?)`,
+`workspaceColorsV1`, and `sessionAppearancesSupported`. Handlers use the existing
+organization mutation error path; session ids are unprefixed. Multi-server rows
+pass their own server id. Project header items and session row models expose
+`appearanceColor`. `hooks/session/useSessionAppearance.ts` provides
+`useSessionAppearancesSupported(serverId)` for server-local action availability
+and `useCustomSessionAppearanceColors(serverId?)` for distinct custom hex colours
+currently in use. Mount the latter inside the open picker; its values are not
+historical recency. Resolve theme accents with `resolveSessionAppearanceColor`.
+Workspace colour actions remain available when per-session support is absent.
+
 ## Sequencing and concurrency
 - `UpdatePayload.seq` is the per-user update sequence (monotonic) used for sync ordering.
 - Sessions, machines, and artifacts have their own `seq` fields used by clients for ordering.
