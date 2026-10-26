@@ -21,8 +21,8 @@ export type VoiceExecutionMachinePresentation = Readonly<{
 // A subscription port, not another store: unrelated root writes do not even
 // ask for naming inputs. Machine ingestion owns these source-slice identities.
 const machineNamingSource = {
-  getState: storage.getState,
-  getInitialState: storage.getInitialState,
+  getState: () => storage.getState(),
+  getInitialState: () => storage.getInitialState(),
   subscribe: (listener: Parameters<typeof storage.subscribe>[0]) => storage.subscribe((state, previous) => {
     if (state.machines !== previous.machines
       || state.machineListByServerId !== previous.machineListByServerId
