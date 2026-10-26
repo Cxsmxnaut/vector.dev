@@ -29,15 +29,15 @@ vi.mock('@/daemon/doctor', async (importOriginal) => {
 });
 
 function doMockChildProcessSpawnSync(
-  spawnSyncImpl: (command: string, args?: readonly string[]) => unknown,
+  spawnSyncImpl: (command: string, args?: readonly string[], options?: { encoding?: BufferEncoding | 'buffer'; timeout?: number }) => unknown,
 ): void {
   vi.doMock('node:child_process', async (importOriginal) => {
     const actual = await importOriginal<typeof import('node:child_process')>();
     return {
       ...actual,
       // Like the real spawnSync, return strings when the caller requests an encoding.
-      spawnSync: vi.fn((command: string, args?: readonly string[], options?: { encoding?: BufferEncoding | 'buffer' }) => {
-        const result = spawnSyncImpl(command, args) as { stdout?: unknown; stderr?: unknown } | null;
+      spawnSync: vi.fn((command: string, args?: readonly string[], options?: { encoding?: BufferEncoding | 'buffer'; timeout?: number }) => {
+        const result = spawnSyncImpl(command, args, options) as { stdout?: unknown; stderr?: unknown } | null;
         const encoding = options?.encoding;
         if (!encoding || encoding === 'buffer' || !result || typeof result !== 'object') return result;
         const decode = (value: unknown) => (Buffer.isBuffer(value) ? value.toString(encoding) : value);
@@ -2084,56 +2084,50 @@ describe('runDaemonServiceCliCommand', () => {
         HAPPIER_DAEMON_SERVICE_OWNERSHIP_STABLE_MS: '20',
       });
       vi.resetModules();
-      vi.doMock('node:child_process', async (importOriginal) => {
-        const actual = await importOriginal<typeof import('node:child_process')>();
-        return {
-          ...actual,
-          spawnSync: vi.fn((command: string, args: readonly string[] = [], options?: { timeout?: number }) => {
-            if (isHappierTaskFolderListing(command, args)) {
-              return { status: 0, stdout: Buffer.from('[]'), stderr: Buffer.from('') };
-            }
-            if (command === 'powershell.exe' && args.some((arg) => arg.includes('.RegisterTask('))) {
-              lifecycleEvents.push('registerTask');
-            }
-            if (isWindowsScheduledTaskStatusRead(command, args)) {
-              observedQueryTimeouts.push(options?.timeout);
-              if (queryTimesOut && options?.timeout) {
-                return {
-                  status: null,
-                  error: Object.assign(new Error('query timed out'), { code: 'ETIMEDOUT' }),
-                  stdout: Buffer.from(''), stderr: Buffer.from(''),
-                };
-              }
-              return { status: 0, stdout: windowsNativeLauncherTaskStatusStdout(paths), stderr: Buffer.from('') };
-            }
-            if (command !== 'schtasks') {
-              return { status: 0, stdout: Buffer.from(''), stderr: Buffer.from('') };
-            }
-            const action = String(args[0] ?? '');
-            lifecycleEvents.push(action);
-            if (action === '/Run' && writeDaemonStateImpl) {
-              writeDaemonStateImpl({
-                pid: process.pid,
-                httpPort: 43141,
-                startedAt: Date.now(),
-                startedWithCliVersion: configuration.currentCliVersion,
-                startedWithPublicReleaseChannel: currentPublicReleaseChannel,
-                startupSource: 'background-service',
-                serviceLabel: paths.label,
-                runtimeId: 'runtime-win32-install',
-              });
-            }
-            if (action === '/Query') {
-              observedTaskStatusTimeouts.push(options?.timeout);
-              return {
-                status: 0,
-                stdout: Buffer.from('Status: Running\nScheduled Task State: Enabled\n'),
-                stderr: Buffer.from(''),
-              };
-            }
-            return { status: 0, stdout: Buffer.from(''), stderr: Buffer.from('') };
-          }),
-        };
+      doMockChildProcessSpawnSync((command: string, args: readonly string[] = [], options?: { timeout?: number }) => {
+        if (isHappierTaskFolderListing(command, args)) {
+          return { status: 0, stdout: Buffer.from('[]'), stderr: Buffer.from('') };
+        }
+        if (command === 'powershell.exe' && args.some((arg) => arg.includes('.RegisterTask('))) {
+          lifecycleEvents.push('registerTask');
+        }
+        if (isWindowsScheduledTaskStatusRead(command, args)) {
+          observedQueryTimeouts.push(options?.timeout);
+          if (queryTimesOut && options?.timeout) {
+            return {
+              status: null,
+              error: Object.assign(new Error('query timed out'), { code: 'ETIMEDOUT' }),
+              stdout: Buffer.from(''), stderr: Buffer.from(''),
+            };
+          }
+          return { status: 0, stdout: windowsNativeLauncherTaskStatusStdout(paths), stderr: Buffer.from('') };
+        }
+        if (command !== 'schtasks') {
+          return { status: 0, stdout: Buffer.from(''), stderr: Buffer.from('') };
+        }
+        const action = String(args[0] ?? '');
+        lifecycleEvents.push(action);
+        if (action === '/Run' && writeDaemonStateImpl) {
+          writeDaemonStateImpl({
+            pid: process.pid,
+            httpPort: 43141,
+            startedAt: Date.now(),
+            startedWithCliVersion: configuration.currentCliVersion,
+            startedWithPublicReleaseChannel: currentPublicReleaseChannel,
+            startupSource: 'background-service',
+            serviceLabel: paths.label,
+            runtimeId: 'runtime-win32-install',
+          });
+        }
+        if (action === '/Query') {
+          observedTaskStatusTimeouts.push(options?.timeout);
+          return {
+            status: 0,
+            stdout: Buffer.from('Status: Running\nScheduled Task State: Enabled\n'),
+            stderr: Buffer.from(''),
+          };
+        }
+        return { status: 0, stdout: Buffer.from(''), stderr: Buffer.from('') };
       });
       vi.doMock('./commandExistsInPath', () => ({
         commandExistsInPath: vi.fn(() => true),
