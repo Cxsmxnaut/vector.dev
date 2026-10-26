@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { renderScreen } from '@/dev/testkit';
+import { layoutHitArea } from '@/dev/testkit/harness/hitFrameReach';
 
 const platformState = vi.hoisted(() => ({
     os: 'ios' as 'android' | 'ios' | 'web',
@@ -63,7 +64,7 @@ describe('AppPresentationPlatformProvider', () => {
         ['android', 48],
         ['ios', 44],
     ] as const) {
-        it(`gives the core IconButton a ${minimum}pt physical ${platform} target without hit slop`, async () => {
+        it(`gives the core IconButton a ${minimum}pt ${platform} touch target as its hit area, not its drawn size`, async () => {
             platformState.os = platform;
 
             const screen = await renderScreen(
@@ -77,12 +78,13 @@ describe('AppPresentationPlatformProvider', () => {
                 </AppPresentationPlatformProvider>,
             );
 
-            const pressable = screen.findByTestId('root-environment-icon-button');
-            const style = resolvePressableStyle(pressable?.props.style);
+            const style = resolvePressableStyle(screen.findByTestId('root-environment-icon-button')?.props.style);
+            expect(style.width).toBe(28);
+            expect(style.height).toBe(28);
 
-            expect(style.minWidth).toBeGreaterThanOrEqual(minimum);
-            expect(style.minHeight).toBeGreaterThanOrEqual(minimum);
-            expect(pressable?.props.hitSlop).toBeUndefined();
+            const area = await layoutHitArea(() => screen.findHostByTestId('root-environment-icon-button'), { width: 28, height: 28 });
+            expect(area.width).toBeGreaterThanOrEqual(minimum);
+            expect(area.height).toBeGreaterThanOrEqual(minimum);
         });
     }
 
@@ -100,12 +102,14 @@ describe('AppPresentationPlatformProvider', () => {
             </AppPresentationPlatformProvider>,
         );
 
-        const pressable = screen.findByTestId('root-environment-icon-button');
-        const style = resolvePressableStyle(pressable?.props.style);
-
+        const style = resolvePressableStyle(screen.findByTestId('root-environment-icon-button')?.props.style);
         expect(style.width).toBe(28);
         expect(style.height).toBe(28);
-        expect(pressable?.props.hitSlop).toBe(8);
+
+        // A precise pointer gets no touch reach: the hit area stays the compact drawn square.
+        const area = await layoutHitArea(() => screen.findHostByTestId('root-environment-icon-button'), { width: 28, height: 28 });
+        expect(area.width).toBe(28);
+        expect(area.height).toBe(28);
     });
 
     it('is mounted once above the boot gate in each independently selected production root', () => {
