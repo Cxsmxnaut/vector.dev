@@ -96,6 +96,12 @@ describe('/session/[id]/git', () => {
         expect(runtime.pane.scopeState?.right).toMatchObject({ isOpen: true, activeTabId: 'git' });
     });
 
+    it('preserves another shared-panel tab after initial entry', async () => {
+        const route = await renderRouteScreen();
+        await act(async () => runtime.pane.setRightTab('files'));
+        await route.rerender();
+        expect(runtime.pane.scopeState?.right).toMatchObject({ isOpen: true, activeTabId: 'files' });
+    });
 
     it('renders the actual phone cockpit with the hydrated Home', async () => {
         phone = true;
@@ -113,5 +119,20 @@ describe('/session/[id]/git', () => {
         expect(screen.findAllByType(SessionRightPanel)).toHaveLength(0);
     });
 
+    it('closes real pane state and returns through native history', async () => {
+        const { SessionRightPanel } = await import('@/components/sessions/panes/SessionRightPanel');
+        const { screen } = await renderRouteScreen();
+        await act(async () => screen.findByType(SessionRightPanel).props.onRequestClose());
+        expect(runtime.pane.scopeState?.right.isOpen).toBe(false);
+        expect(routerBackSpy).toHaveBeenCalledTimes(1);
+    });
 
+    it('keeps an opened details tab inside the cockpit', async () => {
+        phone = true;
+        storage.getState().applySettingsLocal({ mobileWorkspaceExperienceV1: 'cockpit' });
+        const { createWorkspaceFileDetailsTab } = await import('@/components/appShell/panes/details/fileDetailsTab');
+        await renderRouteScreen(() => runtime.pane.openDetailsTab(createWorkspaceFileDetailsTab('README.md'), { intent: 'pinned' }));
+        expect(runtime.pane.scopeState?.details).toMatchObject({ isOpen: true, activeTabKey: 'file:README.md' });
+        expect(routerPushSpy).not.toHaveBeenCalled();
+    });
 });

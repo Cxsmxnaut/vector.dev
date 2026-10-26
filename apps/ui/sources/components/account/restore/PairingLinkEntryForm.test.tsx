@@ -97,8 +97,11 @@ describe('PairingLinkEntryForm', () => {
         await act(async () => {
             defaults = renderer.create(<PairingLinkEntryForm onBack={vi.fn()} onSubmit={vi.fn(async () => true)} />);
         });
-        expect(defaults.root.findByProps({ testID: 'restore-pairing-link-input' }).props.placeholder)
-            .toBe('common.urlPlaceholder');
+        const defaultField = defaults.root.findByProps({ testID: 'restore-pairing-link-input' });
+        expect(defaultField.props.placeholder).toBe('common.urlPlaceholder');
+        // The field is focused on entry and named by its own label for assistive tech.
+        expect(defaultField.props.autoFocus).toBe(true);
+        expect(defaultField.props.accessibilityLabel).toBe('connect.pairingLinkFieldLabel');
         expect(defaults.root.findByProps({ testID: 'restore-pairing-link-submit' }).props.title)
             .toBe('common.continue');
         expect(defaults.root.findByProps({ testID: 'restore-pairing-link-back' }).props.title)

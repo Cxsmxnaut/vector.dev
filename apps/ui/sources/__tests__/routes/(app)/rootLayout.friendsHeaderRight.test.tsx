@@ -121,4 +121,24 @@ describe('RootLayout', () => {
             await tree?.unmount();
         }
     });
+
+    it('registers each centrally titled route with its shared root options entry', async () => {
+        await stubRootLayoutFeaturesFetch();
+        const tree = await renderRootLayout();
+        try {
+            const { createRootStackRouteOptions } = await import('@/components/navigation/root/rootStackRouteOptions');
+            const table = createRootStackRouteOptions('auto');
+            const screens = tree.findAllByType(Stack.Screen) ?? [];
+            for (const name of [
+                'automations/index', 'automations/[id]', 'automations/edit', 'automations/settings',
+                'terminal/connect', 'settings', 'workflows/index',
+            ] as const) {
+                const registered = screens.find((node) => node.props?.name === name);
+                expect(registered, name).toBeTruthy();
+                expect(registered?.props?.options, name).toEqual(table[name]);
+            }
+        } finally {
+            await tree?.unmount();
+        }
+    });
 });

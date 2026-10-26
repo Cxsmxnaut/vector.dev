@@ -49,8 +49,10 @@ installScanRouteCommonModuleMocks({
 });
 
 const processTerminalAuthUrlSpy = vi.fn(async (_url: string) => true);
+let lastTerminalConnectOptions: { onSuccess?: () => void | Promise<void> } | undefined;
 vi.mock('@/hooks/session/useConnectTerminal', () => ({
-    useConnectTerminal: () => {
+    useConnectTerminal: (options?: { onSuccess?: () => void | Promise<void> }) => {
+        lastTerminalConnectOptions = options;
         return { processAuthUrl: processTerminalAuthUrlSpy, isLoading: false };
     },
 }));
@@ -157,6 +159,19 @@ describe('/scan/terminal', () => {
 
         await act(async () => {
             await lastScannerProps.onCancel();
+        });
+
+        expect(routerReplaceSpy).toHaveBeenCalledWith('/');
+        expect(routerBackSpy).not.toHaveBeenCalled();
+    });
+
+    it('uses safe fallback navigation after a successful terminal approval when there is no back stack', async () => {
+        const { default: Screen } = await import('@/app/(app)/scan/terminal');
+
+        await renderScanRoute(<Screen />);
+
+        await act(async () => {
+            await lastTerminalConnectOptions?.onSuccess?.();
         });
 
         expect(routerReplaceSpy).toHaveBeenCalledWith('/');

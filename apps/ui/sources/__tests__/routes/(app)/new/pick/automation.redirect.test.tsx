@@ -7,7 +7,15 @@ import { resolveHref } from 'expo-router/build/link/href';
 
 vi.mock('expo-router', async () => {
     const { createExpoRouterMock } = await import('@/dev/testkit/mocks/router');
-    return createExpoRouterMock().module;
+    // Legacy picker links carried an inline draft; none of it may ride along.
+    return createExpoRouterMock({
+        params: () => ({
+            automationEnabled: '1',
+            automationName: 'Legacy',
+            automationScheduleKind: 'interval',
+            draftId: '8e0a5dd1-b1df-43dd-b51e-b7787b30362e',
+        }),
+    }).module;
 });
 
 describe('legacy automation picker route', () => {

@@ -198,7 +198,8 @@ it('returns canceled fresh Team authentication to its stored Team continuation',
 
 it.each([
     ['an altered', 'returned-admission-reference'],
-    ['a missing', ''],
+    ['a missing', undefined],
+    ['an empty', ''],
 ])('rejects a Team callback with %s admission reference for its pending continuation', async (_label, returnedReference) => {
     restore = installLocalStorageMock().restore;
     const fixture = createDirectoryHttpFixture();
@@ -212,7 +213,8 @@ it.each([
     boundary.params.flow = 'auth';
     boundary.params.pending = 'provider-handle';
     boundary.params.purpose = 'team_admission';
-    boundary.params.admissionReference = returnedReference;
+    if (returnedReference === undefined) Reflect.deleteProperty(boundary.params, 'admissionReference');
+    else boundary.params.admissionReference = returnedReference;
     boundary.params.accountMode = 'plain';
     boundary.params.error = '';
     await expect(TokenStorage.setPendingExternalAuth({

@@ -246,6 +246,9 @@ describe('/restore (web phone)', () => {
             expect(restoreRouteIngressState.scannerProps?.initialPairingLink).toBeNull();
             expect(restoreRouteIngressState.scannerProps?.entryIntent).toBe('enter_home');
             expect(screen.findAllByProps({ 'data-testid': 'RestoreQrView' })).toHaveLength(0);
+            expect(screen.getTextContent()).toContain('setupOnboarding.authRestoreTitle');
+            expect(screen.getTextContent()).toContain('setupOnboarding.authRestoreSubtitle');
+            expect(screen.getTextContent()).not.toContain('setupOnboarding.addHomeTitle');
         },
     );
 
