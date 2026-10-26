@@ -144,9 +144,7 @@ export function collectUnresolvedMockSpecifiers(
  */
 export const DECLARED_UNRESOLVED_MOCK_SPECIFIERS: Readonly<Record<string, readonly string[]>> = Object.freeze({
   "apps/cli/src/agent/runtime/bridges/executionRun/ExecutionRunHostBridge.manager.test.ts": ["../../../plugins/runtime/hooks/execution/dispatchBridgeLifecycleHookEvent"],
-  "apps/ui/sources/__tests__/routes/(app)/index.setupContinuation.native.spec.tsx": ["@/components/onboarding/PreAuthOnboardingWizardEntry"],
   "apps/ui/sources/__tests__/routes/(app)/settings/session.subAgentGate.test.tsx": ["./sessionI18n"],
-  "apps/ui/sources/__tests__/routes/(app)/setup.localRelayStatus.spec.tsx": ["@/components/onboarding/PreAuthOnboardingWizardEntry"],
   "apps/ui/sources/components/navigation/shell/MainView.primaryPaneGettingStarted.test.tsx": ["@/components/ui/navigation/TabBar","@/hooks/session/useVisibleSessionListViewData"],
   "apps/ui/sources/components/sessions/agentInput/AgentInput.permissionPromptSurface.test.tsx": ["./PathAndResumeRow","./ResumeChip","./attachActionBarMouseDragScroll"],
   "apps/ui/sources/components/sessions/shell/SessionView.dataReadyGate.test.tsx": ["@/components/appShell/panes/useRegisterSessionPaneDriver","@/sync/domains/session/activeViewingSession"],
