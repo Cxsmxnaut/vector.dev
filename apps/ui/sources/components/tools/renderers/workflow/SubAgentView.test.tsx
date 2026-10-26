@@ -202,7 +202,7 @@ describe('SubAgentView', () => {
     });
 
     describe('Result Rendering', () => {
-        it('does not render background-run task result content in summary mode', async () => {
+        it('renders a delivered background-run task result in summary mode', async () => {
             const base = Date.now();
             const taskTool = makeTaskTool({
                 state: 'completed',
@@ -214,7 +214,22 @@ describe('SubAgentView', () => {
             });
             const tree = await renderView(taskTool, []);
 
-            expect(collectHostText(tree).join(' ')).not.toContain('SUBTASK_OK');
+            expect(collectHostText(tree).join(' ')).toContain('SUBTASK_OK');
+        });
+
+        it('does not render a background run\'s launch acknowledgement as its result in summary mode', async () => {
+            const base = Date.now();
+            const taskTool = makeTaskTool({
+                state: 'completed',
+                input: { operation: 'run', description: 'Do thing', run_in_background: true },
+                result: { status: 'async_launched', content: 'ACK_ONLY' },
+                createdAt: base,
+                startedAt: base,
+                completedAt: base + 100,
+            });
+            const tree = await renderView(taskTool, []);
+
+            expect(collectHostText(tree).join(' ')).not.toContain('ACK_ONLY');
         });
 
         it('renders foreground-run task result content in summary mode', async () => {

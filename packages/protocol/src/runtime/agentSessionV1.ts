@@ -22,6 +22,7 @@ import { AgentRuntimeDiagnosticDataV1Schema } from './agentRuntimeDiagnosticV1.j
 import { NonBlankOpaqueIdentifierSchema } from '../strings/opaqueIdentifier.js';
 import { UsageRequestAttributionSchema } from '../usage/usageAnalyticsContracts.js';
 import { McpToolLaunchPoliciesV1Schema, type McpToolLaunchPolicyV1 } from '../mcp/servers/tools/resolveMcpToolDecisionV1.js';
+import { TranscriptPeerSenderV1Schema } from '../sessions/messages/transcriptPeerSenderV1.js';
 
 export { AGENT_SESSION_RUNTIME_EVENT_KINDS_V1 } from './eventKindsV1.js';
 export { AgentRuntimeDiagnosticDataV1Schema } from './agentRuntimeDiagnosticV1.js';
@@ -402,7 +403,10 @@ const OutputSchemas = [
     text: z.string().check(maxCodeUnits(TRANSCRIPT_TEXT_CANDIDATE_MAX)),
     turnId: z.optional(HostIdSchema),
     sidechainId: z.optional(HostIdSchema),
-  }))),
+    /** Assistant-channel text delivered by another agent (teammate or subagent hand-back), not the Agent's reply. */
+    peer: z.optional(TranscriptPeerSenderV1Schema),
+  }).check(z.refine((value) => value.peer === undefined || (value.role === 'assistant' && value.turnId === undefined),
+    'Peer-delivered text is Session-scoped assistant-channel text')))),
   lazyZodSchema(() => z.strictObject({
     ...TurnEventBaseShape,
     turnId: z.optional(HostIdSchema),

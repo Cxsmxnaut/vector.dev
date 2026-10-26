@@ -1,4 +1,5 @@
 import { Typography } from '@/constants/Typography';
+import { isAsyncSubAgentLaunchToolResult } from '@happier-dev/protocol/tools/v2/subAgentFamilies';
 import { useSessionTranscriptSource } from '@/components/sessions/transcript/source/SessionTranscriptSourceContext';
 import * as React from 'react';
 import { View, Platform, Pressable } from 'react-native';
@@ -187,7 +188,9 @@ export const SubAgentSummarySection = React.memo<{
     const isBackgroundRun =
         inferredOperation === 'run' &&
         (asRecord(tool.input)?.run_in_background === true || typeof asRecord(tool.input)?.subagent_type === 'string');
-    const shouldShowResultInline = isFullView || !(opts?.hideResultInlineWhenBackgroundRun ?? true) || !isBackgroundRun;
+    // A background run's first result is only its launch acknowledgement; its delivered report is the outcome.
+    const isAwaitingBackgroundResult = isBackgroundRun && (tool.result == null || isAsyncSubAgentLaunchToolResult(tool.result));
+    const shouldShowResultInline = isFullView || !(opts?.hideResultInlineWhenBackgroundRun ?? true) || !isAwaitingBackgroundResult;
     const taskResultContent = shouldShowResultInline ? coerceTaskResultText(tool.result) : null;
 
     const summary = formatTaskLikeSummary(tool);

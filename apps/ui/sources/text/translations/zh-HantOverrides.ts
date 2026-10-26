@@ -7543,6 +7543,9 @@ const zhHantOverrides: DeepPartial<TranslationStructure> = {
         thinking: '思考中',
         thinkingSince: '思考開始時間',
         thinkingLevel: '思考等級',
+        peerReportFrom: ({ name }: { name: string }) => `來自${name}的報告`,
+        peerMessageFrom: ({ name }: { name: string }) => `來自${name}的訊息`,
+        peerUnnamedSender: '另一個代理',
         cliVersion: 'CLI 版本',
         cliVersionOutdated: '需要更新 CLI',
         cliVersionOutdatedMessage: ({ currentVersion, requiredVersion }: { currentVersion: string; requiredVersion: string }) =>

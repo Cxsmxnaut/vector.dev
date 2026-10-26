@@ -24,6 +24,13 @@ import {
 } from './turnOperations.js';
 import { createClaudeNativeSessionRuntimeFromOperations } from '../../nativeRuntime.js';
 import { createFakeControlPort } from './tuiControls/fakeControlPort.js';
+import {
+  CLAUDE_HANDBACK_REPORT,
+  claudeAsyncAgentLaunchAck,
+  claudeHandbackPointerNotification,
+  claudeHandbackQueuedAttachment,
+  claudeHandbackUserRow,
+} from '../../../transcripts/peerMessage.testkit.js';
 
 const RESUME_CHOICE_DIALOG = [
   'This session is 18h 2m old and 560.4k tokens.',
@@ -249,6 +256,91 @@ describe('createClaudeUnifiedTerminalTurnOperations', () => {
         });
         expect(events.filter(event => event.kind === 'tool-result' && event.toolCallId === 'ordinary-action-tool')).toHaveLength(1);
       }
+    } finally {
+      subscription.dispose();
+      await session.dispose();
+    }
+  });
+
+  it.each([
+    ['live', 'completed'], ['initial_replay', 'completed'],
+    ['live', 'task_status'], ['initial_replay', 'stopped-send'],
+  ] as const)('settles a background Agent from its ordered %s %s outcome and publishes an unlinked hand-back as peer text', async (phase, outcome) => {
+    const transcripts = createManualTranscriptFollowFixture();
+    let replayBaseline: (() => Promise<void>) | undefined;
+    const ctx = createPluginContextFixture(createTerminalHostFixture().service, createEventsFixture().service, {
+      transcripts: { ...transcripts.service, followSource: vi.fn(async () => {
+        await replayBaseline?.();
+        return { dispose: vi.fn(async () => undefined) };
+      }) },
+    });
+    const operations = createClaudeUnifiedTerminalProviderOperations({
+      ctx, directory: '/tmp/claude-project', happierSessionId: 'unified-handback',
+      hostPreference: 'zellij', launchEnv: {}, permissionMode: 'default',
+    });
+    const session = createClaudeNativeSessionRuntimeFromOperations(operations, {
+      kind: 'create', sessionId: 'unified-handback', cwd: '/tmp/claude-project',
+    }, { session: { services: {
+      activeInput: { bind: () => ({ dispose() {} }) }, models: { bind: () => ({ dispose() {} }) },
+    } } } as unknown as AgentSessionRuntimeContext);
+    const events: AgentSessionRuntimeEvent[] = [];
+    const subscription = session.watch(event => events.push(event));
+    const providerSessionId = 'claude-provider-session-1';
+    replayBaseline = async () => {
+      await session.observeSourceTranscript?.({ providerSessionId, sourceId: 'history:ack', phase: 'initial_replay',
+        row: { ...claudeAsyncAgentLaunchAck({ toolUseId: 'toolu_a1' }), session_id: providerSessionId } });
+    };
+    try {
+      await operations.startProviderSession();
+      const hook = vi.mocked(ctx.agentRuntime.sessionHooks.startServer).mock.calls[0]?.[0].onSessionHook;
+      if (!hook || !session.observeSourceTranscript) throw new Error('native transcript transport was not registered');
+      await hook(providerSessionId, { hook_event_name: 'SessionStart', session_id: providerSessionId,
+        source: 'resume', transcript_path: '/tmp/claude-provider-session-1.jsonl' });
+      const stoppedResponse = { success: false, message: "Agent a1 was stopped by the user and won't be resumed." };
+      const terminal = outcome === 'task_status'
+        ? { type: 'attachment', uuid: 'terminal-status', attachment: { type: 'task_status', taskId: 'a1', status: 'failed' } }
+        : outcome === 'stopped-send'
+          ? { type: 'user', uuid: 'stopped-send', toolUseResult: stoppedResponse, message: { role: 'user',
+            content: [{ type: 'tool_result', tool_use_id: 'send-message', content: stoppedResponse.message, is_error: true }] } }
+          : claudeHandbackPointerNotification({ toolUseId: 'toolu_a1' });
+      const rows = [
+        { ...claudeHandbackQueuedAttachment(), sessionId: providerSessionId },
+        { ...terminal, sessionId: providerSessionId },
+        { ...claudeHandbackUserRow({ withReportText: true, taskId: 'unlinked', uuid: 'handback-unlinked' }), sessionId: providerSessionId },
+        ...(phase === 'initial_replay' && outcome === 'completed' ? [
+          { type: 'system', subtype: 'task_notification', task_id: 'early', status: 'completed', summary: 'Early findings',
+            uuid: 'early-terminal', sessionId: providerSessionId, timestamp: '2026-09-30T00:00:00.000Z' },
+          { ...claudeAsyncAgentLaunchAck({ taskId: 'early', toolUseId: 'early-tool', uuid: 'late-ack' }),
+            sessionId: providerSessionId, timestamp: '2026-10-02T00:00:00.000Z' },
+        ] : []),
+      ];
+      // The file follower observes each row too; only the ordered source reader publishes it.
+      if (phase === 'live') for (const row of rows) await transcripts.emitRow(row);
+      for (const [index, row] of rows.entries()) {
+        await session.observeSourceTranscript({ providerSessionId, sourceId: `${phase}:${index}`, row,
+          ...(phase === 'initial_replay' ? { phase } : {}) });
+        if (index === 0) {
+          expect(events.filter(event => event.kind === 'tool-result')).toEqual([]);
+          expect(events.filter(event => event.kind === 'transcript-message-committed')).toEqual([]);
+        }
+      }
+      expect(events.filter(event => event.kind === 'tool-result')).toEqual([
+        ...(outcome === 'stopped-send' ? [expect.objectContaining({ toolCallId: 'send-message', isError: true,
+          output: { content: stoppedResponse.message, tool_use_result: stoppedResponse } })] : []),
+        expect.objectContaining({ toolCallId: 'toolu_a1',
+          output: outcome === 'completed' ? CLAUDE_HANDBACK_REPORT : outcome === 'task_status'
+            ? expect.objectContaining({ tool_use_result: { status: 'failed', result: CLAUDE_HANDBACK_REPORT } })
+            : { status: 'cancelled', result: CLAUDE_HANDBACK_REPORT },
+          ...(outcome === 'completed' ? {} : { isError: true }) }),
+        ...(phase === 'initial_replay' && outcome === 'completed' ? [
+          expect.objectContaining({ toolCallId: 'early-tool', output: 'Early findings', emittedAtMs: Date.parse('2026-09-30T00:00:00.000Z') }),
+        ] : []),
+      ]);
+      expect(events.filter(event => event.kind === 'transcript-message-committed')).toEqual([
+        expect.objectContaining({ role: 'assistant', text: CLAUDE_HANDBACK_REPORT,
+          messageId: 'claude-jsonl:main:user:handback-unlinked', peer: { name: 'general-purpose', handback: true } }),
+      ]);
+      expect(events.find(event => event.kind === 'transcript-message-committed')).not.toHaveProperty('turnId');
     } finally {
       subscription.dispose();
       await session.dispose();

@@ -120,6 +120,8 @@ export function runSidechainsPhase(params: Readonly<{
                         last &&
                         last.role === 'agent' &&
                         !last.isThinking &&
+                        !last.peer &&
+                        !c.peer &&
                         typeof last.text === 'string' &&
                         last.meta &&
                         typeof (last.meta as any).happierSidechainStreamKey === 'string' &&
@@ -142,6 +144,7 @@ export function runSidechainsPhase(params: Readonly<{
                             createdAt: msg.createdAt,
                             text: c.text,
                             isThinking: false,
+                            ...(c.peer ? { peer: c.peer } : {}),
                             tool: null,
                             event: null,
                             meta: msg.meta,

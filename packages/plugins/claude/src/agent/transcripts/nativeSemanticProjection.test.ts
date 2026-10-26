@@ -12,6 +12,12 @@ import {
   projectClaudeJsonlLineRecord,
   projectClaudeJsonlLineToRawMessage,
 } from './projection.js';
+import {
+  CLAUDE_HANDBACK_REPORT,
+  claudeHandbackQueuedAttachment,
+  claudeHandbackUserRow,
+  claudeTeammateUserRow,
+} from './peerMessage.testkit.js';
 
 describe('Claude native transcript semantic projection', () => {
   it('keeps shell content visible while projecting exact input identity and output semantics', () => {
@@ -40,9 +46,10 @@ describe('Claude native transcript semantic projection', () => {
     { type: 'user', uuid: 'peer-sdk-blocks', origin: { kind: 'peer', from: 'uds:/tmp/sender.sock', name: 'Sender' }, message: { content: [{ type: 'text', text: 'Delivered' }] } },
   ])('projects native delivered peer content through the recipient-safe owner without human prompt admission', row => {
     expect(classifyClaudeNativeTranscriptRow(row)).toMatchObject({ visibility: 'visible', messageRole: 'agent',
-      content: { kind: 'peer_message', text: 'From Sender:\n\nDelivered' }, lifecycle: { kind: 'none' } });
+      content: { kind: 'peer_message', text: 'Delivered', peer: { name: 'Sender', handback: false } }, lifecycle: { kind: 'none' } });
     const [item] = projectClaudeJsonlLineToDirectMessages({ fileRelPath: 'projects/session.jsonl', lineStartOffsetBytes: 4, lineValue: row });
-    expect(item).toMatchObject({ messageRole: 'agent', raw: { role: 'agent', content: { type: 'acp', agentId: 'claude', data: { type: 'message', message: 'From Sender:\n\nDelivered' } } } });
+    expect(item).toMatchObject({ messageRole: 'agent', raw: { role: 'agent', content: { type: 'acp', agentId: 'claude',
+      data: { type: 'message', message: 'Delivered', peer: { name: 'Sender', handback: false } } } } });
     expect(item?.userProjection).toBeUndefined();
     expect(JSON.stringify(item)).not.toContain('uds:/tmp');
     const native = projectClaudeJsonlLineToRawMessage(row);
@@ -71,7 +78,38 @@ describe('Claude native transcript semantic projection', () => {
 
   it('preserves quoted angle brackets in a native sender name and keeps the whole peer body', () => {
     expect(classifyClaudeNativeTranscriptRow({ type: 'attachment', uuid: 'peer-angle-name', attachment: { type: 'queued_command',
-      prompt: '<cross-session-message from="uds:/tmp/sender.sock" from-name="<Sender>" from-mode="prompting">First\n\n<code>body</code></cross-session-message>' } })).toMatchObject({ content: { kind: 'peer_message', text: 'From <Sender>:\n\nFirst\n\n<code>body</code>' } });
+      prompt: '<cross-session-message from="uds:/tmp/sender.sock" from-name="<Sender>" from-mode="prompting">First\n\n<code>body</code></cross-session-message>' } })).toMatchObject({ content: { kind: 'peer_message', text: 'First\n\n<code>body</code>', peer: { name: '<Sender>', handback: false } } });
+  });
+
+  it.each([
+    ['user row with native report text', claudeHandbackUserRow({ withReportText: true })],
+    ['user row without native report text', claudeHandbackUserRow({ withReportText: false })],
+    ['queued attachment', claudeHandbackQueuedAttachment()],
+  ])('projects a native subagent hand-back as its clean report with sender provenance (%s)', (_label, row) => {
+    expect(classifyClaudeNativeTranscriptRow(row)).toMatchObject({ visibility: 'visible', messageRole: 'agent',
+      content: { kind: 'peer_message', text: CLAUDE_HANDBACK_REPORT, peer: { name: 'general-purpose', handback: true } } });
+    expect(projectClaudeJsonlLineToDirectMessages({ fileRelPath: 'projects/session.jsonl', lineStartOffsetBytes: 4, lineValue: row }))
+      .toMatchObject([{ messageRole: 'agent', raw: { role: 'agent', content: { type: 'acp', agentId: 'claude',
+        data: { type: 'message', message: CLAUDE_HANDBACK_REPORT, peer: { name: 'general-purpose', handback: true } } } } }]);
+  });
+
+  it('keeps a delivered message whose sender name exceeds the transcript limit, without the name', () => {
+    const row = claudeTeammateUserRow();
+    const named = { ...row, origin: { ...row.origin, name: 'n'.repeat(8_001) } };
+    expect(classifyClaudeNativeTranscriptRow(named)).toMatchObject({
+      content: { kind: 'peer_message', text: 'Tests are blocked.', peer: { name: null, handback: false } } });
+  });
+
+  it('projects a native teammate message without its delivery sentence or harness trailer', () => {
+    expect(classifyClaudeNativeTranscriptRow(claudeTeammateUserRow())).toMatchObject({
+      content: { kind: 'peer_message', text: 'Tests are blocked.', peer: { name: 'pr4', handback: false } } });
+  });
+
+  it('does not admit a copied agent-message wrapper without native peer provenance', () => {
+    const prompt = '<agent-message from="a1">\ncopied\n</agent-message>';
+    expect(classifyClaudeNativeTranscriptRow({ type: 'user', uuid: 'copied-agent-message', message: { content: prompt } }).content.kind).toBe('message');
+    expect(classifyClaudeNativeTranscriptRow({ type: 'attachment', uuid: 'queued-agent-message', attachment: { type: 'queued_command', prompt } }))
+      .toMatchObject({ visibility: 'hidden' });
   });
 
   it.each(['completed', 'refused'])('treats command lifecycle state %s as a known non-transcript record', (state) => {

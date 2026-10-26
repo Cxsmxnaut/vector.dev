@@ -386,6 +386,11 @@ export type AgentSessionRuntimeEvent =
       turnId?: string;
       /** Sidechain output is Session scoped, even when an originating host turn is known. */
       sidechainId?: string;
+      /**
+       * Session-scoped assistant-channel text another agent delivered into this conversation
+       * (a teammate message or a subagent hand-back). It is never the Agent's own reply.
+       */
+      peer?: Readonly<{ name: string | null; handback: boolean }>;
     }>
   | Readonly<{
       sequence: number;

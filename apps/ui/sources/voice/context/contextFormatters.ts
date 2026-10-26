@@ -213,7 +213,7 @@ export function summarizeAssistantMessagesForVoiceHuman(
 ): string | null {
     const resolved = resolvePrefs(prefs);
     const latestAssistantMessage = [...messages]
-        .filter((message): message is Extract<Message, { kind: 'agent-text' }> => message?.kind === 'agent-text')
+        .filter((message): message is Extract<Message, { kind: 'agent-text' }> => message?.kind === 'agent-text' && !message.peer)
         .sort((left, right) => left.createdAt - right.createdAt)
         .at(-1);
 
@@ -337,7 +337,9 @@ function formatMessageWithPrefs(message: Message, prefs?: VoiceContextFormatterP
     if (message.kind === 'agent-text') {
         const readable = prepareTranscriptMessageBody(message).text ?? '';
         const text = resolved.voiceShareFilePaths ? readable : redactVoicePathLikeString(readable);
-        lines.push(`Coding assistant: \n<text>${text}</text>`);
+        lines.push(message.peer
+            ? `${message.peer.handback ? 'Sub-agent report' : 'Agent message'} from ${message.peer.name ?? 'another agent'} to the coding assistant: \n<text>${text}</text>`
+            : `Coding assistant: \n<text>${text}</text>`);
     } else if (message.kind === 'user-text') {
         const readable = prepareTranscriptMessageBody(message).text ?? '';
         const text = resolved.voiceShareFilePaths ? readable : redactVoicePathLikeString(readable);
