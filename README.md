@@ -153,9 +153,9 @@ Either way, the session shows up everywhere at once: keep typing in the terminal
 
 ## What you can do
 
-<h3 align="center">📱 Do everything from any device, including your phone</h3>
+<h3 align="center">📱 Run your agents from your phone, desktop or the web</h3>
 
-<p align="center">Start, steer, review and approve sessions from your phone, desktop or the web. Sessions are cross-device, so you pick up the same session wherever you are, including Claude Code, Codex or OpenCode sessions already running on your machine. <a href="https://docs.happier.dev/sessions/continuing-a-session">Continuing a session</a></p>
+<p align="center">Start, steer, review and approve sessions from whichever device is in your hand. Sessions are cross-device, so you pick up the same session wherever you are, including Claude Code, Codex or OpenCode sessions already running on your machine. <a href="https://docs.happier.dev/sessions/continuing-a-session">Continuing a session</a></p>
 
 <p align="center"><img src=".github/screenshots/session.png" width="640" alt="A Happier session showing the agent thinking, tool calls and the final reply" /></p>
 
