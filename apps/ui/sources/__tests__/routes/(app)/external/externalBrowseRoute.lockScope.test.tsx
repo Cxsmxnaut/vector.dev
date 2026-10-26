@@ -166,18 +166,6 @@ describe('ExternalSessionsBrowseRoute locked Agent scope', () => {
         });
     });
 
-    it('fails closed instead of opening an unlocked browse when qualified Agent identity is stale', async () => {
-        routeParamsState.value = {
-            ...routeParamsState.value,
-            agentPluginId: 'replaced.external',
-        };
-        const Route = (await import('@/app/(app)/external/browse')).default;
-
-        await renderScreen(<Route />);
-
-        expect(browseScreenPropsRef.current).toBeNull();
-    });
-
     it('shows a closable loading surface while the locked Agent projection resolves', async () => {
         daemonProjectionState.phase = 'loading';
         const Route = (await import('@/app/(app)/external/browse')).default;

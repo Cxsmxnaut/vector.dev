@@ -191,6 +191,17 @@ describe('bootstrapActiveServerFromWebLocation', () => {
         });
     });
 
+    it('normalizes legacy `?url=...&auto=1` into the same device-scoped server override flow', async () => {
+        process.env.EXPO_PUBLIC_HAPPY_STORAGE_SCOPE = randomScope();
+        stubWebLocation('https://app.example.test/server?url=https%3A%2F%2Fstack.example.test&auto=1');
+        await importFreshBootstrap();
+        const { resolveWebServerUrlOverrideAction } = await import('./resolveAuthenticatedWebServerUrlOverrideAction');
+        expect(resolveWebServerUrlOverrideAction({ bootstrappedServerUrl: null })).toEqual({
+            kind: 'switch_server',
+            serverUrl: 'https://stack.example.test',
+        });
+    });
+
     it('reuses the same equivalent loopback server profile without rewriting its stored url', async () => {
         process.env.EXPO_PUBLIC_HAPPY_STORAGE_SCOPE = randomScope();
         process.env.EXPO_PUBLIC_HAPPY_SERVER_URL = 'http://qa-stack.localhost:57010';
