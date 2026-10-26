@@ -1,12 +1,37 @@
 import { describe, expect, it, vi } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import * as fs from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { resolveClaudeRemoteSessionStartPlan } from './sessionStartPlan';
 import { getProjectPath } from '../utils/path';
 
+// Only the external filesystem failure is replaced; the start plan and transcript check remain real.
+vi.mock('node:fs', async importOriginal => {
+  const actual = await importOriginal<typeof import('node:fs')>();
+  return { ...actual, statSync: vi.fn(actual.statSync) };
+});
+
 describe('resolveClaudeRemoteSessionStartPlan', () => {
+  it('reports unavailable explicit resume state when transcript inspection fails', () => {
+    const root = mkdtempSync(join(tmpdir(), 'claude-unreadable-resume-'));
+    const transcriptPath = join(root, 'requested-session.jsonl');
+    writeFileSync(transcriptPath, '{}\n');
+    const denied = Object.assign(new Error('Transcript access denied'), { code: 'EACCES' });
+    const stat = vi.mocked(fs.statSync).mockImplementationOnce(() => { throw denied; });
+    try {
+      expect(() => resolveClaudeRemoteSessionStartPlan({
+        sessionId: 'requested-session', transcriptPath, path: root, claudeConfigDir: null,
+      })).toThrow(expect.objectContaining({
+        code: 'claude_resume_session_unavailable', providerSessionId: 'requested-session',
+      }));
+    } finally {
+      stat.mockClear();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('resumes a copied transcript whose recorded cwd differs from the launch directory', () => {
     const root = mkdtempSync(join(tmpdir(), 'claude-moved-resume-'));
     const path = join(root, 'new-workspace');

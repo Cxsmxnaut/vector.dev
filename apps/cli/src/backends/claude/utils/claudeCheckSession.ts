@@ -23,10 +23,11 @@ export function hasClaudeMaterializedSessionTranscript(
 ): boolean {
   const sessionFile = resolveClaudeSessionTranscriptPath(sessionId, path, transcriptPath, configDir);
   try {
-    if (!existsSync(sessionFile)) return false;
     return statSync(sessionFile).size > 0;
-  } catch {
-    return false;
+  } catch (error) {
+    const code = error !== null && typeof error === 'object' && 'code' in error ? error.code : null;
+    if (code === 'ENOENT' || code === 'ENOTDIR') return false;
+    throw error;
   }
 }
 

@@ -58,7 +58,16 @@ export function resolveClaudeRemoteSessionStartPlan(
   let shouldContinue = false;
 
   if (opts.sessionId) {
-    if (!effectiveDeps.hasMaterializedSessionTranscript(opts.sessionId, opts.path, opts.transcriptPath, opts.claudeConfigDir)) {
+    let transcriptMaterialized: boolean;
+    try {
+      transcriptMaterialized = effectiveDeps.hasMaterializedSessionTranscript(
+        opts.sessionId, opts.path, opts.transcriptPath, opts.claudeConfigDir,
+      );
+    } catch {
+      // An inaccessible requested transcript is unavailable resume state, never permission to start fresh.
+      throw new ClaudeResumeSessionUnavailableError(opts.sessionId);
+    }
+    if (!transcriptMaterialized) {
       throw new ClaudeResumeSessionUnavailableError(opts.sessionId);
     } else if (!effectiveDeps.checkSession(
       opts.sessionId,

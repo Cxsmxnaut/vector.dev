@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import * as fs from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { SessionClientPort } from '@/api/session/sessionClientPort';
@@ -25,6 +26,13 @@ import { startAnthropicSseBoundary } from './sdk/anthropicSseBoundary.testkit';
 import type {
   SessionRuntimeActivityContributionHandle,
 } from '@/session/runtimeActivity/types';
+
+// The filesystem is an external boundary; forward every stat except the inaccessible
+// transcript injected by the identity-decision regression.
+vi.mock('node:fs', async importOriginal => {
+  const actual = await importOriginal<typeof import('node:fs')>();
+  return { ...actual, statSync: vi.fn(actual.statSync) };
+});
 
 type SessionFoundHookData = NonNullable<Parameters<Session['onSessionFound']>[1]>;
 
@@ -841,6 +849,26 @@ describe('Session', () => {
       expect(session.getResumableSessionId()).toBe('sess_zero_turn');
     } finally {
       provisionalLog.mockRestore();
+      session.cleanup();
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('does not replace a provisional identity when its transcript cannot be inspected', async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'happier-claude-session-'));
+    const transcriptPath = join(tempDir, 'sess_unreadable.jsonl');
+    const session = createSession(createSessionClientStub());
+    try {
+      session.onSessionFound('sess_unreadable', hookWithTranscript(transcriptPath));
+      await session.drainCriticalMetadataWrites({ timeoutMs: 500 });
+      writeFileSync(transcriptPath, '', 'utf8');
+      const denied = Object.assign(new Error('Transcript access denied'), { code: 'EACCES' });
+      const stat = vi.mocked(fs.statSync).mockImplementationOnce(() => { throw denied; });
+      try {
+        expect(() => session.getResumableSessionId()).toThrow(denied);
+        expect(session.sessionId).toBe('sess_unreadable');
+      } finally { stat.mockClear(); }
+    } finally {
       session.cleanup();
       rmSync(tempDir, { recursive: true, force: true });
     }
