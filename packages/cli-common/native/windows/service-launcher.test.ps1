@@ -72,6 +72,19 @@ exit 37
   Assert-True ($exitDiagnostics -match 'wrapper_creation_filetime=\d+') 'Launcher diagnostics omitted wrapper creation time'
   Assert-True ($exitDiagnostics -match 'child_exit=37') 'Launcher diagnostics omitted exact wrapper exit'
 
+  # HAPPIER_HOME_DIR may name a network home. Use the runner's existing local
+  # administrative share so the same real fixture executes through a UNC path.
+  $uncWrapper = '\\localhost\' + $exitWrapper.Substring(0, 1) + '$' + $exitWrapper.Substring(2)
+  $uncLog = '\\localhost\' + $fixtureRoot.Substring(0, 1) + '$' + $fixtureRoot.Substring(2) + '\unc.launcher.log'
+  Assert-True (Test-Path -LiteralPath $uncWrapper -PathType Leaf) 'UNC fixture requires the local administrative drive share'
+  $uncRun = Start-Launcher $uncWrapper $uncLog
+  $ownedProcessIds.Add($uncRun.Id) | Out-Null
+  $uncRun.WaitForExit(10000) | Out-Null
+  Assert-True ($uncRun.HasExited -and $uncRun.ExitCode -eq 37) "Expected UNC wrapper exit 37, got $($uncRun.ExitCode)"
+  $ownedProcessIds.Remove($uncRun.Id) | Out-Null
+  $uncDiagnostics = Get-Content -LiteralPath (Join-Path $fixtureRoot 'unc.launcher.log') -Raw
+  Assert-True ($uncDiagnostics -match 'child_exit=37') 'UNC service home did not retain wrapper exit diagnostics'
+
   # A console-subsystem wrapper and its console descendant must run without a
   # console window. This is synthetic evidence only, not desktop flash/taskbar proof.
   $consoleProbePath = Join-Path $fixtureRoot 'console-window.txt'
