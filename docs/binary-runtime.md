@@ -67,6 +67,22 @@ boundary. The primary-session classifier preserves it as `dependency_failure` wi
 `provider_cli_not_found` and the canonical remediation, without exposing raw paths or
 mistaking runner turn allocation for provider prompt acceptance.
 
+In current development source (not yet released), Windows x64 CLI and hstack payloads carry
+`happier-service-launcher.exe`, the native task launcher described in
+[CLI architecture](cli-architecture.md), beside their executable; the npm CLI and stack packages
+carry it under the bundled cli-common package at `native/windows/bin/windows-x64/`. It is a
+release-time artifact built from `packages/cli-common/native/windows/service-launcher.cpp` by
+`scripts/pipeline/release/build-windows-service-launcher.mjs` in the Windows release job, and the
+existing Ubuntu jobs consume that exact build. Installed hosts never compile it, and source
+checkouts must run the build script before installing a Windows service. A self-contained binary
+resolves the launcher from its runtime root
+(`packages/cli-common/src/firstPartyRuntime/resolveSelfContainedCliRuntimeRoot.ts`, the same root
+the CLI's `resolveCliRuntimeAssetPath` uses): a `~/.happier/bin/happier|hprev|hdev` shortcut is a
+hardlink or copy, so it maps to `~/.happier/<cli root>/current`; any other self-contained binary
+uses its own directory. Node and Bun processes use the package asset. Windows hstack has no
+supported shortcut installer today, so a binary hstack resolves the launcher beside itself; a
+future Windows hstack shortcut must be added to that runtime-root mapping.
+
 ## Installer GitHub authentication
 
 In current development source, the standalone Bash and PowerShell installers prefer
@@ -563,8 +579,11 @@ unchanged; missing, shadowed, divergent, peer-dependent, or linked copies are re
 
 In current development source, the PTY provider uses the existing Python relay on
 POSIX Bun. Both native packages use `tty.ReadStream` for a nonblocking PTY master;
-the bundled Bun 1.4.2 can return a successful spawn without working input/output
-([upstream issue](https://github.com/oven-sh/bun/issues/25822)). Module-load success
+Bun can return a successful spawn without working input/output
+([upstream issue](https://github.com/oven-sh/bun/issues/25822), reported on macOS through
+Bun 1.4.2 and still open). On Linux x64, a `node-pty` interactive input/output and exit probe
+passes on both Bun 1.4.2 and the bundled 1.4.4, so it cannot show the issue is fixed; macOS has
+not been re-checked on 1.4.4. Module-load success
 therefore cannot establish backend usability. Re-enable native POSIX selection
 only after the bundled runtime passes interactive input/output and cleanup checks.
 The relay requires Python 3, applies the initial window size, and reports

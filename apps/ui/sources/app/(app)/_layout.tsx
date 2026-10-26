@@ -1,12 +1,12 @@
 import { Stack, router } from 'expo-router';
 import 'react-native-reanimated';
 import * as React from 'react';
-import { Keyboard, Platform, Pressable, TouchableOpacity, useWindowDimensions } from 'react-native';
+import { Keyboard, Platform, Pressable, useWindowDimensions } from 'react-native';
 import { isRunningOnMac } from '@/utils/platform/platform';
 import { useUnistyles } from 'react-native-unistyles';
 import { t } from '@/text';
 import { useAuth } from '@/auth/context/AuthContext';
-import { useFriendsIdentityReadiness } from '@/hooks/server/useFriendsIdentityReadiness';
+import { FriendsAddButton } from '@/components/friends/FriendsAddButton';
 import { Text } from '@/components/ui/text/Text';
 import { Typography } from '@/constants/Typography';
 import {
@@ -120,8 +120,6 @@ const AuthenticatedAppShellRuntimes = React.memo(function AuthenticatedAppShellR
 const RootLayoutShell = React.memo(function RootLayoutShell(): React.ReactElement {
     const auth = useAuth();
     const { theme } = useUnistyles();
-    const friendsIdentityReadiness = useFriendsIdentityReadiness();
-    const friendsIdentityReady = friendsIdentityReadiness.isReady;
 
     // `/new` renders either the bare composer (simple) or the profile wizard, and the two want
     // different native presentations. A native stack reads `modalPresentationStyle` at present time
@@ -438,24 +436,12 @@ const RootLayoutShell = React.memo(function RootLayoutShell(): React.ReactElemen
             />
             <Stack.Screen
                 name="friends/manage"
-                options={({ navigation }) => ({
+                options={{
                     headerShown: true,
                     headerTitle: t('navigation.friends'),
                     headerBackTitle: t('common.back'),
-                    headerRight: () =>
-                        (
-                            <TouchableOpacity
-                                onPress={() => navigation.navigate('friends/search' as never)}
-                                style={{ paddingHorizontal: 16, opacity: friendsIdentityReady ? 1 : 0.5 }}
-                                disabled={!friendsIdentityReady}
-                                accessibilityState={{ disabled: !friendsIdentityReady }}
-                            >
-                                <Text style={{ color: theme.colors.button.primary.tint, fontSize: 16 }}>
-                                    {t('friends.addFriend')}
-                                </Text>
-                            </TouchableOpacity>
-                        ),
-                })}
+                    headerRight: () => <FriendsAddButton variant="text" />,
+                }}
             />
             <Stack.Screen
                 name="friends/search"

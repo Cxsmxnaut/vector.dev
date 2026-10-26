@@ -61,12 +61,31 @@ does not establish message acceptance or foreground activity. UI normalization a
 filters already-persisted internal records, while genuinely unknown output retains
 the unsupported-output diagnostic.
 
-In development source, native cross-session messages use the shared
+In development source, native peer deliveries (cross-session messages, teammate
+messages and subagent hand-backs) use the shared
 `attachments/claudePeerMessageProjection.ts` conversation projector. Delivered
-queued-command attachments become sender-labelled text with native peer provenance;
-ordinary queued commands and queue operations remain internal. The JSONL parser,
-scanner, direct-session reader and SDK converter consume that projection. Peer input
-cannot acknowledge a pending human prompt.
+queued-command attachments and peer user rows become sender-labelled text with native
+peer provenance; ordinary queued commands and queue operations remain internal. The
+projected body comes from the native `origin.body` (or the `<cross-session-message>` /
+`<agent-message>` wrapper when absent), so delivery sentences and harness guidance are
+not shown. Hand-backs show `origin.handbackReportText` (Claude 2.1.304), or the
+framed body with its provenance frame and two-space report indentation removed
+(Claude 2.1.296). Projected rows drop `body` and `handbackReportText` and keep the
+`From <sender>:` label that released clients display; current clients read the sender
+and body back through `@happier-dev/protocol` `readClaudePeerMessage`. The JSONL parser,
+scanner, direct-session reader and SDK converter consume that projection. Session
+writes send peer rows as raw agent output with `messageRole: 'agent'`, never as user
+text, so the UI renders them as a collapsible "Message from" / "Report from" row and
+composer history, rollback and voice replies do not treat them as human input. Peer
+input cannot acknowledge a pending human prompt.
+
+A hand-back whose sender matches an async Agent launch already correlated by the task
+projector is retained until the native lifecycle supplies a terminal outcome (a task
+notification, task-status attachment, or authenticated stopped-agent SendMessage
+response). That outcome publishes the report on the Agent card with its actual
+success, failure or cancellation; report delivery alone cannot complete the task. Reports
+without an active correlated launch (including after settlement, resume or a CLI
+restart) stay standalone peer rows.
 
 The remote Agent SDK registers its live permission-mode control with the launcher's
 existing metadata consumer. Registration re-reads current permission intent, and
@@ -255,6 +274,14 @@ the permission authority before a request reaches these hooks.
 | Session controls: modes, settings sources, checkpoints, remote extras | `partial` | `packages/agents/src/providerSettings/definitions/claudeRemote.ts`, `apps/ui/sources/agents/providers/claude/settings/plugin.ts`, `apps/ui/sources/agents/providers/claude/core.ts`, `apps/cli/src/backends/claude/remote/claudeRemoteMetaState.ts`, `apps/cli/src/backends/claude/remote/resolveInitialClaudeRemoteMetaState.ts`, `apps/cli/src/backends/claude/remote/agentSdk/claudeAgentSdkSlashCommands.ts` | Claude exposes build/plan mode, remote setting sources (`claudeRemoteSettingSources` + `claudeRemoteSettingSourcesV2`), partial streaming, local permission bridge toggles, checkpoint capture, max-thinking override, TODO suppression, strict MCP, and advanced JSON allowlist; some controls are Agent-SDK-only. | Rename transport-branded / legacy settings into one controls schema and stop carrying both v1 and v2 setting-source formats. |
 | Manual resume (`happier resume`, explicit `resume`, vendor `--resume`) | `supported` | `apps/cli/src/rpc/handlers/registerSessionHandlers.ts`, `apps/cli/src/backends/claude/runClaude.ts`, `apps/cli/src/backends/claude/session.ts`, `apps/cli/src/backends/claude/claudeLocal.ts`, `packages/agents/src/manifest.ts`, `packages/agents/src/sessionControls/vendorResumePolicy.ts` | Claude is a first-class vendor-resume provider keyed by `claudeSessionId`; local runs consume one-time `--resume` / `--continue` flags after spawn, and `session.ts` rewrites metadata when Claude forks to a new vendor session id. | Keep a single provider resume record carrying vendor id, transcript path, and source affinity instead of scattering them across session metadata fields. |
 | Wake resume / background wake | `supported` | `apps/ui/sources/agents/runtime/resumeCapabilities.ts`, `apps/ui/sources/agents/providers/claude/core.ts`, `apps/ui/sources/agents/registry/registryUiBehavior.ts`, `packages/agents/src/sessionControls/vendorResumePolicy.ts` | Claude uses the generic vendor-resume wake path; unlike Codex/OpenCode there is no Claude-specific `buildWakeResumeExtras` override, so wake relies on persisted metadata plus the generic resume capability contract. | Replace generic wake heuristics plus provider-specific metadata fields with a serialized provider runtime descriptor that wake can replay directly. |
+
+Development source caches Claude provider-title state in the direct-session title
+reader and scans appended records after validating the cached prefix. Manual
+titles retain precedence over AI titles. Identical concurrent Claude candidate
+listings share their filesystem scan; other agent listings retain their existing
+request lifecycle. Handoff imports publish complete transcripts through
+`atomicFileWrite`, replacing file identity so incremental readers invalidate
+their previous state. A failed import leaves the previous transcript intact.
 
 ## Installables, auth, and coverage
 
