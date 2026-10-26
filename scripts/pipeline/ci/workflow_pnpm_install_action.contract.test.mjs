@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { createRequire } from 'node:module';
 import { execFileSync, spawnSync } from 'node:child_process';
 import yaml from 'js-yaml';
 import { readBundledPluginPublicationFailures, writeBundledPluginPublicationFailures } from '../../workspaces/bundledPluginPublicationFailure.mjs';
@@ -259,6 +260,81 @@ test('prepared restore refuses a missing artifact and preparation requires canon
   const absentReadiness = runShellStep(archive, workspace, runnerTemp);
   assert.notEqual(absentReadiness.status, 0);
   assert.equal(fs.existsSync(path.join(runnerTemp, 'gate-prepared-workspace.tar')), false);
+});
+
+test('a workspace package build failure fails the compiler and artifact gates while unit gates still run', (t) => {
+  const { root, workspace, runnerTemp } = fixture(t);
+  const workflow = yaml.load(fs.readFileSync(path.join(workflowsDir, 'tests.yml'), 'utf8'));
+  const action = yaml.load(fs.readFileSync(installActionPath, 'utf8'));
+  const prepare = workflow.jobs['gate-prepare'];
+  const steps = prepare.steps;
+
+  // Installation runs only postinstalls that do not compile workspace packages,
+  // so one package's compiler error cannot fail `pnpm install` for every gate.
+  const { shouldRunPostinstall } = createRequire(import.meta.url)(path.join(repoRoot, 'scripts/postinstall/shouldRunPostinstall.cjs'));
+  const install = steps.find((step) => step.id === 'dependencies');
+  const scope = install.env?.HAPPIER_INSTALL_SCOPE ?? '';
+  const compiles = /\brun\s+build\b|build:shared|buildTypeScriptPackageDist|ensureWorkspacePackagesBuilt/;
+  const admitted = [];
+  for (const directory of ['apps', 'packages', 'packages/plugins']) {
+    for (const entry of fs.readdirSync(path.join(repoRoot, directory))) {
+      const manifestPath = path.join(repoRoot, directory, entry, 'package.json');
+      if (!fs.existsSync(manifestPath)) continue;
+      const scripts = JSON.parse(fs.readFileSync(manifestPath, 'utf8')).scripts ?? {};
+      if (!scripts.postinstall) continue;
+      const delegate = scripts.postinstall.match(/^node\s+(\S+\.c?js)$/)?.[1];
+      const gateSource = delegate ? fs.readFileSync(path.join(repoRoot, directory, entry, delegate), 'utf8') : scripts.postinstall;
+      const token = gateSource.match(/workspace:\s*'([^']+)'/)?.[1];
+      assert.ok(token, `${directory}/${entry} postinstall must consult the install-scope gate`);
+      if (!shouldRunPostinstall({ workspace: token, scope })) continue;
+      admitted.push(token);
+      const executed = `${scripts.postinstall}\n${scripts.postinstall.includes('postinstall:real') ? scripts['postinstall:real'] ?? '' : ''}`;
+      assert.doesNotMatch(executed, compiles, `${directory}/${entry} postinstall compiles workspace packages during the Gate install`);
+    }
+  }
+  for (const token of ['cli', 'ui']) assert.ok(admitted.includes(token), `unit suites read the ${token} postinstall outputs`);
+
+  // Package builds are their own recorded step; the canonical source generator
+  // that unit suites import runs before it, independently of compilation.
+  const buildIndex = steps.findIndex((step) => /\bprepare:typecheck:workspaces\b/.test(step.run ?? ''));
+  const build = steps[buildIndex];
+  assert.equal(build['continue-on-error'], true);
+  assert.equal(prepare.outputs.workspace_build, `\${{ steps.${build.id}.outcome }}`);
+  assert.ok(steps.slice(0, buildIndex).some((step) => /generate-embedded-feature-policies\.mjs/.test(step.run ?? '')));
+  for (const step of steps.slice(buildIndex + 1).filter((entry) => /build:shared|verify:native/.test(entry.run ?? ''))) {
+    assert.equal(step.if, `\${{ steps.${build.id}.outcome == 'success' }}`, `${step.name} consumes package outputs`);
+  }
+
+  // Unit consumers restore whatever was prepared; dist consumers fail closed.
+  assert.doesNotMatch(JSON.stringify(workflow.jobs['gate-unit'].if ?? ''), /workspace_build/);
+  for (const id of ['gate-compiler', 'gate-build-artifacts']) {
+    const [guard] = workflow.jobs[id].steps;
+    assert.equal(guard.env?.WORKSPACE_BUILD, '${{ needs.gate-prepare.outputs.workspace_build }}', `${id} must check the build first`);
+    assert.equal(runShellStep(guard, workspace, runnerTemp, { WORKSPACE_BUILD: 'success' }).status, 0);
+    const refused = runShellStep(guard, workspace, runnerTemp, { WORKSPACE_BUILD: 'failure' });
+    assert.notEqual(refused.status, 0);
+    assert.match(refused.stdout, /::error::/);
+  }
+
+  // A failed build still publishes the unit preparation without the readiness
+  // stamp that only a successful CLI closure produces; success still requires it.
+  const archive = steps.find((step) => step.name === "Archive the current run's coherent preparation");
+  assert.equal(archive.env?.WORKSPACE_BUILD_OUTCOME, `\${{ steps.${build.id}.outcome }}`);
+  write(workspace, 'node_modules/external/index.js', 'third-party');
+  write(workspace, 'apps/cli/tools/unpacked/helper', 'unpacked tool');
+  write(workspace, 'packages/iroh-native/native/iroh.node', 'native-output');
+  write(workspace, 'packages/protocol/package.json', '{"name":"@happier-dev/protocol"}');
+  assert.notEqual(runShellStep(archive, workspace, runnerTemp, { WORKSPACE_BUILD_OUTCOME: 'success' }).status, 0);
+  const archived = runShellStep(archive, workspace, runnerTemp, { WORKSPACE_BUILD_OUTCOME: 'failure' });
+  assert.equal(archived.status, 0, archived.stderr);
+  const consumer = path.join(root, 'consumer');
+  fs.mkdirSync(consumer);
+  fs.mkdirSync(path.join(runnerTemp, 'gate-prepared'));
+  fs.copyFileSync(path.join(runnerTemp, 'gate-prepared-workspace.tar'), path.join(runnerTemp, 'gate-prepared/gate-prepared-workspace.tar'));
+  const restore = action.runs.steps.find((step) => step.name === "Restore this run's prepared workspace");
+  const restored = runShellStep(restore, consumer, runnerTemp, { RESTORE_STARTED_SECONDS: '0' });
+  assert.equal(restored.status, 0, restored.stderr);
+  assert.equal(fs.readFileSync(path.join(consumer, 'packages/iroh-native/native/iroh.node'), 'utf8'), 'native-output');
 });
 
 test('GitHub workflows route dependency installs through the shared install-pnpm-dependencies action', () => {

@@ -775,7 +775,19 @@ the UI artifact projection. Root typecheck and the Gate call this combined prepa
 without a separate `build:packages` pass, so plugin publication happens once for that
 combined scope. The Gate then uses `build:shared --source-dev` to finish CLI runtime
 custody and verify readiness while reusing current plugin runtimes; the compiler
-consumer still checks source semantics. Dependency caching contains third-party dependencies only; a cache hit
+consumer still checks source semantics.
+
+Only the compiler and artifact jobs consume built package outputs; unit jobs load
+workspace packages from source. The Gate install therefore runs only the postinstalls
+that do not compile workspace packages (`HAPPIER_INSTALL_SCOPE=cli,ui,docs`): Server
+Prisma clients come from the dependency-admission step and Protocol's embedded
+feature policies from their generator. `prepare:typecheck:workspaces` then runs as its
+own step whose outcome is the job's `workspace_build` output. When a package fails to
+build, the compiler and artifact jobs fail at their first step, the CLI closure and
+the shared Iroh loader check are skipped, and the archive is still published without
+the CLI readiness stamp, so every unit job still runs and reports. CLI unit tests
+remain fail-closed on the Iroh loader check, which reads iroh-native's built output.
+Dependency caching contains third-party dependencies only; a cache hit
 still runs the canonical frozen installer and required postinstalls. The installer
 defaults `REDISMS_DISABLE_POSTINSTALL=1` to skip the optional Redis `stable` prefetch,
 preserving explicit overrides; Redis adapter validation uses `REDIS_URL` or lazily

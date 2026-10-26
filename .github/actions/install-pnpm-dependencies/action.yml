@@ -93,5 +93,4 @@ runs:
         set -euo pipefail
         tar --extract --same-permissions --file "$RUNNER_TEMP/gate-prepared/gate-prepared-workspace.tar" --directory "$GITHUB_WORKSPACE"
         test -d node_modules
-        test -f .project/tmp/cli-source-dev-shared-deps-sync.json
         echo "Current-run prepared workspace download/extract: $(( $(date +%s) - RESTORE_STARTED_SECONDS )) seconds. No dependency installation was run in this consumer."

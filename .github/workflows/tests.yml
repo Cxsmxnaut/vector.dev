@@ -242,6 +242,8 @@ jobs:
       unit_matrix: ${{ steps.select.outputs.unit_matrix }}
       server_db_contract: ${{ steps.select.outputs.server_db_contract }}
       node_version: ${{ steps.toolchain.outputs.node_version }}
+      # Unit gates read package source; only compiler and artifact gates consume built dists.
+      workspace_build: ${{ steps.workspace-build.outcome }}
     env:
       # The artifact consumer needs the same mandatory web assets as its former install.
       HAPPIER_UI_VENDOR_WEB_ASSETS: "1"
@@ -270,21 +272,34 @@ jobs:
         run: echo "node_version=$(node -p 'process.versions.node')" >> "$GITHUB_OUTPUT"
       - name: Install canonical frozen dependencies with the dependency-only cache
         id: dependencies
+        env:
+          # Run only postinstalls that do not compile workspace packages (CLI tools,
+          # UI source assets and patches, docs). Package builds run in their own
+          # step below, so one package's compiler error cannot fail the install.
+          HAPPIER_INSTALL_SCOPE: cli,ui,docs
         uses: ./.github/actions/install-pnpm-dependencies
         with:
           cache-dependencies: 'true'
       - name: Report the exact dependency cache result
-        run: echo "Exact dependency cache hit=${{ steps.dependencies.outputs.cache-hit }}; mandatory frozen install and postinstall completed. Cold and warm install durations are distinct measurements."
+        run: echo "Exact dependency cache hit=${{ steps.dependencies.outputs.cache-hit }}; mandatory frozen install and non-compiling postinstalls completed. Cold and warm install durations are distinct measurements."
       - name: Setup pinned Rust for shared native preparation
         uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
         with:
           toolchain: 1.94.1
       - name: Prepare the canonical Iroh native runtime
         run: pnpm --filter @happier-dev/iroh-native run build:native
-      - name: Prepare canonical compiler and unit workspace prerequisites
-        run: |
-          pnpm run prepare:typecheck:workspaces
+      - name: Generate the Protocol source inputs unit suites import
+        # Protocol's build runs this generator first; run it independently so a
+        # compiler failure in an earlier package cannot remove it from unit suites.
+        run: node packages/protocol/scripts/generate-embedded-feature-policies.mjs
+      - name: Build workspace packages for the compiler and artifact gates
+        id: workspace-build
+        # A package compiler error fails gate-compiler and gate-build-artifacts
+        # through the workspace_build output; unit gates still run from source.
+        continue-on-error: true
+        run: pnpm run prepare:typecheck:workspaces
       - name: Prepare the canonical CLI runtime closure
+        if: ${{ steps.workspace-build.outcome == 'success' }}
         # The root preparation has already published current plugin runtimes.
         # Reuse the canonical currentness scan and finish physical runtime custody.
         run: pnpm --filter @happier-dev/cli run build:shared --source-dev
@@ -301,12 +316,16 @@ jobs:
           "import { prepareNativeCustody } from './apps/cli/src/test-setup.ts'; await prepareNativeCustody(process.argv[1]);"
           "$GITHUB_WORKSPACE/apps/cli"
       - name: Load the prepared Iroh native runtime
+        # The loader is iroh-native's built dist; CLI unit jobs recheck it themselves.
+        if: ${{ steps.workspace-build.outcome == 'success' }}
         run: pnpm --filter @happier-dev/iroh-native run verify:native --package-root "$GITHUB_WORKSPACE/apps/cli/node_modules/@happier-dev/iroh-native"
       - name: Record the installed dependency tree's admission with the canonical refresh owner
         # Consumers validate locally and refuse unadmitted trees. The frozen
         # install above is the authorized refresh; the marker travels in node_modules.
         run: node apps/stack/scripts/utils/dev_targets/remote_dependency_bootstrap.mjs --adopt-installed --repo-dir="$GITHUB_WORKSPACE"
       - name: Archive the current run's coherent preparation
+        env:
+          WORKSPACE_BUILD_OUTCOME: ${{ steps.workspace-build.outcome }}
         run: |
           set -euo pipefail
           archive_paths="$RUNNER_TEMP/gate-prepared-paths"
@@ -343,12 +362,15 @@ jobs:
           done
           # Nested dependencies are already inside the explicit prepared roots.
           find node_modules apps packages "${archive_prunes[@]}" -type d -name node_modules -prune -print0 >> "$archive_paths"
-          test -f .project/tmp/cli-source-dev-shared-deps-sync.json
+          # The CLI closure's readiness exists only after a successful package build.
+          [ "${WORKSPACE_BUILD_OUTCOME:-success}" != success ] || test -f .project/tmp/cli-source-dev-shared-deps-sync.json
           tar --create --file "$RUNNER_TEMP/gate-prepared-workspace.tar" \
             --exclude='.env' --exclude='.env.*' --exclude='.happier' \
             --exclude='.project' --null --files-from="$archive_paths"
           # Only these canonical public build-state files cross the .project boundary.
-          tar --append --file "$RUNNER_TEMP/gate-prepared-workspace.tar" .project/tmp/cli-source-dev-shared-deps-sync.json
+          if [ -f .project/tmp/cli-source-dev-shared-deps-sync.json ]; then
+            tar --append --file "$RUNNER_TEMP/gate-prepared-workspace.tar" .project/tmp/cli-source-dev-shared-deps-sync.json
+          fi
           if [ -f apps/cli/.project/tmp/bundled-plugin-publication/failures.json ]; then
             tar --append --file "$RUNNER_TEMP/gate-prepared-workspace.tar" apps/cli/.project/tmp/bundled-plugin-publication/failures.json
           fi
@@ -392,6 +414,14 @@ jobs:
     permissions:
       contents: read
     steps:
+      - name: Require the shared workspace package build
+        env:
+          WORKSPACE_BUILD: ${{ needs.gate-prepare.outputs.workspace_build }}
+        run: |
+          if [ "$WORKSPACE_BUILD" != success ]; then
+            echo "::error::Workspace package build ${WORKSPACE_BUILD:-unknown} in gate-prepare (step 'Build workspace packages for the compiler and artifact gates'); this gate needs its built packages."
+            exit 1
+          fi
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
@@ -574,6 +604,14 @@ jobs:
     env:
       HAPPIER_UI_VENDOR_WEB_ASSETS: "1"
     steps:
+      - name: Require the shared workspace package build
+        env:
+          WORKSPACE_BUILD: ${{ needs.gate-prepare.outputs.workspace_build }}
+        run: |
+          if [ "$WORKSPACE_BUILD" != success ]; then
+            echo "::error::Workspace package build ${WORKSPACE_BUILD:-unknown} in gate-prepare (step 'Build workspace packages for the compiler and artifact gates'); this gate needs its built packages."
+            exit 1
+          fi
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
