@@ -1,0 +1,137 @@
+import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import test from 'node:test';
+import { checkCommitTypeCoherence } from './checkCommitTypeCoherence.mjs';
+
+// A shared dirty checkout: the worktree holds both halves of a change, a commit takes only one.
+async function checkout(t) {
+  const repo = await mkdtemp(join(tmpdir(), 'happier-commit-coherence-'));
+  t.after(() => rm(repo, { recursive: true, force: true }));
+  const git = (...args) =>
+    execFileSync('git', args, { cwd: repo, encoding: 'utf8' });
+  git('init', '--quiet');
+  git('config', 'user.name', 'Coherence Test');
+  git('config', 'user.email', 'coherence@example.invalid');
+  const write = (path, content) => writeFile(join(repo, path), content);
+  await write(
+    'tsconfig.json',
+    JSON.stringify({
+      compilerOptions: {
+        strict: true,
+        noEmit: true,
+        target: 'es2022',
+        module: 'esnext',
+        moduleResolution: 'bundler',
+        types: [],
+      },
+      include: ['*.ts'],
+    }),
+  );
+  await write('producer.ts', 'export const original = 1;\n');
+  await write(
+    'consumer.ts',
+    "import { original } from './producer';\nexport const value: number = original;\n",
+  );
+  git('add', '-A');
+  git('commit', '--quiet', '-m', 'base');
+  const commitOnly = (...paths) => {
+    git('add', '--', ...paths);
+    git('commit', '--quiet', '-m', `commit ${paths.join(' ')}`);
+    return git('rev-parse', 'HEAD').trim();
+  };
+  return { repo, write, commitOnly };
+}
+
+test('a consumer committed without its uncommitted producer is incoherent at the commit', async (t) => {
+  const { repo, write, commitOnly } = await checkout(t);
+  await write(
+    'producer.ts',
+    'export const original = 1;\nexport const added = 2;\n',
+  );
+  await write(
+    'consumer.ts',
+    "import { added } from './producer';\nexport const value: number = added;\n",
+  );
+  const commit = commitOnly('consumer.ts');
+
+  const result = checkCommitTypeCoherence({
+    repo,
+    base: `${commit}^`,
+    tree: commit,
+  });
+
+  assert.deepEqual(
+    result.fresh.map((row) => [row.file, row.code]),
+    [['consumer.ts', 2305]],
+  );
+});
+
+test('a committed producer change breaks an importer whose adaptation stayed uncommitted', async (t) => {
+  const { repo, write, commitOnly } = await checkout(t);
+  await write('producer.ts', 'export const renamed = 1;\n');
+  await write(
+    'consumer.ts',
+    "import { renamed } from './producer';\nexport const value: number = renamed;\n",
+  );
+  const commit = commitOnly('producer.ts');
+
+  const result = checkCommitTypeCoherence({
+    repo,
+    base: `${commit}^`,
+    tree: commit,
+  });
+
+  assert.deepEqual(
+    result.fresh.map((row) => [row.file, row.code]),
+    [['consumer.ts', 2305]],
+  );
+});
+
+test('a slice that carries its producer is coherent although the worktree differs', async (t) => {
+  const { repo, write, commitOnly } = await checkout(t);
+  await write(
+    'producer.ts',
+    'export const original = 1;\nexport const added = 2;\n',
+  );
+  await write(
+    'consumer.ts',
+    "import { added } from './producer';\nexport const value: number = added;\n",
+  );
+  const commit = commitOnly('producer.ts', 'consumer.ts');
+  await write('producer.ts', 'export const unrelatedLaterWork = 3;\n');
+
+  assert.deepEqual(
+    checkCommitTypeCoherence({ repo, base: `${commit}^`, tree: commit }).fresh,
+    [],
+  );
+});
+
+test('diagnostics already present at the base are not attributed to the slice', async (t) => {
+  const { repo, write, commitOnly } = await checkout(t);
+  await write(
+    'consumer.ts',
+    "import { original } from './producer';\nexport const value: string = original;\n",
+  );
+  const broken = commitOnly('consumer.ts');
+  await write(
+    'consumer.ts',
+    "import { original } from './producer';\nexport const value: string = original;\nexport const more = 1;\n",
+  );
+  const commit = commitOnly('consumer.ts');
+
+  assert.equal(
+    checkCommitTypeCoherence({ repo, base: broken, tree: commit }).fresh.length,
+    0,
+  );
+  assert.deepEqual(
+    checkCommitTypeCoherence({
+      repo,
+      base: `${broken}^`,
+      tree: broken,
+    }).fresh.map((row) => row.code),
+    [2322],
+  );
+});
