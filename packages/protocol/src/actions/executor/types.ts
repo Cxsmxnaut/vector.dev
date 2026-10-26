@@ -472,6 +472,8 @@ export type ActionCaller =
 export type InvokeContributedAction = (request: Readonly<{
   action: import('../../plugins/contributionIdentity.js').PluginContributionIdentityV1;
   input: unknown;
+  /** Exact answering client, separate from contributed business input. */
+  clientId?: string;
   context: ActionExecutorContext;
   /** Opaque committed Message identity, never caller-authored disclosure text. */
   messageActionReference?: import('../../sessions/messages/messageActionReferenceV1.js').MessageActionReferenceV1;

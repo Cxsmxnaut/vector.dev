@@ -85,6 +85,8 @@ describe('actions root command', () => {
     const { createCliActionExecutorFromCredentials } = await import('@/session/actions/createCliActionExecutorFromCredentials');
     const addressOwner = createCliActionExecutorFromCredentials({ credentials: stored, readCredentials: async () => stored });
     const opened: string[] = [];
+    let severalClients = false;
+    const { selectRpcTarget } = await import('../../../../server/sources/app/api/socket/rpc/rpcTargetSelection');
     const executor = createActionExecutor({ ...createUnavailableActionTransportDeps(),
       clientActionExecute: createClientActionReverseDispatcher(() => ({
         hasConnectedClientRpcHandler: method => method === RPC_METHODS.UI_ACTION_EXECUTE,
@@ -92,11 +94,16 @@ describe('actions root command', () => {
         // dispatcher must select the App without a mounted destination Session.
         callConnectedClientRpc: async (method, _request, options) => {
           if (method !== RPC_METHODS.UI_ACTION_EXECUTE) return { ok: false, errorCode: 'RPC_CLIENT_NOT_AVAILABLE' };
+          const receiver = (id: string) => ({ id, timeout: () => ({ emitWithAck: async () => {
+            opened.push(sessionId);
+            return { v: 1, execution: { ok: true, result: { status: 'opened', sessionId, serverId: 'home' } } };
+          } }) });
+          const selection = selectRpcTarget({ targets: severalClients ? [receiver('app-a'), receiver('app-b')] : [receiver('app-b')],
+            answeringClient: options.answeringClient });
+          if (selection.type === 'ambiguous') return { ok: false, errorCode: 'RPC_CLIENT_AMBIGUOUS', answeringClients: selection.clients };
+          if (selection.type !== 'target') return { ok: false, errorCode: 'RPC_CLIENT_NOT_AVAILABLE' };
           options.onIssued();
-          opened.push(sessionId);
-          return { ok: true, result: { v: 1, execution: { ok: true, result: {
-            status: 'opened', sessionId, serverId: 'home',
-          } } } };
+          return { ok: true, result: await selection.target.timeout(0).emitWithAck('rpc-request', _request) };
         },
       })),
     });
@@ -106,6 +113,13 @@ describe('actions root command', () => {
       createExecutorFn: () => ({ ...executor, resolveSessionTarget: addressOwner.resolveSessionTarget }),
     });
     expect(opened).toEqual([sessionId]);
+    severalClients = true;
+    await handleActionsCommand(['invoke', 'session.open', '--input-json', JSON.stringify({ sessionId }),
+      '--client-id', 'app-b', ...(exactMachine ? ['--machine-id', 'machine_1'] : []), '--json'], {
+      readCredentialsFn: async () => stored,
+      createExecutorFn: () => ({ ...executor, resolveSessionTarget: addressOwner.resolveSessionTarget }),
+    });
+    expect(opened, JSON.stringify(vi.mocked(console.log).mock.calls)).toEqual([sessionId, sessionId]);
     expect(process.exitCode ?? 0).toBe(0);
   });
   it.each(['invoke', 'friendly'] as const)('preserves native Goal failure evidence in the %s JSON envelope', async surface => {

@@ -56,6 +56,15 @@ export const SocketRpcAnsweringClientV1Schema = lazyZodSchema(() => z.strictObje
   requireSingle: z.optional(z.literal(true)),
 }));
 export type SocketRpcAnsweringClientV1 = Readonly<z.infer<typeof SocketRpcAnsweringClientV1Schema>>;
+/** Ephemeral, non-content receiver facts; labels remain unknown when not advertised. */
+export const SocketRpcAnsweringClientCandidateV1Schema = lazyZodSchema(() => z.strictObject({
+  id: z.string().check(z.minLength(1)),
+  deviceLabel: z.nullable(z.string()),
+  state: z.optional(z.strictObject({ computer: z.boolean(), focused: z.boolean(),
+    lastFocusedAt: z.optional(z.number().check(z.nonnegative())) })),
+}));
+export const SocketRpcAnsweringClientCandidatesV1Schema = lazyZodSchema(() => z.array(SocketRpcAnsweringClientCandidateV1Schema));
+export type SocketRpcAnsweringClientCandidateV1 = Readonly<z.infer<typeof SocketRpcAnsweringClientCandidateV1Schema>>;
 // A distinct operation name prevents older relays from ignoring routing input
 // and delivering a mutation to an arbitrary client. It uses the same handler.
 export const ANSWERING_CLIENT_RPC_PREFIX_V1 = 'answering-client.v1/';

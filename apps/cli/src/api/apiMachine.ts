@@ -187,6 +187,7 @@ import type { RpcHandlerActiveExecution, RpcHandlerContext, RpcLocalActionContex
 import type { PeerMachineRpcDirectHandlerManager } from '@/daemon/peer/mediation/rpc/registerRoutes';
 import { SOCKET_RPC_EVENTS, type SocketRpcAnsweringClientV1 } from '@happier-dev/protocol/socketRpc';
 import { RPC_METHODS } from '@happier-dev/protocol/rpc/methods';
+import { SocketRpcAnsweringClientCandidatesV1Schema, type SocketRpcAnsweringClientCandidateV1 } from '@happier-dev/protocol/socketRpc';
 import { isCurrentUiContextClientRpcMethod } from '@happier-dev/protocol/actions/clientDispatchV1';
 import { EXTERNAL_SESSION_OPERATION_SOCKET_EVENT_V1 } from '@happier-dev/protocol/sessions/external/operationActionsV1';
 import { EXTERNAL_SESSION_STATUS_DEMAND_EVENT_V1 } from '@happier-dev/protocol/sessions/external/statusDemandV1';
@@ -2928,7 +2929,7 @@ export class ApiMachineClient {
         params: unknown,
         options?: Readonly<{ timeoutMs?: number | null; signal?: AbortSignal; onIssued?: () => void;
             answeringClient?: SocketRpcAnsweringClientV1 }>,
-    ): Promise<Readonly<{ ok: true; result: TResult; answeringClientId?: string; answeringClientIds?: readonly string[] }> | Readonly<{ ok: false; error?: string; errorCode?: string }>> {
+    ): Promise<Readonly<{ ok: true; result: TResult; answeringClientId?: string; answeringClientIds?: readonly string[] }> | Readonly<{ ok: false; error?: string; errorCode?: string; answeringClients?: readonly SocketRpcAnsweringClientCandidateV1[] }>> {
         const socket = this.socket;
         if (!socket || !this.machineContentReady) {
             return { ok: false, errorCode: 'machine_socket_unavailable' };
@@ -2959,6 +2960,7 @@ export class ApiMachineClient {
             },
         };
         if (handlerRetirement) socket.on(SOCKET_RPC_EVENTS.UNREGISTERED, onUnregistered);
+        let answeringClients: readonly SocketRpcAnsweringClientCandidateV1[] | undefined;
         try {
             let answeringClientId: string | undefined;
             let answeringClientIds: readonly string[] | undefined;
@@ -2973,6 +2975,10 @@ export class ApiMachineClient {
                 onIssued: options?.onIssued,
                 answeringClient: options?.answeringClient,
                 onResponse: response => {
+                    if (response && typeof response === 'object' && 'answeringClients' in response) {
+                        const candidates = SocketRpcAnsweringClientCandidatesV1Schema.safeParse(response.answeringClients);
+                        if (candidates.success) answeringClients = candidates.data;
+                    }
                     if (response && typeof response === 'object' && 'answeringClientId' in response
                         && typeof response.answeringClientId === 'string') answeringClientId = response.answeringClientId;
                     if (response && typeof response === 'object' && 'answeringClientIds' in response
@@ -2991,6 +2997,7 @@ export class ApiMachineClient {
                 ok: false,
                 error: isSocketIoAckTimeoutError(error) ? 'RPC call timeout' : error instanceof Error ? error.message : 'RPC call failed',
                 ...(errorCode ? { errorCode } : {}),
+                ...(errorCode === RPC_ERROR_CODES.CLIENT_AMBIGUOUS && answeringClients ? { answeringClients } : {}),
             };
         } finally {
             if (handlerRetirement) socket.off(SOCKET_RPC_EVENTS.UNREGISTERED, onUnregistered);

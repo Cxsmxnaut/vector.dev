@@ -1,14 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { createActionExecutor, type ActionExecutorDeps, RPC_METHODS, RPC_ERROR_CODES, UiActionDispatchRequestV1Schema, ActionIdSchema } from '@happier-dev/protocol';
+import { createActionExecutor, RPC_METHODS, RPC_ERROR_CODES, UiActionDispatchRequestV1Schema, ActionIdSchema } from '@happier-dev/protocol';
+import { createUnavailableActionTransportDeps } from '@/testkit/actionTransportDeps';
 import { createClientActionReverseDispatcher, type ClientActionMachineRpc } from './clientActionReverseDispatch';
 import { createCliSettingsDeclarationAction } from './settingsDeclarationAction';
-import { mountedWorkReadClientRpcMethod, sessionUiActionClientRpcMethod } from '@happier-dev/protocol/actions/clientDispatchV1';
+import { clientActionUnavailable, mountedWorkReadClientRpcMethod, sessionUiActionClientRpcMethod } from '@happier-dev/protocol/actions/clientDispatchV1';
 import { ApprovalRequestV2Schema, StoredApprovalRequestSchema } from '@happier-dev/protocol/approvals/approvalRequestV1';
 import { projectApprovalExecutionFailureV2, readApprovalExecutionFailure } from '@happier-dev/protocol/approvals/approvalExecutionFailure';
+import { uiBrowserAutomationDispatchMethod, UiBrowserAutomationDispatchRequestV1Schema } from '@happier-dev/protocol/browser/automation/reverseDispatchV1';
+import { BrowserDiagnosticsEvalResultV1Schema } from '@happier-dev/protocol/browser/diagnostics/v1';
 
 function executor(client: ClientActionMachineRpc | null) {
-  return createActionExecutor({ clientActionExecute: createClientActionReverseDispatcher(() => client),
-    settingsDeclarationAction: createCliSettingsDeclarationAction({}) } as unknown as ActionExecutorDeps);
+  return createActionExecutor({ ...createUnavailableActionTransportDeps(),
+    clientActionExecute: createClientActionReverseDispatcher(() => client),
+    settingsDeclarationAction: createCliSettingsDeclarationAction({}) });
 }
 
 const disconnectedClient: ClientActionMachineRpc = {
@@ -17,6 +21,76 @@ const disconnectedClient: ClientActionMachineRpc = {
 };
 
 describe('client Action reverse delivery', () => {
+  it.each([
+    { clientId: 'app-b', clients: ['app-a', 'app-b'], expected: 'opened' },
+    { clientId: undefined, clients: ['app-b'], expected: 'opened' },
+    { clientId: undefined, clients: ['app-a', 'app-b'], expected: 'client_ambiguous' },
+    { clientId: 'disconnected', clients: ['app-a', 'app-b'], expected: 'client_not_available' },
+  ])('chooses a client for session.open: $expected ($clientId)', async ({ clientId, clients, expected }) => {
+    const { selectRpcTarget } = await import('../../../../server/sources/app/api/socket/rpc/rpcTargetSelection');
+    const effects: string[] = [];
+    const sessionId = `c${'a'.repeat(24)}`;
+    const targets = clients.map(id => ({ id, timeout: () => ({ emitWithAck: async () => {
+      effects.push(id);
+      return { v: 1, execution: { ok: true, result: { status: 'opened', sessionId, serverId: 'home' } } };
+    } }) }));
+    const caller = executor({ hasConnectedClientRpcHandler: () => true,
+      callConnectedClientRpc: async (_method, payload, options) => {
+        expect(UiActionDispatchRequestV1Schema.safeParse(payload).success).toBe(true);
+        const selection = selectRpcTarget({ targets, answeringClient: options.answeringClient });
+        if (selection.type === 'ambiguous') return { ok: false, errorCode: RPC_ERROR_CODES.CLIENT_AMBIGUOUS,
+          answeringClients: selection.clientIds.map(id => ({ id, deviceLabel: null })) };
+        if (selection.type !== 'target') return { ok: false, errorCode: RPC_ERROR_CODES.CLIENT_NOT_AVAILABLE };
+        options.onIssued();
+        return { ok: true, result: await selection.target.timeout(0).emitWithAck('rpc-request', {}) };
+      } });
+    const result = await caller.execute('session.open', { sessionId, ...(clientId ? { clientId } : {}) },
+      { surface: 'cli', authority: 'account_automation' });
+    if (expected === 'opened') {
+      expect(result).toMatchObject({ ok: true, result: { status: 'opened', sessionId } });
+      expect(effects).toEqual(['app-b']);
+    } else {
+      expect(result).toMatchObject({ ok: false, errorCode: expected });
+      expect(effects).toEqual([]);
+      if (expected === 'client_ambiguous') expect(result).toMatchObject({ details: {
+        clients: clients.map(id => ({ id, deviceLabel: null })), recovery: { inputField: 'clientId' },
+      } });
+    }
+  });
+  it.each([undefined, 'mounted-app'])('delivers admitted diagnostics only to the exact mounted view (clientId=%s)', async clientId => {
+    const { selectRpcTarget } = await import('../../../../server/sources/app/api/socket/rpc/rpcTargetSelection');
+    const view = { browserSessionId: 'mounted-browser', viewId: 'mounted-view' };
+    const result = BrowserDiagnosticsEvalResultV1Schema.parse({ v: 1, evalRequestId: 'eval', viewId: view.viewId, navigationGeneration: 0,
+      tier: 'injectedPage', audited: true, status: 'completed', result: { type: 'number', value: 2 } });
+    const effects: string[] = [];
+    const receiver = (id: string) => ({ id, timeout: () => ({ emitWithAck: async () => {
+      effects.push(id);
+      return result;
+    } }) });
+    const dispatch = createClientActionReverseDispatcher(() => ({
+      hasConnectedClientRpcHandler: () => false,
+      callConnectedClientRpc: async (method, payload, options) => {
+        expect(options.timeoutMs).toBe(3000);
+        const targets = method === uiBrowserAutomationDispatchMethod(view)
+          ? [receiver('mounted-app')] : [receiver('other-app'), receiver('mounted-app')];
+        const selection = selectRpcTarget({ targets, answeringClient: options.answeringClient });
+        if (selection.type === 'ambiguous') return { ok: false, errorCode: RPC_ERROR_CODES.CLIENT_AMBIGUOUS };
+        if (selection.type !== 'target') return { ok: false, errorCode: RPC_ERROR_CODES.CLIENT_NOT_AVAILABLE };
+        expect(UiBrowserAutomationDispatchRequestV1Schema.parse(payload)).toMatchObject({
+          actionId: 'browser.diagnostics.eval', sessionId: 'source-session', authority: 'account_automation',
+        });
+        options.onIssued();
+        return { ok: true, result: await selection.target.timeout(0).emitWithAck('rpc-request', {}) };
+      },
+    }));
+    expect(await dispatch({ actionId: 'browser.diagnostics.eval', input: {
+      v: 1, ...view, evalRequestId: 'eval', navigationGeneration: 0, tier: 'injectedPage',
+      expression: '1 + 1', objectGroupId: 'group', diagnosticsInteractionEnabled: true, timeoutMs: 3000,
+      ...(clientId ? { clientId } : {}),
+    }, context: { surface: 'agent', authority: 'account_automation', defaultSessionId: 'source-session' } }))
+      .toEqual({ ok: true, result });
+    expect(effects).toEqual(['mounted-app']);
+  });
   it.each([
     { actionId: 'notifications.sounds.preview', input: {}, defaultSessionId: undefined },
     { actionId: 'ui.voice_global.history.search', input: {}, defaultSessionId: 'background-agent-session' },
@@ -96,6 +170,20 @@ describe('client Action reverse delivery', () => {
     expect(await dispatch({ actionId: 'session.pending.next', input: {},
       context: { surface: 'agent', defaultSessionId: 'previous-session' } }))
       .toEqual({ ok: true, result: { status: 'unavailable', reason: 'noClient' } });
+  });
+
+  it.each([
+    { response: { errorCode: RPC_ERROR_CODES.METHOD_NOT_FOUND }, errorCode: 'client_not_available' },
+    { response: { v: 1, execution: clientActionUnavailable('settings.get') }, errorCode: 'unavailable' },
+  ])('keeps an exact client refusal terminal instead of falling back to a headless Settings owner: $errorCode', async ({ response, errorCode }) => {
+    const caller = createActionExecutor({ ...createUnavailableActionTransportDeps(),
+      clientActionExecute: createClientActionReverseDispatcher(() => ({
+      hasConnectedClientRpcHandler: () => true,
+      callConnectedClientRpc: async () => ({ ok: true, result: response }),
+    })), settingsDeclarationAction: createCliSettingsDeclarationAction({}) });
+    expect(await caller.execute('settings.get', { anchor: 'machines.administrationTarget', key: 'agents', clientId: 'retired-app' },
+      { surface: 'agent', authority: 'account_automation' }))
+      .toMatchObject({ ok: false, errorCode });
   });
 
   it.each([
@@ -269,20 +357,23 @@ describe('client Action reverse delivery', () => {
     expect(await executor(client).execute('plugins.execution_origin.clear', { pluginId: 'acme.plugin' },
       { surface: 'cli', authority: 'account_automation' })).toMatchObject({ ok: false, errorCode: 'client_ambiguous' });
   });
-  it('keeps Run-on reads unambiguous and exposes current client addresses for the next mutation', async () => {
+  it('selects the sole Run-on reader and exposes its current address for the next mutation', async () => {
+    const { selectRpcTarget } = await import('../../../../server/sources/app/api/socket/rpc/rpcTargetSelection');
     const result = { status: 'available', storedTarget: null, storedOrigin: null, selectedOrigin: null, selectionSource: null, candidates: [] };
     const client: ClientActionMachineRpc = {
       hasConnectedClientRpcHandler: () => true,
       callConnectedClientRpc: async (_method, _raw, options) => {
-        expect(options.answeringClient).toEqual({});
+        const target = { id: 'app-a', timeout: () => ({ emitWithAck: async () => ({ v: 1, execution: { ok: true, result } }) }) };
+        const selection = selectRpcTarget({ targets: [target], answeringClient: options.answeringClient });
+        if (selection.type !== 'target') return { ok: false, errorCode: RPC_ERROR_CODES.CLIENT_NOT_AVAILABLE };
         options.onIssued();
-        return { ok: true, result: { v: 1, execution: { ok: true, result } },
-          answeringClientId: 'app-a', answeringClientIds: ['app-a', 'app-b'] };
+        return { ok: true, result: await selection.target.timeout(0).emitWithAck('rpc-request', {}),
+          answeringClientId: selection.target.id, answeringClientIds: selection.clientIds };
       },
     };
     expect(await executor(client).execute('plugins.execution_origin.list', { pluginId: 'acme.plugin' },
       { surface: 'mcp', authority: 'account_automation' })).toEqual({ ok: true,
-        result: { ...result, answeringClientId: 'app-a', answeringClientIds: ['app-a', 'app-b'] } });
+        result: { ...result, answeringClientId: 'app-a', answeringClientIds: ['app-a'] } });
   });
   it.each([
     { actionId: 'workspace.tabs.list', input: {}, result: { ok: true, tabs: [], groups: [], splits: [], rootNodeId: 'main', focusedGroupId: 'main', maximizedGroupId: null } },

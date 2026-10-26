@@ -321,6 +321,7 @@ export const WIDGET_INSTANCE_ACTION_SPECS_V1: readonly (PreNormalizedActionSpec 
     safety: read || refresh || select ? 'safe' : 'danger',
     sideEffectClass: read || refresh ? 'read' : 'write',
     executionPlacement: refresh || select ? 'client' : 'account',
+    executionPlacements: refresh || select ? ['client'] : ['account', 'client'],
     executionPlacementForInput: (input: unknown) => refresh || select
       || readWidgetActionSurfaceV1(input)?.owner.kind === 'companion'
       || (id === 'widgets.item.move' && readWidgetActionDestinationV1(input)?.owner.kind === 'companion')

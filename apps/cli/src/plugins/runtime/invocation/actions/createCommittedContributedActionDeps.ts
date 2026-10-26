@@ -106,7 +106,7 @@ export function createCommittedContributedActionInvoker(input: Readonly<{
   }>) => boolean | Promise<boolean>;
 }> = {}): NonNullable<ActionExecutorDeps['invokeContributedAction']> {
   const acquire = input.acquireRuntimeRegistryLease ?? acquireAuthoritativePluginRuntimeRegistryLease;
-  return async ({ action, input: actionInput, messageActionReference, context, approvalExecutionOrigin, requiredDangerLevel, signal }) => {
+  return async ({ action, input: actionInput, clientId, messageActionReference, context, approvalExecutionOrigin, requiredDangerLevel, signal }) => {
     const invocationSignal = signal ?? context.signal ?? new AbortController().signal;
     invocationSignal.throwIfAborted();
     const surface = readSurface(context.surface) ?? input.defaultInvocationSurface;
@@ -140,6 +140,7 @@ export function createCommittedContributedActionInvoker(input: Readonly<{
         runtimeRegistry: lease.registry,
         actionId: buildQualifiedPluginContributionKey(action),
         input: actionInput,
+        ...(clientId === undefined ? {} : { clientId }),
         ...(messageActionReference ? { messageActionReference } : {}),
         ...(requiredDangerLevel ? { requiredDangerLevel } : {}),
         approvalContext: context,
@@ -163,6 +164,10 @@ export function createCommittedContributedActionInvoker(input: Readonly<{
       if (attempt.result.ok) {
         const { executionOrigin: _executionOrigin, deferredApprovalArtifactId: _deferredApprovalArtifactId, ...result } = attempt.result;
         return result;
+      }
+      if (attempt.result.errorCode === 'client_ambiguous' && attempt.result.actionHandlerInvocation === 'notStarted') {
+        return { ok: false, errorCode: attempt.result.errorCode, error: attempt.result.error,
+          details: attempt.result.data };
       }
       return attempt.result;
     } finally {

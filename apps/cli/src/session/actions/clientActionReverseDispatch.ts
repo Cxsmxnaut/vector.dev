@@ -4,6 +4,7 @@ import { getActionSpec } from '@happier-dev/protocol/actions/actionSpecs';
 import {
   UiActionDispatchRequestV1Schema,
   clientActionUnavailable,
+  clientActionAmbiguous,
   currentUiContextCommandClientRpcMethod,
   currentUiContextReadClientRpcMethod,
   mountedWorkReadClientRpcMethod,
@@ -12,19 +13,21 @@ import {
 } from '@happier-dev/protocol/actions/clientDispatchV1';
 import type { ActionExecutorDeps } from '@happier-dev/protocol';
 import { projectApprovalExecutionOriginCaller } from '@happier-dev/protocol/actions/actionExecutor';
-import { ClientActionRpcFailureCodeV1Schema, readUnexpectedActionErrorDiagnosticV1 } from '@happier-dev/protocol/actions/actionExecutionResult';
+import { ActionExecuteFailureSchema, ClientActionRpcFailureCodeV1Schema, readUnexpectedActionErrorDiagnosticV1 } from '@happier-dev/protocol/actions/actionExecutionResult';
 import { isWorkflowAuthoringActionId, workflowDraftClientRpcMethod, WorkflowDraftGetInputV1Schema } from '@happier-dev/protocol/actions/workflowAuthoringAction';
 import { PluginExecutionOriginActionIdSchema, PluginExecutionOriginActionInputSchemas } from '@happier-dev/protocol/actions/pluginExecutionOriginActionFamily';
-import type { SocketRpcAnsweringClientV1 } from '@happier-dev/protocol/socketRpc';
+import type { SocketRpcAnsweringClientV1, SocketRpcAnsweringClientCandidateV1 } from '@happier-dev/protocol/socketRpc';
 import { readCliActionBoundSessionId } from './resolveCliActionCallerSession';
+import { MOUNTED_BROWSER_DIAGNOSTICS_ACTION_IDS } from '@happier-dev/protocol/browser/automation/reverseDispatchV1';
+import { createBrowserAutomationReverseDispatcher } from '@/daemon/browser/automation/reverseDispatch';
 import { isVoiceConversationActionId } from '@happier-dev/protocol/actions/voiceConversationActionFamily';
 import { isSettingsDeclarationActionIdV1 } from '@happier-dev/protocol/actions/settingsDeclarationActionFamily';
 
 export type ClientActionMachineRpc = Readonly<{
   hasConnectedClientRpcHandler(method: string): boolean;
   callConnectedClientRpc(method: string, params: unknown,
-    options: Readonly<{ timeoutMs: null; signal?: AbortSignal; answeringClient?: SocketRpcAnsweringClientV1; onIssued(): void }>):
-    Promise<Readonly<{ ok: true; result: unknown; answeringClientId?: string; answeringClientIds?: readonly string[] }> | Readonly<{ ok: false; errorCode?: string }>>;
+    options: Readonly<{ timeoutMs: number | null; signal?: AbortSignal; answeringClient?: SocketRpcAnsweringClientV1; onIssued(): void }>):
+    Promise<Readonly<{ ok: true; result: unknown; answeringClientId?: string; answeringClientIds?: readonly string[] }> | Readonly<{ ok: false; errorCode?: string; answeringClients?: readonly SocketRpcAnsweringClientCandidateV1[] }>>;
 }>;
 
 /** One delivery owner for every built-in client-placed Action; no retry after issuance. */
@@ -32,12 +35,34 @@ export function createClientActionReverseDispatcher(
   getMachineClient: () => ClientActionMachineRpc | null | undefined,
 ): NonNullable<ActionExecutorDeps['clientActionExecute']> {
   return async ({ actionId, input, context }) => {
-    const unavailable = () => clientActionUnavailable(actionId);
+    const requestedClientId: unknown = input && typeof input === 'object' ? Reflect.get(input, 'clientId') : undefined;
+    const clientId = typeof requestedClientId === 'string' ? requestedClientId : undefined;
+    const unavailable = () => clientId
+      ? { ok: false as const, errorCode: 'client_not_available', error: 'The selected clientId is not eligible or is disconnected' }
+      : clientActionUnavailable(actionId);
     const machineTransportUnavailable = (errorCode = 'machine_transport_unavailable') => ({
       ok: false as const, errorCode, error: errorCode,
     });
     const client = getMachineClient();
     // Voice and Settings use the answering Account client's owners even when
+    const mountedDiagnosticsActionId = MOUNTED_BROWSER_DIAGNOSTICS_ACTION_IDS.find(id => id === actionId);
+    if (mountedDiagnosticsActionId) {
+      // The Action has already been admitted here. Continue at its exact mounted
+      // engine, not a Session-wide App executor that can ask for approval again.
+      const execute = createBrowserAutomationReverseDispatcher({ getMachineClient: () => client ? {
+        callConnectedClientRpc: (method, params, options) => client.callConnectedClientRpc(method, params, {
+          timeoutMs: options?.timeoutMs ?? null,
+          ...(options?.signal ? { signal: options.signal } : {}),
+          ...(options?.answeringClient ? { answeringClient: options.answeringClient } : {}),
+          onIssued: () => options?.onIssued?.(),
+        }),
+      } : null });
+      const result = await execute({ actionId: mountedDiagnosticsActionId, input, context });
+      const failure = ActionExecuteFailureSchema.safeParse(result);
+      return failure.success ? failure.data
+        : parseClientActionDispatchResult(actionId, { v: 1, execution: { ok: true, result } })
+          ?? { ok: false, errorCode: 'invalid_action_output', error: 'invalid_action_output' };
+    }
     // the invoking Agent's Session is in the background. View-specific Actions
     // still require the App viewing their exact Session, without fallback.
     const accountClientAction = isVoiceConversationActionId(actionId) || isSettingsDeclarationActionIdV1(actionId);
@@ -56,9 +81,7 @@ export function createClientActionReverseDispatcher(
       : callerSessionId ? readCliActionBoundSessionId(callerSessionId) : null;
     const originAction = PluginExecutionOriginActionIdSchema.safeParse(actionId);
     const originInput = originAction.success ? PluginExecutionOriginActionInputSchemas[originAction.data].parse(input) : null;
-    const answeringClient = originInput ? { ...(originInput.clientId ? { clientId: originInput.clientId } : {}),
-      ...(actionId === 'plugins.execution_origin.list' ? {} : { requireSingle: true as const }) }
-      : { requireSingle: true as const };
+    const answeringClient = { ...(clientId ? { clientId } : {}), requireSingle: true as const };
     // Project only the address from the already-admitted full Action input.
     const address = isWorkflowAuthoringActionId(actionId) && input && typeof input === 'object'
       ? WorkflowDraftGetInputV1Schema.safeParse({ scope: Reflect.get(input, 'scope'), draftId: Reflect.get(input, 'draftId') }) : null;
@@ -116,7 +139,7 @@ export function createClientActionReverseDispatcher(
         },
       });
       if (!response.ok) {
-        if (response.errorCode === RPC_ERROR_CODES.CLIENT_AMBIGUOUS) return { ok: false, errorCode: 'client_ambiguous', error: 'Choose an exact answering client' };
+        if (response.errorCode === RPC_ERROR_CODES.CLIENT_AMBIGUOUS) return clientActionAmbiguous(response.answeringClients);
         if (response.errorCode === RPC_ERROR_CODES.CLIENT_NOT_AVAILABLE) return unavailable();
         if (answeringClient && response.errorCode === RPC_ERROR_CODES.METHOD_NOT_AVAILABLE) return { ok: false,
           errorCode: 'client_routing_update_required', error: 'Update the Home server to support answering-client routing' };

@@ -1,4 +1,5 @@
 import { lazyZodSchema } from '../lazyZodSchema.js';
+import { withClientActionInput, retainClientActionInput } from './clientActionInput.js';
 import { PluginLocalizedStringV2Schema } from '../plugins/contributions/publicTypes.js';
 import { SessionAccessEncryptionPrepareInputV1Schema, SessionAccessEncryptionReprepareInputV1Schema, SessionAccessEncryptionPrepareResultV1Schema, SessionAccessLayoutUpdateResultV1Schema } from '../sessions/access/sessionAccessActionsV1.js';
 import { resolveMachineRpcGovernance } from '../machines/peer/mediation/rpc/governanceV1.js';
@@ -1186,6 +1187,8 @@ export const ActionSpecSchema = lazyZodSchema(() => z.looseObject({
   surfaces: ActionSurfaceSchema,
   inputSchema: ZodSchemaLike,
   inputHints: z.optional(ActionInputHintsSchema),
+  /** Internal domain parser, before the catalog adds the delivery selector. Never serialized. */
+  clientActionDomainInputSchema: z.optional(ZodSchemaLike),
   /**
    * Friendly CLI command projection for this packaged binary. Intentionally
    * omitted by `serializeActionSpec`/`actionSpecToActionDefinitionV1`: it is not
@@ -1430,6 +1433,7 @@ export type ActionSpecWithoutApproval = Readonly<{
   pluginCallerPolicy?: ParsedActionSpec['pluginCallerPolicy'];
   surfaces: ParsedActionSpec['surfaces'];
   inputSchema: ParsedActionSpec['inputSchema'];
+  clientActionDomainInputSchema?: ParsedActionSpec['clientActionDomainInputSchema'];
   inputHints?: ParsedActionSpec['inputHints'];
   cli?: ParsedActionSpec['cli'];
   serverTransport?: ParsedActionSpec['serverTransport'];
@@ -5244,7 +5248,7 @@ const ARTIFACT_ACTION_SPECS: readonly (PreNormalizedActionSpec & Readonly<{
     ...(id === 'artifact.export' ? { approvalPolicy: {
       uiConfirmation: 'direct' as const,
       uiConfirmationForInput: (input: unknown) => !Object.hasOwn(readRecord(input), 'portable'),
-    }, executionPlacementForInput: (input: unknown) => Object.hasOwn(readRecord(input), 'portable') ? 'client' as const : 'machine' as const } : {}),
+    }, executionPlacements: ['client', 'machine'] as const, executionPlacementForInput: (input: unknown) => Object.hasOwn(readRecord(input), 'portable') ? 'client' as const : 'machine' as const } : {}),
     ...(id === 'artifact.public_link.audit' ? { approvalPolicy: { agentDefault: 'egress' as const } } : {}),
     // Opening the share sheet reads the document's links; a present-user read is not confirmed.
     ...(id === 'artifact.public_link.list' ? { approvalPolicy: { uiConfirmation: 'direct' as const } } : {}),
@@ -5477,6 +5481,7 @@ const ACTION_SPECS_WITHOUT_APPROVAL_PREFIX_LEAD = Object.freeze(defineActionSpec
     safety: id === 'settings.set' || id === 'settings.reset' ? 'danger' : 'safe',
     sideEffectClass: id === 'settings.set' || id === 'settings.reset' || id === 'settings.invoke' ? 'write' : 'read',
     requiredAuthority: 'account_automation', executionPlacement: id === 'settings.invoke' ? 'client' : 'account', placements: [],
+    executionPlacements: id === 'settings.list' ? ['account'] : id === 'settings.invoke' ? ['client'] : ['account', 'client'],
     executionPlacementForInput: (input: unknown) => {
       if (id === 'settings.list') return 'account';
       if (id === 'settings.invoke') return 'client';
@@ -7294,6 +7299,7 @@ const ACTION_SPECS_WITHOUT_APPROVAL_PREFIX_MIDDLE = Object.freeze(defineActionSp
   },
   {
     id: 'session.open', approval: {result: 'optional',flow: 'deferred'},
+    executionPlacements: ['session', 'client'],
     sessionTarget: { field: 'sessionId', cardinality: 'one' },
     // Navigation belongs to the answering client, including CLI requests.
     // Only explicit resume without a Workspace destination is headless.
@@ -14000,6 +14006,15 @@ function normalizeActionPublicExposure(spec: PreNormalizedActionSpec): Normalize
   const executionPlacement = resolveActionExecutionPlacement(spec);
   const requiredAuthority = resolveActionRequiredAuthority(spec);
   const canExposeCli = executionPlacement !== 'client' || spec.cli !== undefined;
+  const clientRouted = executionPlacement === 'client' || spec.executionPlacements?.includes('client');
+  const routeSurface = <T extends { inputSchema?: z.ZodMiniType; bindInput?: ActionSurfaceBindingTransform }>(binding: T): T => {
+    const bind = binding.bindInput;
+    return { ...binding,
+      ...(binding.inputSchema ? { inputSchema: withClientActionInput(binding.inputSchema) } : {}),
+      ...(bind ? { bindInput: async (input: unknown, context: ActionSurfaceBindingContext) =>
+        retainClientActionInput(input, await bind(input, context)) } : {}),
+    };
+  };
   // Automation proposes human-owned effects through the ordinary approval owner.
   const presentUserRequestable = !isInternal
     && !Object.hasOwn(AGENT_ACTION_EXCLUSION_REASONS, spec.id)
@@ -14010,7 +14025,25 @@ function normalizeActionPublicExposure(spec: PreNormalizedActionSpec): Normalize
     ...spec,
     requiredAuthority,
     executionPlacement,
-    cli: canExposeCli ? spec.cli : undefined,
+    ...(clientRouted ? {
+      inputSchema: withClientActionInput(spec.inputSchema),
+      clientActionDomainInputSchema: spec.inputSchema,
+      ...(spec.surfaceBindings ? { surfaceBindings: { ...spec.surfaceBindings,
+        ...(spec.surfaceBindings.api ? { api: routeSurface(spec.surfaceBindings.api) } : {}),
+        ...(spec.surfaceBindings.plugin ? { plugin: routeSurface(spec.surfaceBindings.plugin) } : {}),
+        ...(spec.surfaceBindings.rpc ? { rpc: { ...spec.surfaceBindings.rpc,
+          inputSchema: withClientActionInput(spec.surfaceBindings.rpc.inputSchema),
+          decodeInput: async (input, context) => retainClientActionInput(input,
+            await spec.surfaceBindings!.rpc!.decodeInput(input, context)),
+        } } : {}),
+      } } : {}),
+    } : {}),
+    cli: canExposeCli && spec.cli ? { ...spec.cli,
+      ...(clientRouted && spec.cli.inputSchema
+        ? { inputSchema: withClientActionInput(spec.cli.inputSchema) } : {}),
+      ...(clientRouted && spec.cli.bindInput ? { bindInput: (input, context) =>
+        retainClientActionInput(input, spec.cli!.bindInput!(input, context)) } : {}),
+    } : undefined,
     surfaces: {
       ...spec.surfaces,
       // Explicit client commands use the mounted answering-owner transport;

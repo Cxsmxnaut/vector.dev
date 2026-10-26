@@ -122,6 +122,58 @@ afterEach(async () => {
 });
 
 describe('admitted app Actions and daemon-to-app continuations', () => {
+  it.each(['cli', 'agent'] as const)('changes the answering device Administration target through the %s reverse-dispatch path', async surface => {
+    const target = { serverIdentityId: 'srv_administration_destination', machineId: 'chosen-machine' };
+    const sibling = { serverIdentityId: 'srv_other_destination', machineId: 'other-machine' };
+    storage.setState(state => ({ settings: { ...state.settings,
+      machineAdministrationTargetsLocalV1: { preserved: sibling } } }));
+    const { captureActiveServerAccountScopeLifetime } = await import('@/sync/domains/scope/activeServerAccountScope');
+    const lifetime = captureActiveServerAccountScopeLifetime();
+    if (!lifetime) throw new Error('Restored Account lifetime is unavailable');
+    const receive = createUiClientActionReverseHandler({ serverId, accountId: 'relay-account', isCurrent: lifetime.isCurrent });
+    const { selectRpcTarget } = await import('../../../../../server/sources/app/api/socket/rpc/rpcTargetSelection');
+    let multipleClients = true;
+    let unrelatedEffects = 0;
+    // Only the daemon-to-App network hop is synthetic. Placement, strict envelopes,
+    // receiving Account admission and the device preference owner remain real.
+    const reverse = createClientActionReverseDispatcher(() => ({
+      hasConnectedClientRpcHandler: method => method === RPC_METHODS.UI_ACTION_EXECUTE,
+      callConnectedClientRpc: async (method, payload, options) => {
+        expect(method).toBe(RPC_METHODS.UI_ACTION_EXECUTE);
+        expect(options.answeringClient).toMatchObject({ requireSingle: true });
+        const target = { id: 'chosen-app', timeout: () => ({ emitWithAck: async () => await receive(JSON.parse(JSON.stringify(payload)),
+          { signal: options.signal ?? new AbortController().signal }) }) };
+        const unrelated = { id: 'other-app', timeout: () => ({ emitWithAck: async () => {
+          unrelatedEffects++; throw new Error('Unselected client executed an Action');
+        } }) };
+        const selection = selectRpcTarget({ targets: multipleClients ? [target, unrelated] : [target], answeringClient: options.answeringClient });
+        if (selection.type === 'ambiguous') return { ok: false, errorCode: 'RPC_CLIENT_AMBIGUOUS', answeringClients: selection.clients };
+        if (selection.type !== 'target') return { ok: false, errorCode: 'RPC_CLIENT_NOT_AVAILABLE' };
+        options.onIssued();
+        return { ok: true, result: await selection.target.timeout(0).emitWithAck(SOCKET_RPC_EVENTS.REQUEST, payload) };
+      },
+    }));
+    const caller = createActionExecutor({ clientActionExecute: reverse });
+    const context = { surface, authority: 'account_automation',
+      ...(surface === 'agent' ? { defaultSessionId: 'background-agent-session' } : {}) } as const;
+    const input = { anchor: 'machines.administrationTarget', key: 'agents', value: target, clientId: 'chosen-app' };
+    expect(await caller.execute('settings.get', { anchor: input.anchor, key: input.key }, context))
+      .toMatchObject({ ok: false, errorCode: 'client_ambiguous', details: {
+        clients: [{ id: 'chosen-app', deviceLabel: null }, { id: 'other-app', deviceLabel: null }],
+        recovery: { inputField: 'clientId' },
+      } });
+    expect(await caller.execute('settings.set', input, context)).toEqual({ ok: true, result: { anchor: input.anchor, value: target } });
+    expect(storage.getState().settings.machineAdministrationTargetsLocalV1).toEqual({ preserved: sibling, agents: target });
+    expect(await caller.execute('settings.get', { anchor: input.anchor, key: input.key, clientId: input.clientId }, context))
+      .toEqual({ ok: true, result: { anchor: input.anchor, value: target } });
+    expect(await caller.execute('settings.set', { ...input, value: null }, context))
+      .toEqual({ ok: true, result: { anchor: input.anchor, value: null } });
+    expect(storage.getState().settings.machineAdministrationTargetsLocalV1).toEqual({ preserved: sibling });
+    multipleClients = false;
+    expect(await caller.execute('settings.get', { anchor: input.anchor, key: input.key }, context))
+      .toEqual({ ok: true, result: { anchor: input.anchor, value: null } });
+    expect(unrelatedEffects).toBe(0);
+  });
   it('delivers unbound empty Next and All-Machines search through a connected app without an availability hint', async () => {
     const { ClientActionReverseRuntime } = await import('@/components/appShell/runtime/ClientActionReverseRuntime');
     const { NextPendingNavigationHost } = await import('@/components/sessions/pendingNavigation/NextPendingNavigationHost');

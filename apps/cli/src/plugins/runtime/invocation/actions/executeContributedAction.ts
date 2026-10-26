@@ -75,7 +75,7 @@ export type PluginActionExecutionAttempt = Readonly<
 
 export type ClientContributedActionExecutor = (
   request: UiContributedActionExecuteRequestV1,
-  options: Readonly<{ signal?: AbortSignal }>,
+  options: Readonly<{ signal?: AbortSignal; clientId?: string }>,
 ) => Promise<PluginActionExecutorResult>;
 
 type PluginActionExecutionRegistry = ResolvedContributionRegistry | ResolvedExecutablePluginRuntimeRegistry;
@@ -384,6 +384,8 @@ export async function executeContributedAction(params: Readonly<{
   runtimeRegistry?: ResolvedExecutablePluginRuntimeRegistry;
   actionId: ActionId | string;
   input?: unknown;
+  /** Host routing metadata, never contributed business input or a UI authority claim. */
+  clientId?: string;
   /** Host-only read constraint; checked before activation on this registry lease. */
   requiredDangerLevel?: 'safe';
   /** Host-admitted settings snapshot; scoped runtimes must never consult ambient Account policy. */
@@ -496,6 +498,11 @@ export async function executeContributedAction(params: Readonly<{
     return { matched: true, result: actionHandlerNotStartedFailure(
       'plugin_message_action_unavailable',
       'This Action cannot resolve an explicit client Message reference',
+    ) };
+  }
+  if (params.clientId !== undefined && !clientTarget) {
+    return { matched: true, result: actionHandlerNotStartedFailure(
+      'client_routing_not_applicable', 'clientId is only supported for client-targeted Actions',
     ) };
   }
   // Only authenticated host automated origins can use the reverse channel.
@@ -640,7 +647,7 @@ export async function executeContributedAction(params: Readonly<{
     }
     if (!runtimeRegistry?.executeClientAction) {
       return { matched: true, result: actionHandlerNotStartedFailure(
-        'plugin_action_client_target_unavailable', 'No answering UI client is available',
+        params.clientId ? 'client_not_available' : 'plugin_action_client_target_unavailable', 'No answering UI client is available',
       ) };
     }
     const request = UiContributedActionExecuteRequestV1Schema.safeParse({
@@ -656,6 +663,7 @@ export async function executeContributedAction(params: Readonly<{
     }
     return { matched: true, result: await runtimeRegistry.executeClientAction(request.data, {
       ...(params.context.signal ? { signal: params.context.signal } : {}),
+      ...(params.clientId === undefined ? {} : { clientId: params.clientId }),
     }) };
   }
   const targetActionInvocations = runtimeRegistry

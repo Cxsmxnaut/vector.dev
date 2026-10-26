@@ -22,6 +22,7 @@ import {
     type SessionActionRpcOriginV1,
     type SocketRpcTransportAcknowledgementV1,
     type SocketRpcAnsweringClientV1,
+    type SocketRpcAnsweringClientCandidateV1,
 } from "@happier-dev/protocol/socketRpc";
 
 import {
@@ -64,6 +65,7 @@ export type RpcForwardResult =
         ok: false;
         error: string;
         errorCode?: string;
+        answeringClients?: readonly SocketRpcAnsweringClientCandidateV1[];
       }>
     | Readonly<{ ok: false } & AnyClientUpgradeRequiredV1>;
 
@@ -216,7 +218,8 @@ export async function forwardRpcCall(params: Readonly<{
     if (selection.type === 'ambiguous') {
         recordRpcCallFailure(params.method, 'request_error');
         observeRpcCall({ method: params.method, durationMs: Date.now() - callStartedAt, result: 'error' });
-        return { ok: false, error: 'Choose an exact answering client', errorCode: RPC_ERROR_CODES.CLIENT_AMBIGUOUS };
+        return { ok: false, error: 'Pass clientId to choose an exact answering client', errorCode: RPC_ERROR_CODES.CLIENT_AMBIGUOUS,
+            answeringClients: selection.clients };
     }
 
     if (selection.type === "self-call") {
