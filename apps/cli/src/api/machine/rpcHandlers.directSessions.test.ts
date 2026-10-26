@@ -42,6 +42,7 @@ vi.mock('@/session/metadata/updateSessionMetadataWithRetry', () => ({
 }));
 
 import { registerMachineDirectSessionsRpcHandlers } from './rpcHandlers.directSessions';
+import { getDirectSessionProviderOps } from '@/backends/catalog';
 import { createActionOperationRunner } from '@/daemon/actionOperations/actionOperationRunner';
 import { createActionOperationStore } from '@/daemon/actionOperations/actionOperationStore';
 
@@ -570,6 +571,38 @@ describe('registerMachineDirectSessionsRpcHandlers', () => {
 
     expect(res.ok).toBe(true);
     expect(res.candidates.map((c: any) => c.remoteSessionId)).toEqual(['sess-1']);
+  });
+
+  it('shares one in-flight candidates.list for identical concurrent requests', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'happier-directSessions-rpc-inflight-'));
+    const configDir = join(root, '.claude');
+    await mkdir(join(configDir, 'projects', 'proj-a'), { recursive: true });
+    await writeFile(join(configDir, 'projects', 'proj-a', 'sess-1.jsonl'), jsonlLine({ type: 'user', message: { content: 'hello' } }), 'utf8');
+    vi.stubEnv('HAPPIER_CLAUDE_CONFIG_DIR', configDir);
+
+    const registered = new Map<string, (params: any) => Promise<any>>();
+    const rpcHandlerManager = {
+      registerHandler: (method: string, handler: (params: any) => Promise<any>) => {
+        registered.set(method, handler);
+      },
+    } as any;
+    registerMachineDirectSessionsRpcHandlers({ rpcHandlerManager });
+    const handler = registered.get(RPC_METHODS.DAEMON_DIRECT_SESSIONS_CANDIDATES_LIST)!;
+    const listCandidates = vi.spyOn(await getDirectSessionProviderOps('claude'), 'listCandidates');
+    const request = { machineId: 'm1', providerId: 'claude', source: { kind: 'claudeConfig', configDir, projectId: null }, limit: 10 };
+
+    try {
+      const [first, second] = await Promise.all([handler(request), handler({ ...request })]);
+      expect(first).toEqual(second);
+      expect(first.candidates.map((c: any) => c.remoteSessionId)).toEqual(['sess-1']);
+      expect(listCandidates).toHaveBeenCalledTimes(1);
+
+      await handler({ ...request, limit: 5 });
+      await handler(request);
+      expect(listCandidates).toHaveBeenCalledTimes(3);
+    } finally {
+      listCandidates.mockRestore();
+    }
   });
 
   it('advertises ACP session listing as resume-only without granting adjacent direct-session operations', async () => {

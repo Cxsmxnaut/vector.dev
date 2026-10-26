@@ -1,9 +1,16 @@
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, mkdtemp, rename, truncate, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
+// Pass-through spy: counts backward page reads without changing their behavior.
+vi.mock('@/api/directSessions/filePaging/jsonlBackwardPager', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/api/directSessions/filePaging/jsonlBackwardPager')>();
+  return { ...actual, readJsonlFileBackwardPage: vi.fn(actual.readJsonlFileBackwardPage) };
+});
+
+import { readJsonlFileBackwardPage } from '@/api/directSessions/filePaging/jsonlBackwardPager';
 import { readClaudeSessionTitle } from './readClaudeSessionTitle';
 
 function jsonlLine(value: unknown): string {
@@ -160,5 +167,77 @@ describe('readClaudeSessionTitle', () => {
     );
 
     await expect(readClaudeSessionTitle(filePath)).resolves.toBe(queuedPrompt);
+  });
+
+  it('does not rescan already-read transcript bytes on repeated title reads', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'happier-claude-title-incremental-'));
+    const filePath = join(root, 'session-one.jsonl');
+    await writeFile(filePath, [
+      jsonlLine({ type: 'user', message: { content: 'Initial user prompt' } }),
+      jsonlLine({ type: 'ai-title', aiTitle: 'AI title' }),
+      ...Array.from({ length: 520 }, () => jsonlLine({ type: 'progress', data: 'x'.repeat(4_096) })),
+    ].join(''), 'utf8');
+    const backwardPages = vi.mocked(readJsonlFileBackwardPage);
+
+    await expect(readClaudeSessionTitle(filePath)).resolves.toBe('AI title');
+    expect(backwardPages.mock.calls.length).toBeGreaterThan(1);
+
+    backwardPages.mockClear();
+    await expect(readClaudeSessionTitle(filePath)).resolves.toBe('AI title');
+    await appendFile(filePath, jsonlLine({ type: 'progress', data: 'tail' }), 'utf8');
+    await expect(readClaudeSessionTitle(filePath)).resolves.toBe('AI title');
+    expect(backwardPages).not.toHaveBeenCalled();
+  });
+
+  it('keeps title precedence while a transcript keeps growing', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'happier-claude-title-growing-'));
+    const filePath = join(root, 'session-one.jsonl');
+    await writeFile(filePath, [
+      jsonlLine({ type: 'user', message: { content: 'Initial user prompt' } }),
+      jsonlLine({ type: 'ai-title', aiTitle: 'First AI title' }),
+    ].join(''), 'utf8');
+    await expect(readClaudeSessionTitle(filePath)).resolves.toBe('First AI title');
+
+    await appendFile(filePath, jsonlLine({ type: 'custom-title', customTitle: 'Manual title' }), 'utf8');
+    await expect(readClaudeSessionTitle(filePath)).resolves.toBe('Manual title');
+
+    await appendFile(filePath, jsonlLine({ type: 'ai-title', aiTitle: 'Newer AI title' }), 'utf8');
+    await expect(readClaudeSessionTitle(filePath)).resolves.toBe('Manual title');
+
+    await appendFile(filePath, jsonlLine({ type: 'custom-title', customTitle: '   ' }), 'utf8');
+    await expect(readClaudeSessionTitle(filePath)).resolves.toBe('Newer AI title');
+  });
+
+  it('sees a title record that was still being written during the previous read', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'happier-claude-title-partial-'));
+    const filePath = join(root, 'session-one.jsonl');
+    const pendingRecord = jsonlLine({ type: 'custom-title', customTitle: 'Renamed while reading' });
+    await writeFile(filePath, [
+      jsonlLine({ type: 'ai-title', aiTitle: 'AI title' }),
+      pendingRecord.slice(0, 20),
+    ].join(''), 'utf8');
+    await expect(readClaudeSessionTitle(filePath)).resolves.toBe('AI title');
+
+    await appendFile(filePath, pendingRecord.slice(20), 'utf8');
+    await expect(readClaudeSessionTitle(filePath)).resolves.toBe('Renamed while reading');
+  });
+
+  it('rereads a transcript that was rewritten or replaced', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'happier-claude-title-rewrite-'));
+    const filePath = join(root, 'session-one.jsonl');
+    await writeFile(filePath, jsonlLine({ type: 'custom-title', customTitle: 'Original title' }), 'utf8');
+    await expect(readClaudeSessionTitle(filePath)).resolves.toBe('Original title');
+
+    await truncate(filePath, 0);
+    await appendFile(filePath, [
+      jsonlLine({ type: 'ai-title', aiTitle: 'Rewritten AI title' }),
+      jsonlLine({ type: 'progress', data: 'x'.repeat(256) }),
+    ].join(''), 'utf8');
+    await expect(readClaudeSessionTitle(filePath)).resolves.toBe('Rewritten AI title');
+
+    const replacement = join(root, 'replacement.jsonl');
+    await writeFile(replacement, jsonlLine({ type: 'custom-title', customTitle: 'Replaced title' }), 'utf8');
+    await rename(replacement, filePath);
+    await expect(readClaudeSessionTitle(filePath)).resolves.toBe('Replaced title');
   });
 });
