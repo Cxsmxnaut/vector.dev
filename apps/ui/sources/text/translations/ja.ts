@@ -14361,7 +14361,7 @@ settingsSession: {
     onboardingShowcase: {
         details: {
             ...PRODUCT_STORY_DETAILS_ENGLISH,
-            voice: { ...PRODUCT_STORY_DETAILS_ENGLISH.voice, body: "セッションについて聞き、次の変更を声に出して相談できます。権限リクエストの承認にはタップが必要です。" },
+            voice: { ...PRODUCT_STORY_DETAILS_ENGLISH.voice, body: "セッションについて聞き、音声でメッセージを送れます。音声エージェントにリクエストの承認を任せることも、Voice の設定で無効にすることもできます。" },
             handoff: {
                 wideTitle: "実行中のセッションを\n別のマシンへ。",
                 body: "実行中のセッションをデスクトップ、VPS、開発用マシンに引き継いで、中断したところから続けられます。作業ツリーも、全体のスナップショットまたは変更分だけを一緒に移せます。上書きせずに同じ階層にコピーを作成し、無視対象のファイルは指定しない限り転送しません。",
@@ -14383,7 +14383,7 @@ settingsSession: {
                         "existingTitle": "既存のセッションも、そのまま表示",
                         "existingBody": "あなたのマシンで動いているClaude、Codex、OpenCodeのセッションを、Happierでライブに開けます。",
                         "voiceTitle": "一緒に考えられる音声アシスタント",
-                        "voiceBody": "エージェントの状況を聞き、音声でメッセージを送れます。権限リクエストはタップで承認します。",
+                        "voiceBody": "セッションについて聞き、音声でメッセージを送れます。音声エージェントにリクエストの承認を任せることも、Voice の設定で無効にすることもできます。",
                         "reviewTitle": "diffをレビューしてコメント",
                         "reviewBody": "ファイルやdiffの特定行をマークし、送るメモを選び、そのままエージェントに渡せます。",
                         "subagentsTitle": "プロバイダー横断のsubagents",
@@ -18470,6 +18470,7 @@ settingsSession: {
         policyScope: "エージェントによるプロンプトライブラリの編集（すべてのセッション）",
         changedBy: (params: { name: string }) => `${params.name} が変更`,
         approvedBy: (params: { name: string }) => `${params.name} が承認`,
+        approvedByVoice: (params: { name: string }) => `${params.name} の代理として Voice エージェントが承認`,
         detachHelp: 'ドキュメントはプロンプトライブラリに残ります。',
         chooseDocument: 'ドキュメントを選択',
         openInLibrary: 'プロンプトライブラリで開く',

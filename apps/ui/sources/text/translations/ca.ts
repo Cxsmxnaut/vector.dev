@@ -13087,7 +13087,7 @@ settingsSession: {
         onboardingShowcase: {
             details: {
                 ...PRODUCT_STORY_DETAILS_ENGLISH,
-                voice: { ...PRODUCT_STORY_DETAILS_ENGLISH.voice, body: "Pregunta per les teves sessions i pensa els pròxims canvis en veu alta. Les sol·licituds de permís requereixen un toc." },
+                voice: { ...PRODUCT_STORY_DETAILS_ENGLISH.voice, body: "Pregunta per les teves sessions i envia missatges amb la veu. Deixa que l’agent de Veu aprovi sol·licituds per tu o desactiva-ho a la configuració de Veu." },
               worktrees: {
                 wideTitle: "Un worktree per sessió.\nO no.",
                 body: "Inicia una sessió al seu propi worktree de Git —un checkout real en una branca pròpia— perquè diversos agents treballin al mateix repositori sense trepitjar-se. Tria una branca i Happier el crea, suggereix un nom i reutilitza un worktree existent en lloc de duplicar-lo. Començar a la carpeta actual continua sent a un toc.",
@@ -13109,7 +13109,7 @@ settingsSession: {
                         "existingTitle": "Sessions existents, ja disponibles",
                         "existingBody": "Qualsevol sessió de Claude, Codex o OpenCode que s’executi a la teva màquina, obre-la a Happier en directe.",
                         "voiceTitle": "Un assistent de veu per pensar-hi plegats",
-                        "voiceBody": "Pregunta què fan els teus agents i envia missatges amb la veu. Aprova les sol·licituds de permís amb un toc.",
+                        "voiceBody": "Pregunta per les teves sessions i envia missatges amb la veu. Deixa que l’agent de Veu aprovi sol·licituds per tu o desactiva-ho a la configuració de Veu.",
                         "reviewTitle": "Revisa diffs i deixa comentaris",
                         "reviewBody": "Marca línies concretes en fitxers o diffs, tria quines notes vols enviar i passa-les directament a un agent.",
                         "subagentsTitle": "Subagents entre proveïdors",
@@ -17309,6 +17309,7 @@ La meva pregunta: `,
         policyScope: "Edicions de la biblioteca de prompts fetes per agents, a totes les sessions",
         changedBy: (params: { name: string }) => `Canviat per ${params.name}`,
         approvedBy: (params: { name: string }) => `Aprovat per ${params.name}`,
+        approvedByVoice: (params: { name: string }) => `Aprovat per l’agent de Voice en nom de ${params.name}`,
         detachHelp: 'El document es manté a la biblioteca de prompts.',
         chooseDocument: 'Tria un document',
         openInLibrary: 'Obre a la biblioteca de prompts',

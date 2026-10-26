@@ -17241,7 +17241,7 @@ const enReleaseNotes = {
           'Any Claude, Codex, or OpenCode session running on your machine, open it in Happier, live.',
         voiceTitle: 'A voice assistant to brainstorm with',
         voiceBody:
-          'Ask what your agents are doing and send messages by voice. Approve permission requests with a tap.',
+          "Ask about your sessions and send messages by voice. Let the Voice agent approve requests for you, or turn that off in Voice settings.",
         reviewTitle: 'Review diffs and leave comments',
         reviewBody:
           'Mark specific lines in files or diffs, pick which notes to send, and hand them straight to an agent.',
@@ -17486,7 +17486,7 @@ const enReleaseNotes = {
       },
       voice: {
         wideTitle: 'A colleague\nyou can talk to.',
-        body: 'Ask what is running, brainstorm the next change, or send a message by voice. Approve requests with a tap in the same sessions.',
+        body: "Ask about your sessions and send messages by voice. Let the Voice agent approve requests for you, or turn that off in Voice settings.",
       },
       machines: {
         wideTitle: 'On every computer\nyou own.',
@@ -22549,6 +22549,7 @@ export const en: TranslationStructure = {
     policyScope: "Prompt Library edits by agents, in every session",
     changedBy: (params: { name: string }) => `Changed by ${params.name}`,
     approvedBy: (params: { name: string }) => `Approved by ${params.name}`,
+    approvedByVoice: (params: { name: string }) => `Approved by the Voice agent for ${params.name}`,
     detachHelp: 'The document stays in Prompt Library.',
     chooseDocument: 'Choose document',
     openInLibrary: 'Open in Prompt Library',
@@ -22817,6 +22818,7 @@ type EnglishNamespaces0 = {
     readonly policyScope: string;
     readonly changedBy: (params: { name: string }) => string;
     readonly approvedBy: (params: { name: string }) => string;
+    readonly approvedByVoice: (params: { name: string }) => string;
     readonly detachHelp: string;
     readonly chooseDocument: string;
     readonly openInLibrary: string;

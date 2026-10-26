@@ -13914,7 +13914,7 @@ settingsSession: {
     onboardingShowcase: {
         details: {
             ...PRODUCT_STORY_DETAILS_ENGLISH,
-            voice: { ...PRODUCT_STORY_DETAILS_ENGLISH.voice, body: "Pytaj o sesje i omawiaj kolejne zmiany na głos. Prośby o uprawnienia nadal wymagają dotknięcia." },
+            voice: { ...PRODUCT_STORY_DETAILS_ENGLISH.voice, body: "Pytaj o sesje i wysyłaj wiadomości głosem. Pozwól agentowi głosowemu zatwierdzać prośby za ciebie lub wyłącz to w ustawieniach Głosu." },
           handoff: {
             wideTitle: "Przenieś trwającą sesję\nna inną maszynę.",
             body: "Przekaż trwającą sesję na swój komputer, VPS lub maszynę deweloperską i kontynuuj tam, gdzie się zatrzymała. Możesz przenieść z nią katalog roboczy jako pełny obraz lub same zmiany. Happier zapisze kopię obok, zamiast nadpisywać, a pliki ignorowane pozostawi, chyba że je wskażesz.",
@@ -13936,7 +13936,7 @@ settingsSession: {
                         "existingTitle": "Istniejące sesje, już dostępne",
                         "existingBody": "Każdą sesję Claude, Codex albo OpenCode uruchomioną na Twojej maszynie możesz otworzyć w Happier na żywo.",
                         "voiceTitle": "Asystent głosowy do wspólnego myślenia",
-                        "voiceBody": "Zapytaj, co robią agenci, i wysyłaj wiadomości głosem. Prośby o uprawnienia zatwierdzaj dotknięciem.",
+                        "voiceBody": "Pytaj o sesje i wysyłaj wiadomości głosem. Pozwól agentowi głosowemu zatwierdzać prośby za ciebie lub wyłącz to w ustawieniach Głosu.",
                         "reviewTitle": "Przeglądaj diffy i zostawiaj komentarze",
                         "reviewBody": "Oznacz konkretne linie w plikach albo diffach, wybierz notatki do wysłania i przekaż je prosto agentowi.",
                         "subagentsTitle": "Subagenci między providerami",
@@ -18385,6 +18385,7 @@ settingsSession: {
         policyScope: "Zmiany w bibliotece promptów wprowadzane przez agentów, w każdej sesji",
         changedBy: (params: { name: string }) => `Zmienione przez ${params.name}`,
         approvedBy: (params: { name: string }) => `Zatwierdzone przez ${params.name}`,
+        approvedByVoice: (params: { name: string }) => `Zatwierdzone przez agenta Voice w imieniu ${params.name}`,
         detachHelp: 'Dokument pozostaje w bibliotece promptów.',
         chooseDocument: 'Wybierz dokument',
         openInLibrary: 'Otwórz w bibliotece promptów',

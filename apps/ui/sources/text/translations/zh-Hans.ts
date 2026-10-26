@@ -13585,7 +13585,7 @@ settingsSession: {
     onboardingShowcase: {
         details: {
             ...PRODUCT_STORY_DETAILS_ENGLISH,
-            voice: { ...PRODUCT_STORY_DETAILS_ENGLISH.voice, body: "询问会话情况并讨论下一步修改。权限请求仍需你点按批准。" },
+            voice: { ...PRODUCT_STORY_DETAILS_ENGLISH.voice, body: "询问会话情况并通过语音发送消息。让语音代理代你批准请求，或在语音设置中关闭此选项。" },
             handoff: {
                 wideTitle: "把运行中的会话\n移到另一台机器。",
                 body: "将运行中的会话交接到桌面电脑、VPS 或开发机器，从停下的地方继续。工作树也可以一起转移，可以是完整快照，也可以只带上更改。Happier 会创建同级副本而不覆盖现有内容；除非你明确指定，否则不会转移被忽略的文件。",
@@ -13607,7 +13607,7 @@ settingsSession: {
                         "existingTitle": "已有会话，已经在那里",
                         "existingBody": "任何在你机器上运行的 Claude、Codex 或 OpenCode 会话，都可以在 Happier 中实时打开。",
                         "voiceTitle": "可以一起头脑风暴的语音助手",
-                        "voiceBody": "询问代理的工作情况并通过语音发送消息。权限请求需要点按批准。",
+                        "voiceBody": "询问会话情况并通过语音发送消息。让语音代理代你批准请求，或在语音设置中关闭此选项。",
                         "reviewTitle": "审查 diff 并留下评论",
                         "reviewBody": "在文件或 diff 的具体行上做标记，选择要发送的备注，并直接交给代理。",
                         "subagentsTitle": "跨 provider 的 subagents",
@@ -18167,6 +18167,7 @@ settingsSession: {
         policyScope: "代理对提示词库的编辑，适用于所有会话",
         changedBy: (params: { name: string }) => `由 ${params.name} 更改`,
         approvedBy: (params: { name: string }) => `由 ${params.name} 批准`,
+        approvedByVoice: (params: { name: string }) => `由 Voice 智能体代表 ${params.name} 批准`,
         detachHelp: '文档仍保留在提示词库中。',
         chooseDocument: '选择文档',
         openInLibrary: '在提示词库中打开',

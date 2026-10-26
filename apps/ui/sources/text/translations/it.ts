@@ -14297,7 +14297,7 @@ settingsSession: {
     onboardingShowcase: {
         details: {
             ...PRODUCT_STORY_DETAILS_ENGLISH,
-            voice: { ...PRODUCT_STORY_DETAILS_ENGLISH.voice, body: "Chiedi delle tue sessioni e ragiona sui prossimi cambiamenti ad alta voce. Le richieste di permesso richiedono comunque un tocco." },
+            voice: { ...PRODUCT_STORY_DETAILS_ENGLISH.voice, body: "Chiedi delle tue sessioni e invia messaggi con la voce. Lascia che l’agente vocale approvi le richieste per te o disattiva l’opzione nelle impostazioni di Voce." },
           worktrees: {
             wideTitle: "Un worktree per sessione.\nOppure no.",
             body: "Avvia una sessione nel suo worktree Git, un vero checkout su un branch dedicato, così più agenti possono lavorare nello stesso repository senza intralciarsi. Scegli un branch e Happier crea il worktree, suggerisce un nome e riutilizza un worktree esistente anziché duplicarlo. Puoi sempre iniziare nella cartella attuale con un tocco.",
@@ -14319,7 +14319,7 @@ settingsSession: {
                         "existingTitle": "Sessioni esistenti, già disponibili",
                         "existingBody": "Qualsiasi sessione Claude, Codex o OpenCode in esecuzione sulla tua macchina, aprila in Happier in tempo reale.",
                         "voiceTitle": "Un assistente vocale con cui ragionare",
-                        "voiceBody": "Chiedi cosa fanno i tuoi agenti e invia messaggi con la voce. Approva le richieste di permesso con un tocco.",
+                        "voiceBody": "Chiedi delle tue sessioni e invia messaggi con la voce. Lascia che l’agente vocale approvi le richieste per te o disattiva l’opzione nelle impostazioni di Voce.",
                         "reviewTitle": "Rivedi diff e lascia commenti",
                         "reviewBody": "Segna righe specifiche in file o diff, scegli quali note inviare e passale direttamente a un agente.",
                         "subagentsTitle": "Subagenti cross-provider",
@@ -18562,6 +18562,7 @@ settingsSession: {
         policyScope: "Modifiche alla libreria dei prompt da parte degli agenti, in ogni sessione",
         changedBy: (params: { name: string }) => `Modificato da ${params.name}`,
         approvedBy: (params: { name: string }) => `Approvato da ${params.name}`,
+        approvedByVoice: (params: { name: string }) => `Approvato dall’agente Voice per ${params.name}`,
         detachHelp: 'Il documento resta nella libreria dei prompt.',
         chooseDocument: 'Scegli documento',
         openInLibrary: 'Apri nella libreria dei prompt',

@@ -14085,7 +14085,7 @@ settingsSession: {
     onboardingShowcase: {
         details: {
             ...PRODUCT_STORY_DETAILS_ENGLISH,
-            voice: { ...PRODUCT_STORY_DETAILS_ENGLISH.voice, body: "Pregunta por tus sesiones y piensa los próximos cambios en voz alta. Las solicitudes de permiso siguen requiriendo un toque." },
+            voice: { ...PRODUCT_STORY_DETAILS_ENGLISH.voice, body: "Pregunta por tus sesiones y envía mensajes por voz. Deja que el agente de Voz apruebe solicitudes por ti o desactívalo en los ajustes de Voz." },
             handoff: {
                 wideTitle: "Mueve una sesión en marcha\na otra máquina.",
                 body: "Transfiere una sesión en marcha a tu ordenador de escritorio, un VPS o una máquina de desarrollo y continúa donde se detuvo. El árbol de trabajo puede acompañarla como una instantánea completa o solo con los cambios; se crea una copia junto al original en lugar de sobrescribirlo y se omiten los archivos ignorados salvo que los indiques.",
@@ -14107,7 +14107,7 @@ settingsSession: {
                         "existingTitle": "Sesiones existentes, ya disponibles",
                         "existingBody": "Cualquier sesión de Claude, Codex u OpenCode que se esté ejecutando en tu máquina, ábrela en Happier en directo.",
                         "voiceTitle": "Un asistente de voz para pensar juntos",
-                        "voiceBody": "Pregunta qué hacen tus agentes y envía mensajes por voz. Aprueba las solicitudes de permiso con un toque.",
+                        "voiceBody": "Pregunta por tus sesiones y envía mensajes por voz. Deja que el agente de Voz apruebe solicitudes por ti o desactívalo en los ajustes de Voz.",
                         "reviewTitle": "Revisa diffs y deja comentarios",
                         "reviewBody": "Marca líneas concretas en archivos o diffs, elige qué notas enviar y pásalas directamente a un agente.",
                         "subagentsTitle": "Subagentes entre proveedores",
@@ -18560,6 +18560,7 @@ settingsSession: {
         policyScope: "Ediciones de la biblioteca de prompts hechas por agentes, en todas las sesiones",
         changedBy: (params: { name: string }) => `Cambiado por ${params.name}`,
         approvedBy: (params: { name: string }) => `Aprobado por ${params.name}`,
+        approvedByVoice: (params: { name: string }) => `Aprobado por el agente de Voice en nombre de ${params.name}`,
         detachHelp: 'El documento permanece en la biblioteca de prompts.',
         chooseDocument: 'Elegir documento',
         openInLibrary: 'Abrir en la biblioteca de prompts',

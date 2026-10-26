@@ -13959,7 +13959,7 @@ settingsSession: {
     onboardingShowcase: {
         details: {
             ...PRODUCT_STORY_DETAILS_ENGLISH,
-            voice: { ...PRODUCT_STORY_DETAILS_ENGLISH.voice, body: "Parle de tes sessions et réfléchis aux prochains changements à voix haute. Les demandes de permission nécessitent toujours un toucher." },
+            voice: { ...PRODUCT_STORY_DETAILS_ENGLISH.voice, body: "Parle de tes sessions et envoie des messages à la voix. Laisse l’agent vocal approuver les demandes pour toi ou désactive cette option dans les réglages de Voix." },
             handoff: {
                 wideTitle: "Déplace une session en cours\nsur une autre machine.",
                 body: "Transfère une session en cours sur ton ordinateur de bureau, un VPS ou une machine de développement et reprends là où elle s’est arrêtée. L’arbre de travail peut l’accompagner sous forme d’instantané complet ou avec seulement les modifications ; une copie est créée à côté de l’original au lieu de l’écraser, et les fichiers ignorés sont laissés de côté sauf si tu les indiques.",
@@ -13981,7 +13981,7 @@ settingsSession: {
                         "existingTitle": "Tes sessions en cours, déjà là",
                         "existingBody": "N’importe quelle session Claude, Codex ou OpenCode qui tourne sur ta machine : ouvre-la dans Happier, en direct.",
                         "voiceTitle": "Un assistant vocal pour réfléchir à voix haute",
-                        "voiceBody": "Demande ce que font tes agents et envoie des messages à la voix. Approuve les demandes de permission d’un toucher.",
+                        "voiceBody": "Parle de tes sessions et envoie des messages à la voix. Laisse l’agent vocal approuver les demandes pour toi ou désactive cette option dans les réglages de Voix.",
                         "reviewTitle": "Relis les diffs et laisse des commentaires",
                         "reviewBody": "Annote des lignes précises dans un fichier ou un diff, choisis les notes à envoyer, et passe-les directement à un agent.",
                         "subagentsTitle": "Des subagents multi-providers",
@@ -18434,6 +18434,7 @@ settingsSession: {
         policyScope: "Modifications de la bibliothèque de prompts par les agents, dans toutes les sessions",
         changedBy: (params: { name: string }) => `Modifié par ${params.name}`,
         approvedBy: (params: { name: string }) => `Approuvé par ${params.name}`,
+        approvedByVoice: (params: { name: string }) => `Approuvé par l’agent Voice pour ${params.name}`,
         detachHelp: 'Le document reste dans la bibliothèque de prompts.',
         chooseDocument: 'Choisir un document',
         openInLibrary: 'Ouvrir dans la bibliothèque de prompts',
