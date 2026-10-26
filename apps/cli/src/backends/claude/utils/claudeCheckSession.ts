@@ -1,5 +1,5 @@
 import { logger } from "@/ui/logger";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { getProjectPath } from "./path";
 
@@ -11,6 +11,23 @@ export function resolveClaudeSessionTranscriptPath(
 ): string {
     const explicitPath = typeof transcriptPath === 'string' ? transcriptPath.trim() : '';
     return explicitPath || join(getProjectPath(path, claudeConfigDir), `${sessionId}.jsonl`);
+}
+
+// Materialization is weaker than Session's complete-record publication proof. Keep
+// this filesystem threshold shared by identity discovery and remote resume validation.
+export function hasClaudeMaterializedSessionTranscript(
+  sessionId: string,
+  path: string,
+  transcriptPath: string | null,
+  configDir: string | null,
+): boolean {
+  const sessionFile = resolveClaudeSessionTranscriptPath(sessionId, path, transcriptPath, configDir);
+  try {
+    if (!existsSync(sessionFile)) return false;
+    return statSync(sessionFile).size > 0;
+  } catch {
+    return false;
+  }
 }
 
 export function claudeCheckSession(

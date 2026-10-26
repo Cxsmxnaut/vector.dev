@@ -445,7 +445,7 @@ export async function claudeLocalLauncher(
                 return exitReason;
             }
 
-            const resumeFromSessionId = session.sessionId;
+            const resumeFromSessionId = session.getResumableSessionId();
             const resumeFromTranscriptPath = session.transcriptPath;
             const expectsFork = resumeFromSessionId !== null;
             let clearedIdentity: ReturnType<typeof session.clearSessionId> = null;

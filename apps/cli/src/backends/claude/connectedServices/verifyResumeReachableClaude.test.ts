@@ -71,14 +71,13 @@ describe('verifyResumeReachableClaude', () => {
     }
   });
 
-  it('treats an absent vendor resume id as a fresh start instead of a native-store miss', async () => {
-    await expect(verifyResumeReachableClaude({
-      vendorResumeId: null,
-    })).resolves.toEqual({
-      ok: true,
-      resolvedPath: null,
-    });
-  });
+  it.each([null, undefined, '', '  ', 'foo/bar', 'foo\\bar'])(
+    'rejects an absent or invalid resume target (%s)', async vendorResumeId => {
+      await expect(verifyResumeReachableClaude({ vendorResumeId })).resolves.toEqual({
+        ok: false, reason: 'claude_session_not_in_native_store',
+      });
+    },
+  );
 
   it('returns claude_native_store_unreachable when the native projects directory is missing', async () => {
     const claudeConfigDir = await mkdtemp(join(tmpdir(), 'happier-claude-unreachable-'));

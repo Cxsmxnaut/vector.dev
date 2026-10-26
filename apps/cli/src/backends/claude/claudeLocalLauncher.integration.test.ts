@@ -61,6 +61,7 @@ vi.mock('@/ui/logger', () => ({
   logger: {
     debug: vi.fn(),
     debugLargeJson: vi.fn(),
+    infoFile: vi.fn(),
     warn: vi.fn(),
   },
 }));
@@ -148,6 +149,7 @@ function hookWithTranscript(transcriptPath: string): SessionFoundHookData {
 
 function createLocalHarness(options?: {
   metadataSnapshot?: MetadataSnapshot;
+  sessionId?: string;
   providerTasks?: NonNullable<ConstructorParameters<typeof Session>[0]['runtimeActivityContributions']>['providerTasks'];
 }): LocalHarness {
   const switchDeferred = createDeferred<RpcHandler>();
@@ -204,7 +206,7 @@ function createLocalHarness(options?: {
     client,
     path: '/tmp',
     logPath: '/tmp/log',
-    sessionId: null,
+    sessionId: options?.sessionId ?? null,
     messageQueue: new MessageQueue2<EnhancedMode>(() => 'mode'),
     onModeChange: () => {},
     hookSettingsPath: '/tmp/hooks.json',
@@ -246,9 +248,8 @@ describe('claudeLocalLauncher', () => {
   });
 
   it.each(['normal', 'retry', 'switch'] as const)('does not replace an unverified local invocation (%s)', async mode => {
-    const { session, sendSessionEvent, abortHandlerReady } = createLocalHarness();
+    const { session, sendSessionEvent, abortHandlerReady } = createLocalHarness({ sessionId: 'retained-native-session' });
     const started = createDeferred<void>();
-    session.sessionId = 'retained-native-session';
     session.transcriptPath = '/tmp/retained-native-session.jsonl';
     mockClaudeLocal.mockImplementationOnce(async opts => {
       started.resolve(undefined);
@@ -371,8 +372,7 @@ describe('claudeLocalLauncher', () => {
 
   it('configures local resume scanning to backfill only uncommitted Claude rows before provider startup', async () => {
     const order: string[] = [];
-    const { session, client } = createLocalHarness();
-    session.sessionId = 'claude-resume-session';
+    const { session, client } = createLocalHarness({ sessionId: 'claude-resume-session' });
     session.transcriptPath = '/tmp/claude-resume-session.jsonl';
     client.fetchCommittedClaudeJsonlMessageBaseline = vi.fn(async () => {
       order.push('baseline-loaded');
@@ -712,8 +712,7 @@ describe('claudeLocalLauncher', () => {
   });
 
   it('retains the resume identity and one-time args when a mode switch cancels before the child starts', async () => {
-    const { session, switchHandlerReady } = createLocalHarness();
-    session.sessionId = 'retained-native-session';
+    const { session, switchHandlerReady } = createLocalHarness({ sessionId: 'retained-native-session' });
     session.transcriptPath = '/tmp/retained-native-session.jsonl';
     session.claudeArgs = ['--continue'];
     let switching: Promise<unknown> | undefined;
@@ -1324,7 +1323,7 @@ describe('claudeLocalLauncher', () => {
   });
 
   it('clears sessionId and transcriptPath before spawning a local resume session', async () => {
-    const { session, switchHandlerReady } = createLocalHarness();
+    const { session, switchHandlerReady } = createLocalHarness({ sessionId: 'sess_0' });
     const localStarted = createDeferred<void>();
 
     session.onSessionFound('sess_0', hookWithTranscript('/tmp/sess_0.jsonl'));

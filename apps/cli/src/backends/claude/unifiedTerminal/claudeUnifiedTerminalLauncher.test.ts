@@ -9,8 +9,10 @@ import { ZellijActionTimeoutError } from '@/integrations/zellij/actions';
 import type { TerminalAttachmentInfo } from '@/terminal/attachment/terminalAttachmentInfo';
 import type { AccountSettings } from '@happier-dev/protocol';
 import { HAPPIER_CONNECTED_SERVICE_SELECTIONS_ENV_KEY } from '@/daemon/connectedServices/connectedServiceChildEnvironment';
+import { MessageQueue2 } from '@/agent/runtime/modeMessageQueue';
+import type { SessionClientPort } from '@/api/session/sessionClientPort';
 
-import type { Session } from '../session';
+import { Session } from '../session';
 import type { EnhancedMode } from '../loop';
 
 const mocks = vi.hoisted(() => ({
@@ -150,16 +152,19 @@ function abortLauncherOnEmptyQueueWait(session: Session, waitNumber = 1): AbortS
   return controller.signal;
 }
 
+const createdSessions: Session[] = [];
+
 function createSession(overrides: Readonly<{
   terminalRuntime?: Session['terminalRuntime'];
   metadata?: unknown;
   startedBy?: Session['startedBy'];
 }> = {}): Session {
   let metadata: unknown = overrides.metadata ?? {};
-  return {
+  const fixture = {
     path: '/workspace/project',
     client: {
       sessionId: 'happy-session-id',
+      keepAlive: vi.fn(),
       sendSessionEvent: vi.fn(),
       sendClaudeSessionMessage: vi.fn(),
       sendClaudeSessionMessageCommittedExact: vi.fn(async () => {}),
@@ -206,7 +211,6 @@ function createSession(overrides: Readonly<{
     },
     pushSender: null,
     accountSettings: null,
-    sessionId: 'claude-session-id',
     lastPermissionMode: 'default',
     lastPermissionModeUpdatedAt: 0,
     adoptLastPermissionModeFromMetadata: vi.fn(() => true),
@@ -230,13 +234,27 @@ function createSession(overrides: Readonly<{
     registerProviderInputConsumer: vi.fn(),
     registerConnectedServiceExactApplicationHandler: vi.fn(() => vi.fn()),
     isWorkflowOwnedTaskReference: vi.fn(() => false),
-    onSessionFound: vi.fn(),
     publishUnifiedTerminalHostMetadata: vi.fn(async () => {}),
     onThinkingChange: vi.fn(),
     setThinkingWithoutTaskLifecycle: vi.fn(),
     noteUserAbortRequested: vi.fn(),
     abortCurrentTaskTurn: vi.fn(),
-  } as unknown as Session;
+  };
+  const session = new Session({
+    client: fixture.client as unknown as SessionClientPort,
+    path: fixture.path,
+    logPath: '/tmp/claude-unified-launcher.log',
+    sessionId: 'claude-session-id',
+    messageQueue: new MessageQueue2<EnhancedMode>(() => 'mode'),
+    onModeChange: () => {},
+    hookSettingsPath: '/tmp/hooks.json',
+    startedBy: overrides.startedBy,
+    terminalRuntime: overrides.terminalRuntime,
+  });
+  // Keep the existing transport/runtime fixture while identity adoption and resumability stay real.
+  Object.assign(session, fixture);
+  createdSessions.push(session);
+  return session;
 }
 
 function readFirstInvocationOrder(
@@ -260,6 +278,7 @@ function getFailTurnSpy(session: Session) {
 
 describe('claudeUnifiedTerminalLauncher', () => {
   afterEach(() => {
+    for (const session of createdSessions.splice(0)) session.cleanup();
     restoreProcessTty();
     mocks.runClaudeUnifiedTerminalSession.mockReset();
     vi.clearAllMocks();

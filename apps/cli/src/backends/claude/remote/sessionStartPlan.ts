@@ -1,9 +1,8 @@
 import {
   claudeCheckSession,
-  resolveClaudeSessionTranscriptPath,
+  hasClaudeMaterializedSessionTranscript,
 } from '@/backends/claude/utils/claudeCheckSession';
 import { claudeFindLastSession } from '@/backends/claude/utils/claudeFindLastSession';
-import { existsSync, statSync } from 'node:fs';
 
 export type ClaudeRemoteSessionStartPlan = {
   startFrom: string | null;
@@ -36,30 +35,6 @@ type ResolveClaudeRemoteSessionStartPlanDeps = {
   logDebug: (message: string) => void;
   logPrefix: string;
 };
-
-/**
- * Remote-resumability threshold: a session id may back a remote resume once its
- * native transcript file exists and is non-empty. Exported for the Session
- * identity owner, which applies the same threshold when deciding whether an
- * observed id is a usable resume target. This gate is intentionally weaker than
- * the metadata publication proof (`isProvenClaudeTranscriptPath` in session.ts),
- * which additionally requires a complete matching record before an identity is
- * advertised for resume.
- */
-export function hasClaudeMaterializedSessionTranscript(
-  sessionId: string,
-  path: string,
-  transcriptPath: string | null,
-  configDir: string | null,
-): boolean {
-  const sessionFile = resolveClaudeSessionTranscriptPath(sessionId, path, transcriptPath, configDir);
-  try {
-    if (!existsSync(sessionFile)) return false;
-    return statSync(sessionFile).size > 0;
-  } catch {
-    return false;
-  }
-}
 
 export function resolveClaudeRemoteSessionStartPlan(
   opts: {

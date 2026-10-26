@@ -905,9 +905,7 @@ export async function claudeUnifiedTerminalLauncher(
         allowPendingDeliveryBlock: !effectMayHaveOccurred,
       });
     };
-    const knownClaudeSessionId = typeof session.sessionId === 'string' && session.sessionId.trim().length > 0
-      ? session.sessionId.trim()
-      : null;
+    const knownClaudeSessionId = session.getResumableSessionId();
     const claudeArgs = unifiedTerminalLaunchAttempt === 0
       ? initialPrompt.claudeArgs
       : knownClaudeSessionId

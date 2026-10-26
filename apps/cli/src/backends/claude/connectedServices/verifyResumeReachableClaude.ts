@@ -56,12 +56,7 @@ export async function verifyResumeReachableClaude(params: Readonly<{
 
   const vendorResumeId = normalizeVendorResumeId(params.vendorResumeId);
   if (!vendorResumeId) {
-    // No resume target was supplied: the identity owner resolved the session id to
-    // "not resumable yet" (a provisional, never-materialized identity) or the spawn
-    // is fresh. Absence of a resume target is not a store miss — the same provisional
-    // rule as the daemon spawn gate, which never gates fresh spawns. A present id that
-    // cannot be found still fails closed below.
-    return { ok: true, resolvedPath: null };
+    return { ok: false, reason: 'claude_session_not_in_native_store' };
   }
 
   const claudeConfigDir = resolveConfiguredClaudeConfigDir({ env: processEnv });

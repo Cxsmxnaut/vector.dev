@@ -266,11 +266,20 @@ describe.sequential('claudeRemoteLauncher legacy Runtime Activity subscriber', (
     });
     const finishQuery = createDeferred<void>();
     let queryIdle = false;
-    const createQuery: NonNullable<Parameters<typeof actualClaudeRemoteAgentSdk.claudeRemoteAgentSdk>[0]['createQuery']> = () => ({
+    let receivedPrompt: unknown;
+    const createQuery: NonNullable<Parameters<typeof actualClaudeRemoteAgentSdk.claudeRemoteAgentSdk>[0]['createQuery']> = ({ prompt, options }) => ({
       // Only the external SDK query is replaced. The launcher, start-plan resolution and
       // Session identity owner run for real, so a ghost resume id would fail before this
       // query ever starts.
       async *[Symbol.asyncIterator]() {
+        expect(options?.resume).toBeUndefined();
+        if (typeof prompt === 'string') {
+          receivedPrompt = prompt;
+        } else {
+          const first = await prompt[Symbol.asyncIterator]().next();
+          if (first.done) throw new Error('Expected the first queued remote prompt');
+          receivedPrompt = first.value.message.content;
+        }
         yield { type: 'system', subtype: 'init', model: 'claude-requested', session_id: 'claude-fresh-start' };
         yield { type: 'result', subtype: 'success', is_error: false, result: 'First remote message handled' };
         queryIdle = true;
@@ -300,6 +309,7 @@ describe.sequential('claudeRemoteLauncher legacy Runtime Activity subscriber', (
       const switchHandler = await switchHandlerReady;
       try {
         await vi.waitFor(() => expect(queryIdle).toBe(true));
+        expect(JSON.stringify(receivedPrompt)).toContain('first message from the app');
         expect(infoFile).not.toHaveBeenCalledWith('[remote]: launch error', expect.objectContaining({
           error: expect.stringContaining('ClaudeResumeSessionUnavailableError'),
         }));

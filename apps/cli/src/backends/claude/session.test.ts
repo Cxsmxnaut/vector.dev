@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import type { SessionClientPort } from '@/api/session/sessionClientPort';
 import type { Metadata } from '@/api/types';
 import { Session } from './session';
+import { logger } from '@/ui/logger';
 import { MessageQueue2 } from '@/agent/runtime/modeMessageQueue';
 import type { EnhancedMode } from './loop';
 import { getProjectPath } from './utils/path';
@@ -818,6 +819,7 @@ describe('Session', () => {
     mkdirSync(transcriptDir, { recursive: true });
     const transcriptPath = join(transcriptDir, 'sess_zero_turn.jsonl');
     const session = createSession(createSessionClientStub());
+    const provisionalLog = vi.spyOn(logger, 'infoFile');
 
     try {
       // Zero-turn terminal birth: SessionStart observed an id before any turn wrote the transcript.
@@ -826,6 +828,9 @@ describe('Session', () => {
 
       expect(session.sessionId).toBe('sess_zero_turn');
       expect(session.getResumableSessionId()).toBeNull();
+      expect(provisionalLog).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+        event: 'claude_provisional_resume_identity',
+      }));
 
       // An allocated-but-empty transcript has not materialized a conversation either.
       writeFileSync(transcriptPath, '', 'utf8');
@@ -834,6 +839,53 @@ describe('Session', () => {
       // The first turn materializes the transcript; resumability follows without re-observation.
       writeClaudeTranscriptInit(transcriptPath, 'sess_zero_turn');
       expect(session.getResumableSessionId()).toBe('sess_zero_turn');
+    } finally {
+      provisionalLog.mockRestore();
+      session.cleanup();
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it.each(['observed', 'published'] as const)('preserves an established %s identity when its transcript disappears, including clear/restore', async proof => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'happier-claude-session-'));
+    vi.stubEnv('CLAUDE_CONFIG_DIR', tempDir);
+    const transcriptDir = join(tempDir, 'projects', 'project-a');
+    mkdirSync(transcriptDir, { recursive: true });
+    const transcriptPath = join(transcriptDir, 'sess_established.jsonl');
+    const session = createSession(createSessionClientStub());
+    try {
+      if (proof === 'published') writeClaudeTranscriptInit(transcriptPath, 'sess_established');
+      session.onSessionFound('sess_established', hookWithTranscript(transcriptPath));
+      await session.drainCriticalMetadataWrites({ timeoutMs: 500 });
+      if (proof === 'observed') {
+        writeClaudeTranscriptInit(transcriptPath, 'sess_established');
+        expect(session.getResumableSessionId()).toBe('sess_established');
+      }
+      rmSync(transcriptPath);
+      expect(session.getResumableSessionId()).toBe('sess_established');
+      const cleared = session.clearSessionId();
+      expect(session.getResumableSessionId()).toBeNull();
+      if (!cleared) throw new Error('Expected an established identity');
+      session.restoreClearedSessionIdentity(cleared);
+      expect(session.getResumableSessionId()).toBe('sess_established');
+    } finally {
+      session.cleanup();
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it.each(['resume', 'fork', 'compact'])('preserves native %s context before its transcript is available', async source => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'happier-claude-session-'));
+    const session = createSession(createSessionClientStub());
+    try {
+      // Resuming an already observed idle ID must establish context too.
+      if (source === 'resume') session.onSessionFound('sess_native');
+      session.onSessionFound('sess_native', {
+        ...hookWithTranscript(join(tempDir, 'sess_native.jsonl')),
+        hook_event_name: 'SessionStart', source,
+      });
+      await session.drainCriticalMetadataWrites({ timeoutMs: 500 });
+      expect(session.getResumableSessionId()).toBe('sess_native');
     } finally {
       session.cleanup();
       rmSync(tempDir, { recursive: true, force: true });
@@ -877,7 +929,7 @@ describe('Session', () => {
       expect(cleared).toEqual({
         sessionId: 'sess_requested',
         transcriptPath: null,
-        wasRequestedResume: true,
+        mustResume: true,
       });
 
       session.restoreClearedSessionIdentity(cleared!);
@@ -898,7 +950,7 @@ describe('Session', () => {
       await session.drainCriticalMetadataWrites({ timeoutMs: 500 });
 
       const cleared = session.clearSessionId();
-      expect(cleared?.wasRequestedResume).toBe(false);
+      expect(cleared?.mustResume).toBe(false);
 
       session.restoreClearedSessionIdentity(cleared!);
       expect(session.getResumableSessionId()).toBeNull();
