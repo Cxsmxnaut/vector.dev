@@ -139,7 +139,7 @@ function hasShadow(style: Record<string, unknown>): boolean {
 
 // The suite setup renders icons as `Icon` hosts.
 function countIcons(screen: RenderedOverlayScreen, name: string): number {
-    return screen.findAll((node) => node.type === 'Icon' && node.props.name === name).length;
+    return screen.findAll((node) => String(node.type) === 'Icon' && node.props.name === name).length;
 }
 
 afterEach(() => {
