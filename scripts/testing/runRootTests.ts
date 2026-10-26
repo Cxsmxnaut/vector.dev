@@ -27,8 +27,22 @@ export const ROOT_TEST_COMMANDS = {
   ],
 } as const satisfies Record<string, readonly CommandSuiteEntry[]>;
 
+/** The root lane whose workspaces come from run-time package labels instead of a fixed inventory. */
+const GATE_UNIT_LANE = 'gate-unit';
+
+/**
+ * The fixed command inventory a root test lane runs, read by the lane runner and by the wiring
+ * reader alike so a new lane cannot reach one without the other. The Gate lane has none: its
+ * workspace set is chosen by the package labels its caller passes.
+ */
+export function resolveFixedRootTestCommands(lane: string | undefined): readonly CommandSuiteEntry[] {
+  if (lane === 'unit' || lane === 'integration') return ROOT_TEST_COMMANDS[lane];
+  if (lane === GATE_UNIT_LANE) return [];
+  throw new Error(`Unsupported root test lane: ${lane ?? '<missing>'}`);
+}
+
 export async function runRootTests(lane: string, args: readonly string[] = [], rootDir = process.cwd()): Promise<void> {
-  if (lane === 'gate-unit') {
+  if (lane === GATE_UNIT_LANE) {
     const separator = args.indexOf('--');
     const selectionArgs = separator < 0 ? args : args.slice(0, separator);
     const packages = selectionArgs.filter((arg) => !arg.startsWith('--filter='));
@@ -55,9 +69,8 @@ export async function runRootTests(lane: string, args: readonly string[] = [], r
     }) });
     return;
   }
-  if (lane !== 'unit' && lane !== 'integration') throw new Error('Test lane must be unit or integration');
   await runCommandSuite<CommandSuiteEntry>({
-    commands: ROOT_TEST_COMMANDS[lane],
+    commands: resolveFixedRootTestCommands(lane),
     suiteName: `Root ${lane} test suite`,
     runCommand: (command) => runPnpmCommand(command, rootDir),
   });
