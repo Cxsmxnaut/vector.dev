@@ -6800,7 +6800,7 @@
     "sources/sync/runtime/files/nativeFileActions.test.ts",
     "sources/sync/runtime/homeCarrierPolicy.test.ts",
     "sources/sync/runtime/irohHomeTransportDiagnostics.test.ts",
-    "sources/sync/runtime/nativeIrohTunnels/adapter.test.ts",
+    "sources/sync/runtime/nativeIrohTunnels/runtime.test.ts",
     "sources/sync/runtime/nativeIrohTunnels/desktopLifecycle.test.ts",
     "sources/sync/runtime/nativeIrohTunnels/diagnostics.test.ts",
     "sources/sync/runtime/nativeIrohTunnels/machineTransferLifecycle.test.ts",
