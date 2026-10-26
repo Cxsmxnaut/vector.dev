@@ -136,7 +136,7 @@ export class ScmStatusSync {
             this.projectLastSnapshot.set(projectKey, snapshot);
             this.projectSnapshotSignature.set(projectKey, signature);
             if (signatureChanged) {
-                await clearSearchCacheForProject(this.sessionToProjectKey, projectKey);
+                await clearSearchCacheForProject(this.getProjectSessions(projectKey));
             }
             if (source === 'mutation') {
                 const changedPaths = collectChangedPaths(previousSnapshot, snapshot);
@@ -239,6 +239,19 @@ export class ScmStatusSync {
     private getSessionSyncKey(sessionId: string, serverId?: string | null): string {
         const exactServerId = serverId?.trim();
         return exactServerId ? `${exactServerId}\u0000${sessionId}` : sessionId;
+    }
+
+    /** The Sessions mapped to a project, decoded from their sync keys (see getSessionSyncKey). */
+    private getProjectSessions(projectKey: string): Array<{ sessionId: string; serverId: string | null }> {
+        const sessions: Array<{ sessionId: string; serverId: string | null }> = [];
+        for (const [sessionSyncKey, key] of this.sessionToProjectKey.entries()) {
+            if (key !== projectKey) continue;
+            const separator = sessionSyncKey.indexOf('\u0000');
+            sessions.push(separator < 0
+                ? { sessionId: sessionSyncKey, serverId: null }
+                : { sessionId: sessionSyncKey.slice(separator + 1), serverId: sessionSyncKey.slice(0, separator) });
+        }
+        return sessions;
     }
 
     private getProjectKeyForSession(sessionId: string, serverId?: string | null): string | null {
@@ -623,7 +636,7 @@ export class ScmStatusSync {
 
             if (signatureChanged) {
                 this.projectLastSnapshot.set(activeProjectKey, snapshot);
-                await clearSearchCacheForProject(this.sessionToProjectKey, activeProjectKey);
+                await clearSearchCacheForProject(this.getProjectSessions(activeProjectKey));
             }
         } catch (error) {
             const failure = scmFallbackError(error, { method: RPC_METHODS.SCM_STATUS_SNAPSHOT, request: {} });

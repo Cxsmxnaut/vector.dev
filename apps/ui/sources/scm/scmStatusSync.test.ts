@@ -13,6 +13,11 @@ import { ScmStatusSync } from './scmStatusSync';
 import { ATTRIBUTION_INVALIDATION_WINDOW_MS, shouldAttributeChangedPaths } from './sync/attribution';
 import { isSessionPathWithinRepoRoot } from './sync/paths';
 import { collectChangedPaths } from './sync/snapshotDiff';
+import { resolveWorkspaceTargetForSessionFromState } from '@/sync/domains/session/resolveWorkspaceTargetForSessionFromState';
+import {
+    getCachedWorkspaceRepositoryDirectoryEntries,
+    setCachedWorkspaceRepositoryDirectoryEntries,
+} from '@/sync/domains/workspaces/files/workspaceRepositoryDirectory';
 
 const machineRpc = vi.hoisted(() => vi.fn());
 // The authenticated Machine RPC transport is external; repository resolution,
@@ -104,6 +109,42 @@ describe('repository scope snapshot publication and reuse', () => {
             });
         } finally {
             syncer.stop(session.id, serverId);
+        }
+    });
+
+    it('clears the exact Home workspace directory cache of the refreshed repository only', async () => {
+        const serverId = 'cache-home';
+        const machine = createMachineFixture({ id: 'cache-machine' });
+        const base = createSessionFixture();
+        const refreshed = createSessionFixture({ id: 'cache-session', metadata: { ...base.metadata!, machineId: machine.id, path: '/cache-repo' } });
+        const other = createSessionFixture({ id: 'cache-other', metadata: { ...base.metadata!, machineId: machine.id, path: '/cache-other-repo' } });
+        storage.setState({
+            machines: { [machine.id]: machine },
+            sessions: { [refreshed.id]: refreshed, [other.id]: other },
+            machineListByServerId: { [serverId]: [machine] },
+            sessionListRowsByServerId: { [serverId]: { [refreshed.id]: refreshed, [other.id]: other } },
+        });
+        const workspaceCacheKey = (sessionId: string) => {
+            const target = resolveWorkspaceTargetForSessionFromState(storage.getState(), { sessionId, serverId });
+            expect(target).not.toBeNull();
+            return target!.workspaceCacheKey;
+        };
+        const entries = [{ name: 'README.md', type: 'file' as const }];
+        for (const sessionId of [refreshed.id, other.id]) {
+            setCachedWorkspaceRepositoryDirectoryEntries({ workspaceCacheKey: workspaceCacheKey(sessionId), directoryPath: '', entries });
+        }
+        machineRpc.mockResolvedValue({
+            success: true,
+            snapshot: { ...makeSnapshot([]), repo: { isRepo: true, rootPath: '/cache-repo' }, capabilities: EMPTY_SCM_CAPABILITIES },
+        });
+        const syncer = new ScmStatusSync();
+        try {
+            await syncer.getSync(refreshed.id, serverId).invalidateAndAwait();
+            expect(storage.getState().getSessionProjectScmSnapshot(refreshed.id, serverId)?.repo.rootPath).toBe('/cache-repo');
+            expect(getCachedWorkspaceRepositoryDirectoryEntries({ workspaceCacheKey: workspaceCacheKey(refreshed.id), directoryPath: '' })).toBeNull();
+            expect(getCachedWorkspaceRepositoryDirectoryEntries({ workspaceCacheKey: workspaceCacheKey(other.id), directoryPath: '' })).toEqual(entries);
+        } finally {
+            syncer.stop(refreshed.id, serverId);
         }
     });
 

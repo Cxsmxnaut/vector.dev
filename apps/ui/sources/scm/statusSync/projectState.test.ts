@@ -148,7 +148,7 @@ describe('buildSnapshotSignature', () => {
 
 
 describe('clearSearchCacheForProject', () => {
-  it('clears the search caches of the project sessions only, without loading the full file-search module', async () => {
+  it('clears the search caches of the given sessions only, without loading the full file-search module', async () => {
     const machine = createMachineFixture({ id: 'clear-machine' });
     storage.setState({
       machines: { [machine.id]: machine },
@@ -167,11 +167,10 @@ describe('clearSearchCacheForProject', () => {
     const clearedSuggestionSessions: Array<string | undefined> = [];
     const unregister = registerSuggestionFileSearchCacheClearer((sessionId) => clearedSuggestionSessions.push(sessionId));
     try {
-      await clearSearchCacheForProject(new Map([
-        ['clear-s1', 'project-a'],
-        ['clear-s2', 'project-b'],
-        ['clear-s3', 'project-a'],
-      ]), 'project-a');
+      await clearSearchCacheForProject([
+        { sessionId: 'clear-s1', serverId: null },
+        { sessionId: 'clear-s3', serverId: null },
+      ]);
     } finally {
       unregister();
     }
