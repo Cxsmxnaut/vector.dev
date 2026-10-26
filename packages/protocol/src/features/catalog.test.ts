@@ -1,9 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
-import { FEATURE_CATALOG, FEATURE_IDS, isFeatureId, type FeatureId } from './catalog.js';
+import { FEATURE_CATALOG, FEATURE_IDS, featureRequiresServerSnapshot, isFeatureId, type FeatureId } from './catalog.js';
 import type { FeatureFailMode } from './catalogTypes.js';
 
 describe('feature catalog', () => {
+  it('requires a server snapshot for server features and for client features that depend on one', () => {
+    expect(featureRequiresServerSnapshot('terminal.embeddedPty')).toBe(true);
+    // Client feature whose dependency chain reaches a server feature (voice.agent -> voice).
+    expect(FEATURE_CATALOG['voice.daemonInference'].representation).toBe('client');
+    expect(featureRequiresServerSnapshot('voice.daemonInference')).toBe(true);
+    expect(featureRequiresServerSnapshot('execution.runs')).toBe(false);
+  });
   it('keeps MCP servers core rather than exposing a feature gate', () => {
     expect(isFeatureId('mcp.servers')).toBe(false);
     expect(FEATURE_IDS).not.toContain('mcp.servers');
