@@ -10,13 +10,14 @@ import { buildQualifiedPluginContributionKey } from '@happier-dev/protocol/plugi
 import { ExternalActionRequestEnvelopeV1Schema } from '@happier-dev/protocol/actions/externalActionApi';
 import { MachineProvisionersListResultV1Schema } from '@happier-dev/protocol/plugins/contributions/machineProvisioners';
 import { PluginProjectedActionV2Schema, QualifiedConnectedAccountProfileV4Schema } from '@happier-dev/protocol';
-import { DaemonContributionRegistryProjectionDescribeResponseSchema } from '@happier-dev/protocol/daemon/contributionRegistryProjection';
+import { DaemonContributionRegistryProjectionDescribeResponseSchema, buildDeferredDaemonProjectionSections } from '@happier-dev/protocol/daemon/contributionRegistryProjection';
 import { RPC_METHODS } from '@happier-dev/protocol/rpc';
 import { PLUGIN_PROVIDER_DAEMON_PROJECTION_FIXTURE } from '@/dev/testkit/fixtures/pluginProviderDaemonProjection';
 import { loadSyncSingletonForTests } from '@/dev/testkit/harness/syncSingletonLoader';
 
 const route = vi.hoisted(() => ({ replace: vi.fn() }));
 const nativeBoundary = vi.hoisted(() => ({ rpc: vi.fn() }));
+let projectionReply: ReturnType<typeof DaemonContributionRegistryProjectionDescribeResponseSchema.parse>;
 vi.mock('@/sync/runtime/orchestration/serverScopedRpc/serverScopedMachineRpc', async () => {
     const { createServerScopedMachineRpcBoundaryMock } = await import('@/dev/testkit/mocks/serverScopedRpc');
     return createServerScopedMachineRpcBoundaryMock(nativeBoundary.rpc);
@@ -29,6 +30,9 @@ installHomeGovernanceBoundaries(harness);
 const { resetScopedHomeActionExecutorsForTests } = await import('@/sync/ops/actions/scopedHomeActionExecutor');
 const { clearDaemonMergedProjectionCacheForTests } = await import('@/agents/backendCatalog/loadDaemonMergedProjectionInputs');
 const { resetMachineProjectionReadsForTests } = await import('@/sync/ops/machineContributionRegistryProjection');
+// Compile the real singleton graph after its network boundaries are installed,
+// outside a per-test lifecycle deadline on a cold executor.
+await loadSyncSingletonForTests();
 let restoreViewport: (() => void) | undefined;
 let restorePopover: (() => void) | undefined;
 const controller = { machineId: 'host', installationId: 'installation' };
@@ -77,6 +81,7 @@ beforeEach(async () => {
                 fields: [{ id: 'token', title: 'Token', schema: { type: 'string' }, secret: true }] }] },
         }])) } },
     } });
+    projectionReply = projection;
     nativeBoundary.rpc.mockImplementation(async (request: { method: string }) => request.method === RPC_METHODS.DAEMON_MERGED_CONTRIBUTION_REGISTRY_PROJECTION_DESCRIBE
         ? projection : request.method === RPC_METHODS.DAEMON_PLUGIN_ACTION_SCHEMAS_READ ? { ok: true,
             inputSchema: { type: 'object', properties: { cpu: { type: 'integer', minimum: 1 } }, additionalProperties: false } } : { ok: false, code: 'unsupported' });
@@ -177,6 +182,45 @@ async function renderAccountScreen(content: React.ReactElement) {
 }
 
 describe('managed provisioner credential purposes', () => {
+    it.each(['setup', 'configurator'] as const)('settles a cold Connect handoff through %s without unrelated projection sections', async surface => {
+        const serverId = await setupHome();
+        // The real daemon framing producer keeps unrequested families absent. Legacy full
+        // projection fixtures concealed this failure behind the configurator's warm read.
+        const framed = buildDeferredDaemonProjectionSections({ ...projectionReply, projectionDigest: 'a'.repeat(64) });
+        const sectionReads: string[] = [];
+        nativeBoundary.rpc.mockImplementation(async (request: { method: string; payload: unknown }) => {
+            if (request.method !== RPC_METHODS.DAEMON_MERGED_CONTRIBUTION_REGISTRY_PROJECTION_DESCRIBE) return { ok: false, code: 'unsupported' };
+            const payload = (await import('@happier-dev/protocol/daemon/contributionRegistryProjection'))
+                .DaemonContributionRegistryProjectionDescribeRequestSchema.parse(request.payload);
+            if (!('sectionRead' in payload) || !payload.sectionRead) return framed.manifest;
+            const { sectionRead, sectionFrameVersion } = payload;
+            sectionReads.push(sectionRead.digest);
+            return framed.read(sectionRead.digest, sectionRead.offset, sectionRead.includeDigests, sectionFrameVersion);
+        });
+        const { ConnectedServiceSetupPage } = await import('../../connectedServices/setup/ConnectedServiceSetupPage');
+        const { resolveServerProfileScopeIdForIdentifier } = await import('@/sync/domains/server/serverProfiles');
+        const { ManagedMachineConfigurationView } = await import('./ManagedMachineConfigurationView');
+        const page = surface === 'setup' ? <ConnectedServiceSetupPage purposeRequest={{ scope: { serverId: resolveServerProfileScopeIdForIdentifier(serverId), accountId: 'owner' },
+            machineId: controller.machineId, purpose: cloudPurpose }} onSelected={() => {}} onClose={() => {}} />
+            : <ManagedMachineConfigurationView serverId={serverId} provisioner={buildQualifiedPluginContributionKey(contribution)}
+                initialController={controller} initialConnectPurpose={cloudPurpose.purpose} />;
+        const screen = await renderAccountScreen(page);
+        const chooser = `connected-account-purpose:${buildQualifiedPluginContributionKey(cloud.service)}`;
+        await waitForHomeGovernance(() => expect(sectionReads).toContain(framed.manifest.sections.resourcesById));
+        await flushHookEffects();
+        expect(screen.findByTestId(chooser)).not.toBeNull();
+        expect(screen.findByTestId('connected-account-purpose-unavailable')).toBeNull();
+        expect(sectionReads.filter(digest => digest === framed.manifest.sections['familiesById.machineProvisioners'])).toHaveLength(1);
+        expect(sectionReads).not.toContain(framed.manifest.sections.toolsById);
+        expect(sectionReads).not.toContain(framed.manifest.sections.agentsById);
+        const settledReads = nativeBoundary.rpc.mock.calls.length;
+        const { storage } = await import('@/sync/domains/state/storage');
+        await act(async () => storage.setState({ isDataReady: true }));
+        await flushHookEffects();
+        expect(nativeBoundary.rpc.mock.calls).toHaveLength(settledReads);
+        expect(harness.requestsFor('/v1/actions/machines.managed.acquire')).toHaveLength(0);
+        await screen.unmount();
+    });
     it('connects a declared provisioner purpose through setup and returns the explicit selection to the same draft', async () => {
         const serverId = await setupHome();
         let catalogReads = 0;
