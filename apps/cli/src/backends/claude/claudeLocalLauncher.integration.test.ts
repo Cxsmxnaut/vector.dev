@@ -4,6 +4,13 @@ import type { PermissionMode } from '@/api/types';
 import { MessageQueue2 } from '@/agent/runtime/modeMessageQueue';
 import { Session } from './session';
 import { EventEmitter } from 'node:events';
+import { ChildProcess } from 'node:child_process';
+import * as childProcess from 'node:child_process';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { createEnvKeyScope } from '@/testkit/env/envScope';
+import { getProjectPath } from './utils/path';
 import type { EnhancedMode } from './loop';
 import { completedNativeChildTranscript } from './workflows/claudeWorkflowActivitySource.testkit';
 import type { SessionWorkflowRunSnapshotV1 } from '@happier-dev/protocol';
@@ -19,6 +26,12 @@ vi.mock('@/agent/runtime/createHappierMcpBridge', () => ({
     },
   })),
 }));
+
+// The provider process is an OS boundary; native launch preparation and session scanning stay real.
+vi.mock('node:child_process', async importOriginal => {
+  const actual = await importOriginal<typeof import('node:child_process')>();
+  return { ...actual, spawn: vi.fn(actual.spawn) };
+});
 
 type MetadataSnapshot = { permissionMode?: PermissionMode; permissionModeUpdatedAt?: number };
 type RpcHandler = (params?: unknown) => unknown | Promise<unknown>;
@@ -150,6 +163,7 @@ function hookWithTranscript(transcriptPath: string): SessionFoundHookData {
 function createLocalHarness(options?: {
   metadataSnapshot?: MetadataSnapshot;
   sessionId?: string;
+  path?: string;
   providerTasks?: NonNullable<ConstructorParameters<typeof Session>[0]['runtimeActivityContributions']>['providerTasks'];
 }): LocalHarness {
   const switchDeferred = createDeferred<RpcHandler>();
@@ -204,7 +218,7 @@ function createLocalHarness(options?: {
 
   const session = new Session({
     client,
-    path: '/tmp',
+    path: options?.path ?? '/tmp',
     logPath: '/tmp/log',
     sessionId: options?.sessionId ?? null,
     messageQueue: new MessageQueue2<EnhancedMode>(() => 'mode'),
@@ -244,6 +258,61 @@ describe('claudeLocalLauncher', () => {
     restoreTTY(originalStdinIsTTY, originalStdoutIsTTY);
     for (const session of createdSessions.splice(0)) {
       session.cleanup();
+    }
+  });
+
+  it('imports the first fresh local transcript after a provisional identity even when the replay baseline is unavailable', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'happier-local-provisional-baseline-'));
+    const workspaceDir = join(dir, 'workspace');
+    const configDir = join(dir, 'claude-config');
+    const projectDir = getProjectPath(workspaceDir, configDir);
+    await mkdir(workspaceDir, { recursive: true });
+    await mkdir(projectDir, { recursive: true });
+    const env = createEnvKeyScope(['CLAUDE_CONFIG_DIR', 'HAPPIER_CLAUDE_PATH']);
+    env.patch({ CLAUDE_CONFIG_DIR: configDir, HAPPIER_CLAUDE_PATH: process.execPath });
+    const stdinWasPaused = process.stdin.isPaused();
+    const { session, client } = createLocalHarness({ path: workspaceDir });
+    session.onSessionFound('provisional-local', {
+      hook_event_name: 'SessionStart', source: 'startup',
+      transcript_path: join(projectDir, 'provisional-local.jsonl'),
+    });
+    await session.drainCriticalMetadataWrites({ timeoutMs: 500 });
+    client.fetchCommittedClaudeJsonlMessageBaseline = vi.fn(async () => { throw new Error('baseline transport unavailable'); });
+    const actualScanner = await vi.importActual<typeof import('./utils/sessionScanner')>('./utils/sessionScanner');
+    mockCreateSessionScanner.mockImplementationOnce(actualScanner.createSessionScanner);
+    const actualLocal = await vi.importActual<typeof import('./claudeLocal')>('./claudeLocal');
+    mockClaudeLocal.mockImplementationOnce(async options => { await actualLocal.claudeLocal(options); });
+    const child = new ChildProcess();
+    const spawned = createDeferred<void>();
+    vi.mocked(childProcess.spawn).mockImplementationOnce(() => {
+      spawned.resolve(undefined);
+      return child;
+    });
+    const { claudeLocalLauncher } = await import('./claudeLocalLauncher');
+    const launch = claudeLocalLauncher(session);
+    try {
+      await spawned.promise;
+      const freshId = 'fresh-local-session';
+      const transcriptPath = join(projectDir, `${freshId}.jsonl`);
+      await writeFile(transcriptPath, `${[
+        { type: 'user', uuid: 'fresh-local-user', sessionId: freshId,
+          timestamp: new Date().toISOString(),
+          message: { role: 'user', content: 'First fresh local prompt' } },
+        { type: 'assistant', uuid: 'fresh-local-assistant', sessionId: freshId,
+          timestamp: new Date().toISOString(),
+          message: { role: 'assistant', content: [{ type: 'text', text: 'First fresh local reply' }] } },
+      ].map(row => JSON.stringify(row)).join('\n')}\n`);
+      session.onSessionFound(freshId, { hook_event_name: 'SessionStart', source: 'startup', transcript_path: transcriptPath });
+      await vi.waitFor(() => {
+        expect(client.sendClaudeSessionMessageCommitted).toHaveBeenCalledWith(expect.objectContaining({ uuid: 'fresh-local-user' }), expect.anything());
+        expect(client.sendClaudeSessionMessageCommitted).toHaveBeenCalledWith(expect.objectContaining({ uuid: 'fresh-local-assistant' }), expect.anything());
+      }, { timeout: 5_000 });
+    } finally {
+      child.emit('exit', 0, null);
+      await launch;
+      env.restore();
+      if (stdinWasPaused) process.stdin.pause();
+      await rm(dir, { recursive: true, force: true });
     }
   });
 
@@ -1304,7 +1373,7 @@ describe('claudeLocalLauncher', () => {
   });
 
   it('passes transcriptPath to sessionScanner when already known', async () => {
-    const { session } = createLocalHarness();
+    const { session } = createLocalHarness({ sessionId: 'sess_1' });
 
     session.onSessionFound('sess_1', hookWithTranscript('/alt/sess_1.jsonl'));
 

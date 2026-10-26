@@ -830,12 +830,15 @@ describe('Session', () => {
     const provisionalLog = vi.spyOn(logger, 'infoFile');
 
     try {
+      session.transcriptPath = transcriptPath;
+      expect(session.getResumableSessionIdentity()).toBeNull();
       // Zero-turn terminal birth: SessionStart observed an id before any turn wrote the transcript.
       session.onSessionFound('sess_zero_turn', hookWithTranscript(transcriptPath));
       await session.drainCriticalMetadataWrites({ timeoutMs: 500 });
 
       expect(session.sessionId).toBe('sess_zero_turn');
       expect(session.getResumableSessionId()).toBeNull();
+      expect(session.getResumableSessionIdentity()).toBeNull();
       expect(provisionalLog).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
         event: 'claude_provisional_resume_identity',
       }));
@@ -847,6 +850,7 @@ describe('Session', () => {
       // The first turn materializes the transcript; resumability follows without re-observation.
       writeClaudeTranscriptInit(transcriptPath, 'sess_zero_turn');
       expect(session.getResumableSessionId()).toBe('sess_zero_turn');
+      expect(session.getResumableSessionIdentity()).toEqual({ sessionId: 'sess_zero_turn', transcriptPath });
     } finally {
       provisionalLog.mockRestore();
       session.cleanup();
@@ -854,7 +858,7 @@ describe('Session', () => {
     }
   });
 
-  it.each(['getResumableSessionId', 'clearSessionId'] as const)('preserves a provisional identity and reports unavailable resume state when %s cannot inspect its transcript', async operation => {
+  it.each(['getResumableSessionId', 'getResumableSessionIdentity', 'clearSessionId'] as const)('preserves a provisional identity and reports unavailable resume state when %s cannot inspect its transcript', async operation => {
     const tempDir = mkdtempSync(join(tmpdir(), 'happier-claude-session-'));
     const transcriptPath = join(tempDir, 'sess_unreadable.jsonl');
     const session = createSession(createSessionClientStub());

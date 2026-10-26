@@ -521,10 +521,10 @@ export class Session {
         logger.debug(`[Session] Adopted requested Claude resume session ID from args: ${resumeSessionId}`);
     }
 
-    /** Return a resume target for every launcher, preserving requested or ever-proven context. */
-    getResumableSessionId = (): string | null => {
+    /** Project the coherent resume identity for launch, replay, and startup observers. */
+    getResumableSessionIdentity = (): SessionFoundInfo | null => {
         if (!this.sessionId) return null;
-        if (this.sessionIdMustBeResumed) return this.sessionId;
+        if (this.sessionIdMustBeResumed) return { sessionId: this.sessionId, transcriptPath: this.transcriptPath };
         if (
             hasClaudeMaterializedSessionTranscript(
                 this.sessionId,
@@ -534,7 +534,7 @@ export class Session {
             )
         ) {
             this.sessionIdMustBeResumed = true;
-            return this.sessionId;
+            return { sessionId: this.sessionId, transcriptPath: this.transcriptPath };
         }
         logger.infoFile('[Session] Starting without a provisional Claude resume identity', {
             event: 'claude_provisional_resume_identity',
@@ -542,6 +542,9 @@ export class Session {
         });
         return null;
     }
+
+    /** Return only the ID when the caller does not need the canonical transcript path. */
+    getResumableSessionId = (): string | null => this.getResumableSessionIdentity()?.sessionId ?? null;
 
     setPushSender(pushSender: PushNotificationClient | null): void {
         this.pushSender = pushSender;

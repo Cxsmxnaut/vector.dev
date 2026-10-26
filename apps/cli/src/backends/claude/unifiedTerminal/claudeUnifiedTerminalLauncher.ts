@@ -905,7 +905,8 @@ export async function claudeUnifiedTerminalLauncher(
         allowPendingDeliveryBlock: !effectMayHaveOccurred,
       });
     };
-    const knownClaudeSessionId = session.getResumableSessionId();
+    const resumeIdentity = session.getResumableSessionIdentity();
+    const knownClaudeSessionId = resumeIdentity?.sessionId ?? null;
     const claudeArgs = unifiedTerminalLaunchAttempt === 0
       ? initialPrompt.claudeArgs
       : knownClaudeSessionId
@@ -977,8 +978,8 @@ export async function claudeUnifiedTerminalLauncher(
       dispatch: async () => runClaudeUnifiedTerminalSession({
       path: session.path,
       happySessionId: session.client.sessionId,
-      sessionId: session.sessionId,
-      transcriptPath: session.transcriptPath,
+      sessionId: knownClaudeSessionId,
+      transcriptPath: resumeIdentity?.transcriptPath ?? null,
       claudeArgs,
       expectedProviderResumeSessionId: resumeSessionId,
       hookSettingsPath: session.hookSettingsPath,

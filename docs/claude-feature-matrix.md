@@ -40,8 +40,9 @@ SDK/offline discoveries. Other hook events, including `SessionEnd`, continue to
 reach lifecycle handling but cannot replace the active Claude resume identity,
 transcript path, or owned-session lineage during local/remote handoff.
 
-In development source, `Session.getResumableSessionId` supplies resume identity
-to local, remote, and Unified Terminal relaunches. A newly observed ID without a
+In development source, `Session.getResumableSessionIdentity` supplies the ID and
+transcript path together to local, remote, and Unified Terminal startup, replay,
+and relaunches; the ID-only accessor delegates to it. A newly observed ID without a
 materialized transcript remains provisional, so zero-turn takeover can start a
 fresh Claude conversation in the same Happier session. Requested resumes, native
 resume/fork/compaction, and identities already proven by a transcript retain their
