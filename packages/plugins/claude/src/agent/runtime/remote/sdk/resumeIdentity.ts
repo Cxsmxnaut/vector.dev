@@ -31,6 +31,7 @@ type ActiveTranscriptCandidate = {
     promoted: boolean;
     promotionInFlight: Promise<void> | null;
     followHandle: AgentTranscriptFileFollowHandle | null;
+    proofReadFailure: unknown;
 };
 
 export type ClaudeAgentSdkResumeIdentityPromotion = Readonly<{
@@ -293,7 +294,7 @@ export function createClaudeAgentSdkResumeIdentityOwner(params: Readonly<{
                     candidate.evidence.length = 0;
                 },
                 onError: (error) => {
-                    params.ctx.logger.debug('[ClaudeAgentSdk] transcript identity proof follow failed', { error });
+                    recordProofReadFailure(candidate, error);
                 },
             });
             if (disposed || activeCandidate !== candidate || candidate.promoted) {
@@ -302,8 +303,16 @@ export function createClaudeAgentSdkResumeIdentityOwner(params: Readonly<{
             }
             candidate.followHandle = handle;
         } catch (error) {
-            params.ctx.logger.debug('[ClaudeAgentSdk] transcript identity proof follow unavailable', { error });
+            recordProofReadFailure(candidate, error);
         }
+    }
+
+    function recordProofReadFailure(candidate: ActiveTranscriptCandidate, error: unknown): void {
+        if (disposed || activeCandidate !== candidate || candidate.invalidated || candidate.promoted) return;
+        const code = error && typeof error === 'object' && 'code' in error ? error.code : null;
+        if (code === 'ENOENT' || code === 'ENOTDIR') return;
+        candidate.proofReadFailure = error ?? new Error('Claude transcript identity proof is unavailable.');
+        params.ctx.logger.warn('[ClaudeAgentSdk] transcript identity proof read failed', { error });
     }
 
     async function observeSessionStart(
@@ -364,6 +373,7 @@ export function createClaudeAgentSdkResumeIdentityOwner(params: Readonly<{
                 promoted: false,
                 promotionInFlight: null,
                 followHandle: null,
+                proofReadFailure: null,
             }
             : null;
         if (existing) {
@@ -424,11 +434,15 @@ export function createClaudeAgentSdkResumeIdentityOwner(params: Readonly<{
             const candidate = activeCandidate;
             if (!candidate || candidate.invalidated || candidate.promoted) return;
             await candidate.followHandle?.drainNow().catch((error) => {
-                params.ctx.logger.debug('[ClaudeAgentSdk] transcript identity proof drain failed', { error });
+                recordProofReadFailure(candidate, error);
             });
             await candidate.promotionInFlight?.catch((error) => {
                 params.ctx.logger.debug('[ClaudeAgentSdk] transcript identity promotion failed', { error });
             });
+            // Host drains can resolve after reporting onError; only matched proof retires that failure.
+            if (activeCandidate === candidate && !candidate.invalidated && !candidate.promoted && candidate.proofReadFailure !== null) {
+                throw candidate.proofReadFailure;
+            }
         },
         async observeSessionHook(providerSessionId, payload, origin = 'sdk') {
             if (disposed) return;

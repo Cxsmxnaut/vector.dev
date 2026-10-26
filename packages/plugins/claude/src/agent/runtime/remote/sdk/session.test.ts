@@ -328,6 +328,60 @@ describe('bindClaudeAgentSdkFallbackSession', () => {
     } finally { await operations.resetOrDisposeRuntime(); }
   });
 
+  it.each(['acquire', 'onError', 'drain'] as const)('refuses SDK takeover after a local transcript proof %s failure', async failurePhase => {
+    const exec = createSdkExecFixture();
+    const sessionHooks = createSessionHooksFixture();
+    const follows: TranscriptFileFollowInputV1[] = [];
+    const denied = Object.assign(new Error('Transcript proof access denied'), { code: 'EACCES' });
+    const ctx = createPluginContextFixture(createTerminalHostFixture().service, createEventsFixture().service, {
+      exec: exec.service, sessionHooks: sessionHooks.service,
+      transcripts: {
+        append: vi.fn(async () => undefined),
+        defineSource: vi.fn(async () => ({ id: 'local-proof-denied', dispose: vi.fn(async () => undefined) })),
+        fileFollow: { follow: vi.fn(async (input: TranscriptFileFollowInputV1) => {
+          follows.push(input);
+          if (failurePhase === 'acquire') throw denied;
+          return { id: 'local-proof-denied-follow', close: async () => {}, drainNow: async () => {
+            if (failurePhase === 'drain') throw denied;
+          } };
+        }) },
+      },
+    });
+    const operations = createClaudeAgentSdkTurnOperations({
+      nativeOperationsOnly: true, ctx, directory: '/tmp/claude-project', launchEnv: {},
+      permissionMode: 'default', happierSessionId: 'local-proof-denied-session', enableSessionResumability: true,
+    });
+    try {
+      const presentation = await operations.prepareTerminalPresentation();
+      await operations.observeTerminalExecution({ kind: 'started', plan: presentation.plan });
+      const hook = sessionHooks.service.startServer.mock.calls[0]?.[0].onSessionHook;
+      if (!hook) throw new Error('native session hook server did not start');
+      await hook('local-proof-denied-native', { hook_event_name: 'SessionStart', session_id: 'local-proof-denied-native',
+        source: 'startup', transcript_path: '/tmp/claude-project/local-proof-denied-native.jsonl' });
+      await hook('local-proof-denied-native', { hook_event_name: 'UserPromptSubmit',
+        session_id: 'local-proof-denied-native', prompt: 'Keep my local conversation' });
+      if (failurePhase === 'onError') await follows[0]?.onError?.(denied);
+      await operations.observeTerminalExecution({ kind: 'provider_stopped', plan: presentation.plan, exitCode: 0, signal: null });
+      await expect(operations.sendTurnPrompt('Continue from the app')).resolves.toMatchObject({
+        kind: 'rejected_before_effect', reason: expect.stringContaining('Transcript proof access denied'),
+      });
+      expect(exec.spawnClient).not.toHaveBeenCalled();
+      expect(operations.readSessionIdentity()).toEqual({ sessionId: 'local-proof-denied-native' });
+      await expect(operations.prepareTerminalPresentation()).rejects.toMatchObject({ code: 'EACCES' });
+      expect(ctx.logger.warn).toHaveBeenCalledWith('[ClaudeAgentSdk] transcript identity proof read failed', { error: denied });
+      if (failurePhase !== 'acquire') {
+        const follow = follows[0];
+        if (!follow) throw new Error('Missing transcript follow');
+        await follow.onLine({ line: JSON.stringify({ type: 'user', sessionId: 'local-proof-denied-native',
+          timestamp: new Date().toISOString(), message: { role: 'user', content: 'Keep my local conversation' } }),
+          sourcePath: follow.path, sequence: 1 });
+        await expect(operations.sendTurnPrompt('Continue after proof recovery')).resolves.toMatchObject({ kind: 'accepted' });
+        const args = exec.spawnClient.mock.calls[0]?.[0].launch.args;
+        expect(args?.[args.indexOf('--resume') + 1]).toBe('local-proof-denied-native');
+      }
+    } finally { await operations.resetOrDisposeRuntime(); }
+  });
+
   it.each([undefined, 0])('witnesses native MCP inventory and deduplicated calls through successful SDK completion (queued count %s)', async queuedTurnCount => {
     const exec = createSdkExecFixture();
     const ctx = createPluginContextFixture(createTerminalHostFixture().service, createEventsFixture().service, { exec: exec.service });

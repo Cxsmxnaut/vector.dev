@@ -11,6 +11,54 @@ import {
 import { createClaudeAgentSdkResumeIdentityOwner } from './resumeIdentity.js';
 
 describe('createClaudeAgentSdkResumeIdentityOwner', () => {
+    it('retains unexpected proof read failures until matched proof or candidate retirement', async () => {
+        const follows: TranscriptFileFollowInputV1[] = [];
+        const promotions: string[] = [];
+        const denied = Object.assign(new Error('Proof access denied'), { code: 'EACCES' });
+        const ctx = createPluginContextFixture(createTerminalHostFixture().service, createEventsFixture().service, {
+            transcripts: {
+                append: vi.fn(async () => undefined),
+                defineSource: vi.fn(async () => ({ id: 'unused', dispose: vi.fn(async () => undefined) })),
+                fileFollow: { follow: vi.fn(async (input: TranscriptFileFollowInputV1) => {
+                    follows.push(input);
+                    return { id: 'proof-follow', drainNow: async () => {}, close: async () => {} };
+                }) },
+            },
+        });
+        const owner = createClaudeAgentSdkResumeIdentityOwner({ ctx, nowMs: () => 10_000,
+            onProviderSessionId: () => {}, onTranscriptPromoted: async promotion => { promotions.push(promotion.providerSessionId); } });
+        const start = (id: string) => owner.observeSessionHook(id, { hook_event_name: 'SessionStart',
+            session_id: id, transcript_path: `/tmp/${id}.jsonl` }, 'local_terminal');
+        try {
+            await start('first');
+            const first = follows[0];
+            if (!first) throw new Error('Missing transcript follow');
+            for (const code of ['ENOENT', 'ENOTDIR']) {
+                await first.onError?.(Object.assign(new Error('Transcript not present'), { code }));
+                await expect(owner.settleCurrentCandidate()).resolves.toBeUndefined();
+            }
+            await first.onError?.(denied);
+            await expect(owner.settleCurrentCandidate()).rejects.toBe(denied);
+            await expect(owner.settleCurrentCandidate()).rejects.toBe(denied);
+            await start('current');
+            await first.onError?.(denied);
+            await expect(owner.settleCurrentCandidate()).resolves.toBeUndefined();
+            const current = follows[1];
+            if (!current) throw new Error('Missing current transcript follow');
+            await owner.observeSessionHook('current', { hook_event_name: 'UserPromptSubmit', session_id: 'current',
+                prompt: 'Local context' }, 'local_terminal');
+            await current.onError?.(denied);
+            await expect(owner.settleCurrentCandidate()).rejects.toBe(denied);
+            await current.onLine({ line: JSON.stringify({ type: 'user', sessionId: 'current',
+                timestamp: new Date(10_000).toISOString(), message: { role: 'user', content: 'Local context' } }),
+                sourcePath: current.path, sequence: 1 });
+            await expect(owner.settleCurrentCandidate()).resolves.toBeUndefined();
+            await current.onError?.(denied);
+            await expect(owner.settleCurrentCandidate()).resolves.toBeUndefined();
+            expect(promotions).toEqual(['current']);
+        } finally { await owner.dispose(); }
+    });
+
     it.each([
         { origin: 'sdk' as const, hookSessionId: 'native-current', sidechain: false, expectedPromotions: [] },
         { origin: 'local_terminal' as const, hookSessionId: 'native-current', sidechain: false, expectedPromotions: ['native-current'] },
