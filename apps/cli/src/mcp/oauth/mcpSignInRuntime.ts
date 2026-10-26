@@ -1,7 +1,6 @@
 import { z } from 'zod/mini';
 import type { AuthorizationServerMetadata, OAuthTokens } from '@modelcontextprotocol/sdk/shared/auth.js';
 import type { FetchLike } from '@modelcontextprotocol/sdk/shared/transport.js';
-import { InvalidClientError } from '@modelcontextprotocol/sdk/server/auth/errors.js';
 import { canonicalMcpOAuthResourceUrlV1 } from '@happier-dev/protocol/mcp/oauth/mcpOAuthResourceV1';
 import { PluginConnectedAccountDescriptorContributionV2Schema } from '@happier-dev/protocol/connect/plugin-connected-account-authentication-v2';
 import { ConnectedAccountRequestAuthMaterializationV1Schema } from '@happier-dev/protocol/connect/connected-account-request-auth';
@@ -87,6 +86,13 @@ function metadata(issuer: string, registration: Registration): AuthorizationServ
         token_endpoint_auth_methods_supported: registration.tokenEndpointAuthMethods };
 }
 function diagnostic(code: string) { return { code, severity: 'error' as const }; }
+
+// The SDK error module loads on demand like the SDK client: daemon startup
+// registers this runtime and must not evaluate the MCP SDK before an operation.
+async function isInvalidClientError(cause: unknown): Promise<boolean> {
+    const { InvalidClientError } = await import('@modelcontextprotocol/sdk/server/auth/errors.js');
+    return cause instanceof InvalidClientError;
+}
 class McpOAuthEndpointRequiresHttpsError extends Error {}
 function requireHttpsEndpoint(input: Parameters<FetchLike>[0]): URL {
     const endpoint = input instanceof URL ? input : new URL(input);
@@ -252,7 +258,7 @@ export function createMcpSignInRuntime(params: Readonly<{ fetchFn?: FetchLike; n
                 } catch (cause) {
                     context.signal.throwIfAborted();
                     return { status: 'rejected', diagnostic: diagnostic(cause instanceof McpOAuthEndpointRequiresHttpsError
-                        ? 'mcp_oauth_endpoints_require_https' : cause instanceof InvalidClientError ? 'invalid_client' : 'mcp_oauth_discovery_failed') };
+                        ? 'mcp_oauth_endpoints_require_https' : await isInvalidClientError(cause) ? 'invalid_client' : 'mcp_oauth_discovery_failed') };
                 }
             },
             async complete(input, context) {
@@ -272,7 +278,7 @@ export function createMcpSignInRuntime(params: Readonly<{ fetchFn?: FetchLike; n
                     return { status: 'connected', accountId: sealed.serverId, displayName: sealed.serverId, scopes };
                 } catch (cause) {
                     context.signal.throwIfAborted();
-                    return cause instanceof InvalidClientError
+                    return await isInvalidClientError(cause)
                         ? { status: 'rejected', diagnostic: diagnostic('invalid_client') }
                         : cause instanceof McpOAuthEndpointRequiresHttpsError
                         ? { status: 'rejected', diagnostic: diagnostic('mcp_oauth_endpoints_require_https') }
