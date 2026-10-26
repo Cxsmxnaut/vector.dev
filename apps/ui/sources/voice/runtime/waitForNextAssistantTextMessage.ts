@@ -189,6 +189,7 @@ export function collectFinalAssistantReplySinceBaseline(
     : messages.length >= baseline.baselineCount ? baseline.baselineCount : 0;
   const submittedSeq = submittedIndex >= 0 ? messages[submittedIndex]?.seq : undefined;
   let trailing: string[] = [];
+  let beforePeer: string[] = [];
   for (let idx = startIndex; idx < messages.length; idx += 1) {
     const message = messages[idx];
     if (typeof submitted?.endSeqInclusive === 'number' && (
@@ -197,8 +198,14 @@ export function collectFinalAssistantReplySinceBaseline(
       || (typeof submittedSeq === 'number' && message.seq <= submittedSeq)
     )) continue;
     if (typeof message?.id === 'string' && baseline.baselineIds.has(message.id)) continue;
-    // A delivered peer report is input to the agent, not its answer.
-    if (message?.kind === 'tool-call' || message?.kind === 'user-text' || (message?.kind === 'agent-text' && message.peer)) {
+    if (message?.kind === 'tool-call' || message?.kind === 'user-text') {
+      trailing = [];
+      beforePeer = [];
+      continue;
+    }
+    // Peer input is never spoken. Keep the prior answer if no later reply replaces it.
+    if (message?.kind === 'agent-text' && message.peer) {
+      if (trailing.length > 0) beforePeer = trailing;
       trailing = [];
       continue;
     }
@@ -206,7 +213,8 @@ export function collectFinalAssistantReplySinceBaseline(
     const text = message.text.trim();
     if (text) trailing.push(text);
   }
-  return trailing.length > 0 ? trailing.join('\n\n') : null;
+  const reply = trailing.length > 0 ? trailing : beforePeer;
+  return reply.length > 0 ? reply.join('\n\n') : null;
 }
 
 function hasTurnProjection(marker: SessionTurnMarker | null): boolean {

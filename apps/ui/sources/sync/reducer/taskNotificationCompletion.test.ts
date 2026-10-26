@@ -51,9 +51,9 @@ const persistedCompletion = { type: 'user', uuid: 'completion', isMeta: true,
 
 describe('native task completion through normalization and reducer', () => {
     it('shows a delivered subagent hand-back report on its background Agent card', async () => {
-        // CLI projection of a linked hand-back: the report is the launching tool's result.
+        // CLI projection publishes the buffered report when the native task settles.
         const handback = { type: 'user', uuid: 'handback',
-            origin: { kind: 'peer', from: 'task', senderTaskId: 'task', name: 'general-purpose', handback: true },
+            origin: { kind: 'task-notification', taskId: 'task', toolUseId: 'tool', status: 'completed' },
             message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'tool',
                 content: [{ type: 'text', text: 'Verdict: fixed.' }], is_error: false }] } };
         const backgroundLaunch = { type: 'assistant', uuid: 'launch', message: { content: [{ type: 'tool_use', id: 'tool', name: 'Agent',

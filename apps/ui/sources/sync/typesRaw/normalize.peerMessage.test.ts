@@ -13,6 +13,20 @@ const peerOutput = {
 };
 
 describe('typesRaw.normalizeRawMessage (peer messages)', () => {
+    it('keeps a nested peer delivery as attributed agent text within its sidechain', () => {
+        const nestedPeerOutput = {
+            ...peerOutput,
+            content: { ...peerOutput.content, data: { ...peerOutput.content.data, isSidechain: true, sidechainId: 'parent-tool' } },
+        };
+        const normalized = normalizeRawMessage('nested-peer', null, 1, nestedPeerOutput as never, { messageRole: 'agent' });
+        const state = createReducer();
+        reducer(state, normalized ? [normalized] : []);
+        expect(state.sidechains.get('parent-tool')).toEqual([
+            expect.objectContaining({ role: 'agent', text: '**Verdict:** fixed.',
+                peer: { name: 'general-purpose', handback: true } }),
+        ]);
+    });
+
     // Released CLIs stamped peer rows as user; current CLIs stamp them as agent.
     it.each(['agent', 'user'] as const)('shows a peer delivery as sender-labelled agent text, never user input (messageRole=%s)', messageRole => {
         const normalized = normalizeRawMessage('peer', null, 1, peerOutput as never, { messageRole });
