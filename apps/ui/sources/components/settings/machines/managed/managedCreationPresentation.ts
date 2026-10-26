@@ -7,6 +7,8 @@ import { sameStrictJsonValue } from '@happier-dev/protocol/json/strictJsonValue'
 import { isRedundantManagedWakeIntentV1 } from '@happier-dev/protocol/machines/managed/resolveMachineRetentionPolicyV1';
 import { machinePageHref } from '@/components/machines/page/machinePageHref';
 import { resolveSystemTaskFailureMessage } from '@/components/systemTasks/resolveSystemTaskFailureMessage';
+import { isManagedMachineResourceAbsent } from './managedMachineResource';
+export { isManagedMachineResourceAbsent } from './managedMachineResource';
 
 /**
  * The short cause the page says for a failed install, in the app's words; null when only the installer's own

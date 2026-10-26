@@ -9,7 +9,7 @@ import { setServerProfileIdentityForUrl } from '@/sync/domains/server/serverProf
 import { retireActiveServerAccountScopeLifetime } from '@/sync/domains/scope/activeServerAccountScope';
 import { resetRuntimeFetch, setRuntimeFetch } from '@/utils/system/runtimeFetch';
 import { publishHomeAccountChange } from '@/sync/runtime/orchestration/homeAccountChange';
-import { useManagedMachineInventory } from './useManagedMachineInventory';
+import { useAdmittedManagedMachineAbsentEnrolledIds, useManagedMachineInventory } from './useManagedMachineInventory';
 import { createDefaultActionExecutor } from '@/sync/ops/actions/defaultActionExecutor';
 import { invalidateAccountEncryptionModeCache } from '@/sync/api/account/apiAccountEncryptionMode';
 import { createArtifactStoreBoundary } from '@/dev/testkit/harness/artifactStoreBoundary';
@@ -24,6 +24,52 @@ installApprovalCommonModuleMocks();
 afterEach(() => { retireActiveServerAccountScopeLifetime(); resetRuntimeFetch(); invalidateAccountEncryptionModeCache(); vi.restoreAllMocks(); });
 
 describe('managed Machine inventory', () => {
+    it('keeps admitted absence visible while a narrower overlapping inventory is still unread', async () => {
+        const absent = ManagedMachineV1Schema.parse({ id: 'removed', homeId: 'srv_absence', custodianAccountId: 'owner', enrolledMachineId: 'ghost',
+            launch: { provider: { pluginId: 'custom.provisioner', localId: 'native' }, schemaVersion: 1, name: 'Guest', choices: {} },
+            controller: { machineId: 'controller', installationId: 'installation' }, allocation: 'confirmed-absent', creationState: 'active',
+            desired: 'delete', desiredWhen: 'now', intentRevision: 1, retention: { kind: 'until-delete' }, wakeOnAcceptedMessage: false });
+        const archived = { ...absent, id: 'archived', enrolledMachineId: 'retired', archivedAt: 1 };
+        const coldRead = createDeferred<Response>();
+        let activeReads = 0;
+        let archiveReads = 0;
+        const target = await upsertAndActivateServer({ serverUrl: 'https://inventory-absence.test', scope: 'tab' });
+        await setServerProfileIdentityForUrl(target.serverUrl, 'srv_absence');
+        vi.spyOn(TokenStorage, 'getCredentialsForServerUrl').mockResolvedValue({ token: createAccountTokenForTests('owner') });
+        // Secure storage and HTTP are boundaries; both inventory readers and admission stay real.
+        setRuntimeFetch(async (input, init) => {
+            const path = new URL(String(input)).pathname;
+            if (path === '/v2/account/settings') return Response.json({ content: { t: 'plain', v: {} }, version: 1 });
+            if (path === '/v1/account/encryption') return Response.json({ mode: 'plain', updatedAt: 1 });
+            if (path !== '/v1/machines/managed/actions/list') return Response.json({ error: 'not_found' }, { status: 404 });
+            const body: unknown = typeof init?.body === 'string' ? JSON.parse(init.body) : undefined;
+            if (body && typeof body === 'object' && 'archived' in body && body.archived) {
+                archiveReads += 1;
+                return Response.json({ machines: [archived] });
+            }
+            return ++activeReads === 1 ? Response.json({ machines: [absent] }) : coldRead.promise;
+        });
+        const serverId = 'srv_absence';
+        const execute = createDefaultActionExecutor().execute;
+        const held = await renderHook(() => useManagedMachineInventory([serverId], undefined, execute, true), { flushOptions: { cycles: 30 } });
+        const narrow = await renderHook(() => useManagedMachineInventory([serverId], undefined, execute), { flushOptions: { cycles: 30 } });
+        const observer = await renderHook(() => useAdmittedManagedMachineAbsentEnrolledIds(serverId,
+            held.getCurrent().bindings.get(serverId), execute));
+        try {
+            expect(held.getCurrent().entries[serverId]?.status).toBe('ready');
+            expect(narrow.getCurrent().entries[serverId]?.status).toBe('loading');
+            expect([...observer.getCurrent()]).toEqual(['ghost']);
+            expect(activeReads + archiveReads).toBe(3);
+            coldRead.resolve(Response.json({ machines: [absent] }));
+            await flushHookEffects({ cycles: 30 });
+            expect([...observer.getCurrent()]).toEqual(['ghost']);
+        } finally {
+            coldRead.resolve(Response.json({ machines: [absent] }));
+            await observer.unmount();
+            await narrow.unmount();
+            await held.unmount();
+        }
+    });
     it('keeps a hydrated same-Home inventory ready while its revalidation is in flight', async () => {
         const target = await upsertAndActivateServer({ serverUrl: 'https://managed-inventory-revalidate.test', scope: 'tab' });
         await setServerProfileIdentityForUrl(target.serverUrl, 'srv_inventory_revalidate');

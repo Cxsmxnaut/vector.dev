@@ -15,7 +15,11 @@ import { useServerCredentialAccountScopeBindings } from '@/sync/domains/scope/us
 import type { MachineDisplayRenderable } from '@/sync/domains/machines/machineDisplayRenderable';
 import { readMachineInventoryStatus } from '@/sync/domains/machines/machineInventorySnapshots';
 import { useAllProfileMachineInventorySnapshots } from '@/sync/domains/machines/useMachineInventorySnapshots';
-import { useMachineReachabilityRevision } from '@/sync/domains/machines/reachability/useMachineReachabilityRevision';
+import { useMachinePresenceSnapshot } from '@/sync/domains/machines/reachability/useMachinePresenceSummary';
+import type { ServerMachineInventorySnapshotV1 } from '@/sync/domains/machines/machineInventorySnapshots';
+import { createServerAccountScope } from '@/sync/domains/scope/serverAccountScope';
+import { captureServerProfileScopeResolver } from '@/sync/domains/server/serverProfiles';
+import { resolveFleetMachineAvailability } from './fleetUnion';
 import {
     readLiveMachineInventoryRows,
     resolvePortableMachineAdministrationTarget,
@@ -187,11 +191,36 @@ export type MachineAdministrationTargetSelectionOptions = Readonly<{
 /** Presentation-only canonical Administration rows, without creating a persisted selection. */
 export function useMachineAdministrationTargetPickerRows(): readonly MachineAdministrationTargetPickerRowV1[] {
     const snapshots = useAllProfileMachineInventorySnapshots();
-    const reachabilityRevision = useMachineReachabilityRevision();
-    return React.useMemo(
+    return useMachineAdministrationInventoryRows(snapshots);
+}
+
+/** Inventory owns content; the shared presence owner advances only changed availability facts. */
+function useMachineAdministrationInventoryRows(snapshots: readonly ServerMachineInventorySnapshotV1[]): readonly MachineAdministrationTargetPickerRowV1[] {
+    const rows = React.useMemo(
         () => buildMachineAdministrationCandidateInventoryRowsFromSnapshots({ snapshots }),
-        [reachabilityRevision, snapshots],
+        [snapshots],
     );
+    const targets = React.useMemo(() => snapshots.flatMap(snapshot => snapshot.kind === 'resolved'
+        ? [{ serverId: snapshot.profileId, machineIds: snapshot.machines.map(machine => machine.id) }] : []), [snapshots]);
+    const readMachines = React.useCallback(() => rows.map(row => row.machine), [rows]);
+    const readSnapshot = React.useMemo(() => {
+        const scopes = new Map(snapshots.flatMap(snapshot => snapshot.kind === 'resolved'
+            ? [[snapshot.profileId, createServerAccountScope(snapshot.serverIdentityId, snapshot.accountId)] as const] : []));
+        let current = rows;
+        return (nowMs: number) => {
+            const resolveScopeId = captureServerProfileScopeResolver();
+            let changed = false;
+            const next = current.map(row => {
+                const availability = resolveFleetMachineAvailability(scopes.get(row.serverId), row.machine, nowMs, resolveScopeId);
+                if (availability === row.candidate.availability) return row;
+                changed = true;
+                return Object.freeze({ ...row, candidate: Object.freeze({ ...row.candidate, availability }) });
+            });
+            if (changed) current = Object.freeze(next);
+            return current;
+        };
+    }, [rows, snapshots]);
+    return useMachinePresenceSnapshot(readMachines, readSnapshot, targets);
 }
 
 /**
@@ -204,7 +233,6 @@ export function useMachineAdministrationTargetSelection(
     options: MachineAdministrationTargetSelectionOptions = {},
 ): MachineAdministrationTargetSelectionV1 {
     const enabled = options.enabled !== false;
-    const reachabilityRevision = useMachineReachabilityRevision();
     const explicitSelection = options.explicitSelection ?? 'live';
     const selections = useSetting('machineAdministrationTargetsLocalV1');
     const expectedSettingsScope = useAccountSettingsScope();
@@ -251,10 +279,7 @@ export function useMachineAdministrationTargetSelection(
             && target && areServerProfileIdentifiersEquivalent(value.serverId, target.serverIdentityId));
         return resolveFreshMachineAdministrationExecutionTarget(target, { ...options, accountScope: binding?.scope ?? null });
     }, [bindings]);
-    const pickerRows = React.useMemo(
-        () => buildMachineAdministrationCandidateInventoryRowsFromSnapshots({ snapshots }),
-        [reachabilityRevision, snapshots],
-    );
+    const pickerRows = useMachineAdministrationInventoryRows(snapshots);
     const candidates = React.useMemo(
         () => Object.freeze(pickerRows.map((row) => row.candidate)),
         [pickerRows],
