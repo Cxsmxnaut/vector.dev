@@ -135,9 +135,16 @@ export function resolveCredentialActionAdmissionV1(input: Readonly<{
   surface?: string | null;
   hasExternalCredential?: boolean;
   actionInput?: unknown;
+  /** Host-stamped native Realtime input restriction, never a grant or Action input. */
+  nativeRealtimeInput?: true;
   /** Host-validated current Session question origin; eligibility remains with the receiving question owner. */
   hasSessionQuestionAnswerOrigin?: boolean;
 }>): { ok: true } | { ok: false; errorCode: 'present_user_required' } {
+  if (input.nativeRealtimeInput && (
+    (DECISION_ACTION_IDS as readonly string[]).includes(input.spec.id)
+    || input.spec.id === 'execution.run.permission.respond'
+    || input.spec.id === 'session.permission.remote.respond'
+  )) return { ok: false, errorCode: 'present_user_required' };
   if (input.spec.id === 'session.user_action.answer' && input.hasSessionQuestionAnswerOrigin
     && !input.hasExternalCredential && !input.grant) return { ok: true };
   // Host Agent/MCP decisions reach the shared, user-waivable approval

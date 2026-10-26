@@ -580,6 +580,8 @@ export type SessionPermissionRemoteActionArgs =
     }>;
 
 export type ActionExecutorContext = Readonly<{
+  /** Host-stamped native Realtime input: ordinary Actions only, never approval decisions. Not Action/RPC input. */
+  nativeRealtimeInput?: true;
   /** Host-local live delegation check before a request decision is issued; never Action/RPC input. */
   assertDecisionAuthorityCurrent?: () => void;
   /** Exact dependency census retained from this host's reviewed Delete click; never Action input or execution authority. */
