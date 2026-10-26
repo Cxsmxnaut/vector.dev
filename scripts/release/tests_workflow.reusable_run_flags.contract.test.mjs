@@ -4,20 +4,12 @@ import test from 'node:test';
 
 import YAML from 'yaml';
 
+import { withoutV03GateSkip } from './testsWorkflowTestkit.mjs';
+
 const root = new URL('../../', import.meta.url);
 
 async function readWorkflow(path) {
   return readFile(new URL(path, root), 'utf8');
-}
-
-// The automatic v0.3 Gate replaces the ordinary jobs on v0.3 pushes and PRs;
-// explicit reusable selection keeps each job's own boundary underneath it.
-const V03_GATE_SKIP = "(!(!inputs.select_jobs_explicitly && ((github.event_name == 'push' && github.ref_name == 'v0.3') || (github.event_name == 'pull_request' && github.base_ref == 'v0.3'))))";
-
-function withoutV03GateSkip(expression) {
-  const prefix = `\${{ ${V03_GATE_SKIP} && (`;
-  if (typeof expression !== 'string' || !expression.startsWith(prefix) || !expression.endsWith(') }}')) return expression;
-  return `\${{ ${expression.slice(prefix.length, -') }}'.length)} }}`;
 }
 
 // Evaluates the small `==`/`&&`/`||` GitHub expression grammar the concurrency key uses.
