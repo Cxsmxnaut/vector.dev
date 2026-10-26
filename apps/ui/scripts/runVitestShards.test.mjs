@@ -80,10 +80,10 @@ for (const scenario of [
 }
 
 test('the file-count shard resolver keeps each Vitest process within the file budget', () => {
-  assert.equal(resolveVitestShardCountForFileCount({}, 1_264), 79);
+  assert.equal(resolveVitestShardCountForFileCount({}, 1_264), 10);
   assert.equal(resolveVitestShardCountForFileCount({}, 1), 1);
-  assert.equal(resolveVitestShardCountForFileCount({}, 16), 1);
-  assert.equal(resolveVitestShardCountForFileCount({}, 17), 2);
+  assert.equal(resolveVitestShardCountForFileCount({}, 128), 1);
+  assert.equal(resolveVitestShardCountForFileCount({}, 129), 2);
 });
 
 for (const interruption of ['SIGINT', 'timeout']) {

@@ -746,20 +746,25 @@ import ancestry. `sources/dev/vitestAsyncMockContext.test.ts` in the UI owns the
 real cycle and non-cycle controls; run them when upgrading either dependency
 before removing a patch replaced upstream.
 
-Automatic v0.3 Gate UI partitions use one native Vitest invocation per partition,
-with disjoint native selection rather than repeated 16-file processes. The non-UI
+Automatic v0.3 Gate UI partitions run the UI `test:unit` wrapper with
+`HAPPIER_UI_VITEST_PART`/`HAPPIER_UI_VITEST_PARTS` (eight parts). The wrapper lists the
+suite once, splits it into batches of at most 128 files and gives each part a contiguous
+range of batches. Each batch is one Vitest process whose transform cache serves all of its
+files; the former 16-file batches repeated that cold transform for every batch. The non-UI
 Gate partition runs CLI, Protocol, Server and plugin projects in one Vitest instance,
 retaining package configs and running their non-Vitest checks after that instance closes.
-The Gate supplies its observed core count through the shared worker override;
+The Gate supplies its worker budget through the shared worker override (two workers for
+UI partitions, the observed core count for the non-UI partition);
 without an override, partitions use the same canonical default described above.
 Gate and UI unit entry points project that resolved budget into Vitest's native
 pool environment, so inherited pool variables cannot select a competing budget.
 Explicit UI CLI worker flags, including percentages, retain native Vitest precedence;
 the Gate restores its previous environment before package adjunct checks.
 CLI nightly partitions, integration runs and explicit diagnostic sharding retain
-their existing invocation policies. Unit partitions target at most 20 minutes and have a
-30-minute job deadline including current-run artifact restoration/headroom, not
-shared preparation. The UI wrapper does not impose a separate default watchdog;
+their existing invocation policies. Unit job deadlines are hang guards derived from
+measured complete partitions (270 minutes for UI, 360 for the non-UI partition), not
+performance targets; they include current-run artifact restoration but not shared
+preparation. The UI wrapper does not impose a separate default watchdog;
 an explicit `HAPPIER_UI_VITEST_SHARD_TIMEOUT_MS` remains available for diagnostic runs.
 The existing Gate selector also owns one shared preparation
 job: canonical frozen installation, native preparation and CLI/workspace closure

@@ -30,10 +30,10 @@ describe('apps/ui runVitestShards', () => {
         expect(resolveVitestShardCount({ HAPPIER_UI_VITEST_SHARDS: 'nope' })).toBe(32);
     });
 
-    it('derives enough shards to keep the default file budget at sixteen', () => {
-        expect(resolveVitestShardCountForFileCount({}, 16)).toBe(1);
-        expect(resolveVitestShardCountForFileCount({}, 17)).toBe(2);
-        expect(resolveVitestShardCountForFileCount({}, 5_056)).toBe(316);
+    it('derives enough shards to keep the default file budget at 128', () => {
+        expect(resolveVitestShardCountForFileCount({}, 128)).toBe(1);
+        expect(resolveVitestShardCountForFileCount({}, 129)).toBe(2);
+        expect(resolveVitestShardCountForFileCount({}, 5_056)).toBe(40);
         expect(resolveVitestShardCountForFileCount({ HAPPIER_UI_VITEST_SHARDS: '7' }, 5_056)).toBe(7);
     });
 
