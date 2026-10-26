@@ -22,6 +22,14 @@ describe('shouldRedirectDetailsRouteToPanes', () => {
         })).toBe(false);
     });
 
+    it('returns false for phone device types', () => {
+        expect(shouldRedirectDetailsRouteToPanes({
+            containerWidthPx: 1600,
+            deviceType: 'phone',
+            multiPaneEnabled: true,
+        })).toBe(false);
+    });
+
     it('returns false for narrow viewports', () => {
         expect(shouldRedirectDetailsRouteToPanes({
             containerWidthPx: 800,

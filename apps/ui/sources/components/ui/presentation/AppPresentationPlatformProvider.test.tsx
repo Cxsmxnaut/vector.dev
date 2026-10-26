@@ -1,14 +1,26 @@
 import * as React from 'react';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { act, type ReactTestInstance } from 'react-test-renderer';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { renderScreen } from '@/dev/testkit';
-import { layoutHitArea } from '@/dev/testkit/harness/hitFrameReach';
+import { createLayoutChangeEvent } from '@/dev/testkit/fixtures/nativeEventFixtures';
+import { readHitArea } from '@/dev/testkit/harness/hitFrameReach';
 
 const platformState = vi.hoisted(() => ({
     os: 'ios' as 'android' | 'ios' | 'web',
 }));
+
+// Lays the pressable out at its drawn size (how the shared owner learns the drawn box), then reads the hit area it publishes.
+async function layoutHitArea(read: () => ReactTestInstance | null | undefined, drawn: Readonly<{ width: number; height: number }>) {
+    const before = read();
+    if (!before || typeof before.props.onLayout !== 'function') throw new Error('The control declares no hit area to measure (no onLayout)');
+    await act(async () => { before.props.onLayout(createLayoutChangeEvent({ x: 0, y: 0, ...drawn })); });
+    const after = read();
+    if (!after) throw new Error('The control unmounted while its hit area was measured');
+    return readHitArea(after, drawn);
+}
 
 vi.mock('react-native', async () => {
     const { createReactNativeWebMock } = await import('@/dev/testkit/mocks/reactNative');
