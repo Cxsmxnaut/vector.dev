@@ -48,10 +48,13 @@ describe('explicit CLI personal reviewed Action', () => {
     expect(network.post).not.toHaveBeenCalled();
   });
   it('does not mutate a retired or unauthorized Account scope', async () => {
-    network.get.mockResolvedValue({ status: 200, data: currentness });
+    // An absent record keeps the KV read valid, so only the retired signal can refuse the mutation.
+    network.get.mockImplementation(async (url: string) => url.endsWith('/currentness') ? { status: 200, data: currentness }
+      : { status: 404 });
     const retired = new AbortController(); retired.abort();
     await expect(createCliScmReviewedMarkAction({ credentials: { token: 'token', encryption: null }, serverBaseUrl: 'https://home',
-      resolveAuthorizationHeaders, comparison, changeRefs: ['exact'], reviewed: true, signal: retired.signal })).resolves.toMatchObject({ success: false });
+      resolveAuthorizationHeaders, comparison, changeRefs: ['exact'], reviewed: true, signal: retired.signal }))
+      .resolves.toMatchObject({ success: false, errorCode: 'account_kv_scope_retired' });
     await expect(createCliScmReviewedMarkAction({ credentials: { token: 'token', encryption: null }, serverBaseUrl: 'https://home',
       resolveAuthorizationHeaders: () => null, comparison, changeRefs: ['exact'], reviewed: true })).resolves.toMatchObject({ success: false, errorCode: 'not_authenticated' });
     expect(network.post).not.toHaveBeenCalled();

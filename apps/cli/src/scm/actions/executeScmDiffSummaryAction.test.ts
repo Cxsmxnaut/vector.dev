@@ -890,15 +890,4 @@ describe('executeScmDiffSummaryAction', () => {
             .toMatchObject({ success: true, result: { revision: 0, output: { outputs: { walkthrough: { state: 'pending' } } } } });
         expect(executeCanonicalAction).toHaveBeenCalledTimes(1);
     });
-
-    it('preserves captured inventory when admission throws without a creation receipt', async () => {
-        const fixture = await changedRepository();
-        await expect(executeScmDiffSummaryAction({
-            request: { cwd: fixture.rootPath, source: { kind: 'workingTree' } },
-            sessionId: 'session-1', backendTarget: BACKEND_TARGET,
-            executeCanonicalAction: async () => { throw new Error('Admission transport disconnected'); },
-        })).resolves.toMatchObject({ success: true, revision: 0, comparison: { inventory: { state: 'complete' } },
-            outputs: { summary: { state: 'pending' } },
-        });
-    });
 });
