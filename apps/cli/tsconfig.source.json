@@ -755,7 +755,6 @@
     "src/mcp/bridges/happierMcpStdioBridge.ts",
     "src/mcp/bridges/registerHappierBridgeTools.ts",
     "src/mcp/bridges/remoteMcpStdioBridge.ts",
-    "src/mcp/happierMcpToolCatalog.ts",
     "src/mcp/launchers/stdioMcpServerLauncher.ts",
     "src/mcp/oauth/mcpOAuthSocketRequestAuth.testkit.ts",
     "src/mcp/runtime/runMcpStdioBridgeLifecycle.ts",

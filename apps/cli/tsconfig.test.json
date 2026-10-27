@@ -2607,7 +2607,6 @@
     "src/mcp/createHappierMcpServer.test.ts",
     "src/mcp/createHappierMcpServer.watch.test.ts",
     "src/mcp/createPluginHostedMcpServerHandle.test.ts",
-    "src/mcp/happierMcpToolCatalog.test.ts",
     "src/mcp/hosted/handlers.test.ts",
     "src/mcp/hosted/startPluginHostedMcpLoopbackServer.test.ts",
     "src/mcp/launchers/stdioMcpServerLauncher.test.ts",
