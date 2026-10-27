@@ -464,11 +464,16 @@ export function machineUpdateHandler(
     ) => {
         const parsed = MachineSessionTerminalCaptureRequestV1Schema.safeParse(request);
         const machineId = readAuthenticatedMachineId(socket);
+        const installationId = readVerifiedMachineSocketInstallationIdFromSocketData(socket.data);
         if (!parsed.success) {
             callback?.({ v: 1, status: "rejected", reason: "invalid_request" });
             return;
         }
         try {
+            if (installationId && !await hasCurrentSocketCredential(userId, socket)) {
+                callback?.({ v: 1, status: "rejected", sessionId: parsed.data.sessionId, reason: "unauthorized" });
+                return;
+            }
             if (!machineId || !(await isMachineAvailableForSocket(userId, machineId))) {
                 if (machineId) activityCache.invalidateMachine(machineId);
                 callback?.({
@@ -494,6 +499,7 @@ export function machineUpdateHandler(
                     machineId,
                     sessionId: parsed.data.sessionId,
                 },
+                ...(installationId ? { installedMachineCustody: { installationId } } : {}),
             });
             callback?.(result.status === "captured"
                 ? {
@@ -578,6 +584,7 @@ export function machineUpdateHandler(
     ) => {
         const parsed = MachineSessionTerminalFinalizeRequestV1Schema.safeParse(request);
         const machineId = readAuthenticatedMachineId(socket);
+        const installationId = readVerifiedMachineSocketInstallationIdFromSocketData(socket.data);
         if (!parsed.success) {
             callback?.({ v: 1, status: "rejected", reason: "invalid_request" });
             return;
@@ -601,7 +608,12 @@ export function machineUpdateHandler(
             return;
         }
         try {
+            if (installationId && !await hasCurrentSocketCredential(userId, socket)) {
+                callback?.({ v: 1, status: "rejected", sessionId: parsed.data.sessionId, reason: "unauthorized" });
+                return;
+            }
             const result = await options.sessionPublisherPresence.finalizeMachineSessionTerminal({
+                ...(installationId ? { installedMachineCustody: { installationId } } : {}),
                 target: {
                     binding: {
                         accountId: userId,

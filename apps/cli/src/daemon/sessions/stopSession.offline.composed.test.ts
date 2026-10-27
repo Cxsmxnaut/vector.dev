@@ -144,19 +144,23 @@ describe.skipIf(process.platform !== 'linux')('offline Stop through physical exi
           expect(retired).toBe(true);
         } else if (wiring === 'bound' || wiring === 'missing-owned-host' || wiring === 'mode-only-offline'
             || wiring === 'terminal-started-offline') {
-          expect(result).toEqual({ status: 'stopped' });
-          expect(sessions.size).toBe(0);
+          expect(result.status).toBe('incomplete');
+          // This fixture's zero-budget probe may finish before exit staging.
+          // Join that existing lifecycle before driving connected-edge recovery.
+          await onExit(pid, { reason: 'process-missing', code: null, signal: null });
+          expect(sessions.get(pid)).toBe(tracked);
           expect(await readSessionMarkerForPid(pid)).toMatchObject({ happySessionId: sessionId, processStartTimeMs: identity.processStartTimeMs });
           online = true;
-          const recovery = await reattachTrackedSessionsFromMarkers({ pidToTrackedSession: sessions });
-          expect(recovery.orphanedDeadDaemonSessions).toHaveLength(1);
-          expect(await readOrphanedDeadPlainRunnerMarkers()).toEqual(recovery.orphanedDeadDaemonSessions);
-          const input = { apiMachine: machine, orphanedDeadDaemonSessions: recovery.orphanedDeadDaemonSessions,
+          // Reconnect scans disk independently of retained in-memory custody;
+          // startup reattachment's already-adopted flag is not physical liveness.
+          const orphanedDeadDaemonSessions = await readOrphanedDeadPlainRunnerMarkers();
+          expect(orphanedDeadDaemonSessions).toEqual([{ pid, sessionId, processStartTimeMs: identity.processStartTimeMs }]);
+          const input = { apiMachine: machine, orphanedDeadDaemonSessions,
             retireTerminalControlServiceability: async () => { await retire(); } };
           // Machine finality is reachable before the metadata HTTP path. Its
           // success alone must not erase the remaining retirement obligation.
           get.mockRejectedValueOnce(refusal());
-          expect(await publishOrphanedStartupSessionEnds(input)).toEqual(recovery.orphanedDeadDaemonSessions);
+          expect(await publishOrphanedStartupSessionEnds(input)).toEqual(orphanedDeadDaemonSessions);
           expect(await readSessionMarkerForPid(pid)).not.toBeNull();
           expect(await publishOrphanedStartupSessionEnds(input)).toEqual([]);
           expect(retired).toBe(!modeOnly);

@@ -61,7 +61,7 @@ import type { RequesterSessionRuntimeContext, ResolveRequesterSessionRuntimeCont
 import { activateInactiveUsageLimitResume } from '@/daemon/sessions/activateInactiveUsageLimitResume';
 import { publishOrphanedStartupSessionEnds } from '@/daemon/sessions/publishOrphanedStartupSessionEnds';
 import { readOrphanedDeadPlainRunnerMarkers, type OrphanedDeadDaemonSession } from '@/daemon/sessions/reattachFromMarkers';
-import { retireExactTerminalControlServiceability } from '@/daemon/sessions/retireTerminalControlServiceability';
+import { retireOrphanedTerminalControlServiceability } from '@/daemon/sessions/retireOrphanedTerminalControlServiceability';
 import { runWithServerHttpBaseUrl } from '@/api/client/serverHttpBaseUrl';
 import type { AutomationWorkerHandle } from '../automation/automationWorker';
 import type { MemoryWorkerHandle } from '../memory/memoryWorker';
@@ -2136,18 +2136,15 @@ export async function bootstrapMachineSyncRuntime(
             isSessionAlreadyRunning: params.isSessionAlreadyRunning,
             isShuttingDown: params.isPublicationQuiescing ?? params.isShuttingDown,
             ...(params.credentials ? { retireTerminalControlServiceability: async (marker: OrphanedDeadDaemonSession) => {
-              const context = await params.resolveRequesterSessionRuntimeContext?.(marker.sessionId, marker.requesterWorkAttributionV1);
-              // Attributed work must recover its exact Account; legacy/unattributed markers use this daemon's Account.
-              if (marker.requesterWorkAttributionV1 && !context) throw new Error('requester_session_context_unavailable');
-              try {
-                const publish = () => retireExactTerminalControlServiceability({
-                  credentials: context?.bootstrap.credentials ?? params.credentials!, sessionId: marker.sessionId,
-                  terminalMode: 'plain', expectedRunner: { pid: marker.pid, startTimeMs: marker.processStartTimeMs },
-                  ...(context ? { currentness: { verifyCurrent: () => context.isCurrent() } } : {}) });
-                await (context ? runWithServerHttpBaseUrl(context.bootstrap.serverHttpBaseUrl, publish) : publish());
-              } finally {
-                if (context) await params.releaseRequesterSessionRuntimeContext?.(context);
-              }
+              await retireOrphanedTerminalControlServiceability({ marker, credentials: params.credentials!,
+                serverId: params.requesterServerId ?? configuration.activeServerId,
+                serverHttpBaseUrl: resolveServerHttpBaseUrl(), machineId: params.machineId,
+                encryptionMode: params.machine.encryptionMode ?? 'e2ee',
+                custodianAccountId: normalizeNonEmptyString(params.peerMediationMachineRpc?.accountId)
+                  ?? readAccountIdFromToken(params.credentials!.token),
+                isSessionAlreadyRunning: params.isSessionAlreadyRunning,
+                resolveRequesterSessionRuntimeContext: params.resolveRequesterSessionRuntimeContext,
+                releaseRequesterSessionRuntimeContext: params.releaseRequesterSessionRuntimeContext });
             } } : {}),
           });
           if (params.isShuttingDown()) return;

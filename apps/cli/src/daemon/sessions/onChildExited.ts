@@ -370,6 +370,7 @@ export function createOnChildExited(params: Readonly<{
       }
       const hasServerBackedSession = Boolean(finalSessionId) && isServerBackedSessionId(finalSessionId);
       const actionableUnexpectedExit = shouldReportSessionEnd && isUnexpected && hasServerBackedSession;
+      let finalPublisherPending = false;
       let shouldPreserveMarker = !personRequestedKill && hasServerBackedSession && await shouldPreserveSessionMarkerOnExit?.({
         pid,
         trackedSession: tracked,
@@ -413,6 +414,7 @@ export function createOnChildExited(params: Readonly<{
         })) {
           if (!await readRetainedPlainRunnerExitMarker(tracked)) return;
           shouldPreserveMarker = true;
+          finalPublisherPending = true;
         }
       }
       const stagingStartedAtMs = Date.now();
@@ -532,6 +534,10 @@ export function createOnChildExited(params: Readonly<{
         },
       }).catch((error) => logger.debug('[DAEMON RUN] Failed to write session exit report', error));
       if (!isCurrentPidOwner()) return;
+      // Physical exit is not Home retirement. Keep the existing Stop witness
+      // incomplete until terminal publication settles, while the durable marker
+      // lets connected-edge recovery finish the same obligation.
+      if (finalPublisherPending) return;
       if (isCurrentPidOwner()) {
         pidToTrackedSession.delete(pid);
       }
