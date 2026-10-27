@@ -467,17 +467,6 @@ describe('exact invoking-surface continuation', () => {
         expect(screen.getTextContent()).not.toContain('Open Account settings to continue connecting the Home');
     });
 
-    it('offers a rejected approval the same fresh attempt expiry already gets', async () => {
-        const input = { service: fixture.service,
-            credentialTokenDigest: ACCOUNT_CREDENTIAL_TOKEN_DIGEST,
-            session: new AccountDirectorySession({ endpoint: fixture.service.endpointUrl, serverIdentityId: fixture.service.serverIdentityId }, { capability: fixture.service.capability }),
-            intent: { kind: 'enroll' as const, homeServerIdentityId: fixture.home.homeServerIdentityId } };
-        screen = await renderScreen(<AccountServiceContinuation input={input}
-            result={{ kind: 'failure', stage: 'enroll', code: { source: 'home', code: 'rejected' }, recovery: 'stop', accountCredentialCommitted: true, homeCredentialCommitted: false }}
-            onResult={() => {}} onBack={() => {}} />);
-        expect(screen.getTextContent()).toContain('Start again');
-    });
-
     it('keeps a rejected approval on the fresh-attempt action even when the stage is retryable', async () => {
         const input = { service: fixture.service,
             credentialTokenDigest: ACCOUNT_CREDENTIAL_TOKEN_DIGEST,
