@@ -608,6 +608,16 @@ jobs:
           fi
           yarn -s test:e2e:ui -- "${specs[@]}"
 
+      # Select with ui_e2e_specs=packages/tests/suites/ui-e2e/session.networkTransfer.spec.ts.
+      # Keep every retry's sanitized report on successful and failed calibration runs.
+      - name: Upload Home network transfer measurements
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ui-e2e-network-transfer-shard-${{ matrix.shard }}
+          path: packages/tests/.project/logs/e2e/ui-playwright/**/network-transfer.retry-*.json
+          if-no-files-found: ignore
+
       - name: Upload UI E2E artifacts (Playwright)
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
