@@ -363,6 +363,25 @@ describe('default Action executor mode and catalog contracts', () => {
       body.restore();
     }
   });
+  it.each([true, false])('clears reviewer override %s without a redundant metadata publication', async enabled => {
+    const sessionId = 'reviewer-clear';
+    const read = installSession(sessionId, { flavor: 'codex' }, serverId, 1);
+    const executor = createDefaultActionExecutor();
+    const write = (value: boolean | null) => executor.execute('session.approval_reviewer.set', { sessionId, enabled: value }, context());
+    const metadata = () => {
+      const owner = SessionOwnerMetadataEnvelopeV1Schema.parse(read().ownerMetadata);
+      if (owner.t !== 'plain') throw new Error('Expected plain owner metadata');
+      return projectSessionOwnerCompatibilityViewV1({ sharedMetadata: JSON.parse(read().metadata), ownerMetadata: owner.v });
+    };
+    expect(await write(enabled)).toMatchObject({ ok: true });
+    expect(metadata().approvalReviewerEnabled).toBe(enabled);
+    expect(await write(null)).toMatchObject({ ok: true });
+    expect(metadata()).not.toHaveProperty('approvalReviewerEnabled');
+    const writes = () => homes.requestsFor(`/v2/sessions/${sessionId}`).filter(request => request.input !== null).length;
+    const published = writes();
+    expect(await write(null)).toMatchObject({ ok: true });
+    expect(writes()).toBe(published);
+  });
   it.each(['focus-switch', 'credential-replacement'] as const)(
     'keeps explicit Home metadata authority independent from ambient %s', async change => {
     // Published Homes carry a portable identity, so their Account encryption scopes are comparable.

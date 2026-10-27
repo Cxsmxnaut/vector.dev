@@ -1,4 +1,5 @@
 import type { UsageLimitContinuationResult } from '@/daemon/connectedServices/continuation/continueSessionAfterUsageLimitReset';
+import { writeSessionApprovalReviewerOverrideV1 } from '@happier-dev/protocol/sessions/metadata/sessionMetadataSchemasV1';
 import { LocalServiceInventoryCountResponseV1Schema } from '@happier-dev/protocol/local/services/inventory/v1';
 import type { readLatestUsageLimitFailureIssue } from '@/session/usageLimitRecoveryControls/readLatestUsageLimitFailureIssue';
 import type { readCurrentRunnerAgentStartPolicyV1 } from '@/agent/runtime/session/process/agentRuntimeDaemonServiceAuthorityClient';
@@ -8537,7 +8538,7 @@ export function createCliActionDeps(params: Readonly<{
       const mutate = () => updateSessionMetadataForTarget({
         credentials, idOrPrefix: sessionId,
         resolveAuthorizationHeaders: (request) => resolveServerRequestHeaders(context, 'session.approval_reviewer.set', request),
-        updater: (metadata) => ({ ...metadata, approvalReviewerEnabled: enabled }),
+        updater: (metadata) => writeSessionApprovalReviewerOverrideV1(metadata, enabled),
       });
       const result = await (params.serverHttpBaseUrl ? runWithServerHttpBaseUrl(params.serverHttpBaseUrl, mutate) : mutate());
       return result.ok ? { updated: true } : { ok: false, errorCode: result.code, error: result.code };

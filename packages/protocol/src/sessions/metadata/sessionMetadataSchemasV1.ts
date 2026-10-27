@@ -2698,6 +2698,20 @@ export function createSessionOwnerMetadataV1(params: Readonly<{
   };
 }
 
+/** Null clears the Session choice; absence preserves the permission owner's Account-default fallback. */
+export function writeSessionApprovalReviewerOverrideV1<T extends Record<string, unknown>>(
+  metadata: T,
+  enabled: boolean | null,
+): T {
+  if (enabled !== null) {
+    return metadata.approvalReviewerEnabled === enabled ? metadata : { ...metadata, approvalReviewerEnabled: enabled };
+  }
+  if (!Object.prototype.hasOwnProperty.call(metadata, 'approvalReviewerEnabled')) return metadata;
+  const next = { ...metadata };
+  delete next.approvalReviewerEnabled;
+  return next;
+}
+
 export function createPlainSessionOwnerMetadataEnvelopeV1(
   ownerMetadata: SessionOwnerMetadataV1,
 ): SessionOwnerMetadataEnvelopeV1 {
