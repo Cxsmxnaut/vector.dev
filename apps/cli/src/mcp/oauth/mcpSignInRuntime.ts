@@ -128,9 +128,7 @@ async function saveTokens(store: HostConnectedAccountAuthenticationContext['atte
     return scopes;
 }
 
-export function createMcpSignInRuntime(params: Readonly<{ fetchFn?: FetchLike; now?: () => number }> = {}): HostConnectedAccountRuntime {
-    const fetchFn = params.fetchFn ?? fetch;
-    const now = params.now ?? Date.now;
+export function createMcpSignInRuntime(): HostConnectedAccountRuntime {
     function transport(signal: AbortSignal) {
         let lastStatus: number | undefined;
         let issRequired = false;
@@ -141,7 +139,7 @@ export function createMcpSignInRuntime(params: Readonly<{ fetchFn?: FetchLike; n
             requireHttpsEndpoint(url);
             // Prevent a 307/308 from forwarding authorization codes, verifiers,
             // refresh tokens or DCR secrets to another endpoint.
-            const response = await fetchFn(url, { ...init, signal, redirect: 'error' });
+            const response = await fetch(url, { ...init, signal, redirect: 'error' });
             lastStatus = response.status;
             if (readMetadata && response.ok && (!init?.method || init.method === 'GET')) {
                 const raw: unknown = await response.clone().json().catch(() => null);
@@ -273,7 +271,7 @@ export function createMcpSignInRuntime(params: Readonly<{ fetchFn?: FetchLike; n
                     const tokens = await exchangeAuthorization(sealed.issuer, { metadata: metadata(sealed.issuer, sealed.registration),
                         clientInformation: client(sealed.registration, sealed.clientSecret), authorizationCode: input.code,
                         codeVerifier: input.pkceVerifier, redirectUri: input.callbackUrl, resource: resourceUrl(sealed.resource), fetchFn: network.send });
-                    const scopes = await saveTokens(context.attemptCredentials, tokens, now(), sealed.scopes);
+                    const scopes = await saveTokens(context.attemptCredentials, tokens, Date.now(), sealed.scopes);
                     await context.attemptCredentials.delete(completionKey);
                     return { status: 'connected', accountId: sealed.serverId, displayName: sealed.serverId, scopes };
                 } catch (cause) {
@@ -297,7 +295,7 @@ export function createMcpSignInRuntime(params: Readonly<{ fetchFn?: FetchLike; n
                 const tokens = await refreshAuthorization(issuer, { metadata: metadata(issuer, registration),
                     clientInformation: client(registration, clientSecret), refreshToken, resource: resourceUrl(configuration.resource), fetchFn: network.send });
                 const previousScopes = await context.credentials.get('scopes');
-                const scopes = await saveTokens(context.stagedCredentials, tokens, now(), previousScopes ? z.array(z.string()).parse(JSON.parse(previousScopes)) : []);
+                const scopes = await saveTokens(context.stagedCredentials, tokens, Date.now(), previousScopes ? z.array(z.string()).parse(JSON.parse(previousScopes)) : []);
                 return { status: 'connected', scopes };
             } catch (cause) {
                 context.signal.throwIfAborted();
@@ -332,7 +330,7 @@ export function createMcpSignInRuntime(params: Readonly<{ fetchFn?: FetchLike; n
             const accessToken = await context.credentials.get('accessToken');
             const expiresAt = await context.credentials.get('expiresAtMs');
             if (!accessToken) return { status: 'reconnectRequired' };
-            if (expiresAt !== null && Number(expiresAt) <= now()) {
+            if (expiresAt !== null && Number(expiresAt) <= Date.now()) {
                 return { status: await context.credentials.get('refreshToken') ? 'expired' : 'reconnectRequired' };
             }
             return { status: 'connected' };
