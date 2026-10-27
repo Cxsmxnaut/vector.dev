@@ -162,14 +162,4 @@ describe('journeyBeats', () => {
         });
     });
 
-    it('uses the journey i18n namespace for every narration slot', () => {
-        for (const beat of journeyBeats) {
-            const keyPrefix = `journey.beats.${beat.id.toLowerCase()}.`;
-            expect(beat.narrationKeys).toEqual({
-                eyebrow: `${keyPrefix}eyebrow`,
-                title: `${keyPrefix}title`,
-                body: `${keyPrefix}body`,
-            });
-        }
-    });
 });

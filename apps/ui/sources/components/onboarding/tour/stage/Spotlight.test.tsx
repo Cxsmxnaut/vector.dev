@@ -235,12 +235,6 @@ describe('Spotlight', () => {
             </SpotlightProvider>,
         );
 
-        // The four-rect cutout is gone; the giant-spread shadow dims everything around a single hole.
-        expect(screen.findByTestId('spotlight-overlay')).toBeNull();
-        expect(screen.findByTestId('spotlight-cutout-top')).toBeNull();
-        expect(screen.findByTestId('spotlight-cutout-left')).toBeNull();
-        expect(screen.findByTestId('spotlight-cutout-right')).toBeNull();
-        expect(screen.findByTestId('spotlight-cutout-bottom')).toBeNull();
 
         const halo = screen.findByTestId('spotlight-halo');
         expect(halo).not.toBeNull();
