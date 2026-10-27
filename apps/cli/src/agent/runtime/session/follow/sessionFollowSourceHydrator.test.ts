@@ -391,7 +391,7 @@ describe('Session Follow source hydrator', () => {
         delivery: SessionFollowInputV1Schema.parse({ v: 1, delivery: 'next_turn', event: { kind: 'update_posted' },
           original: { sourceSessionId: 'source', sourceMessage: { localId: 'report-original', seq: 2 } } }) },
     });
-    expect(envelope?.workerUpdate).toMatchObject({ ownerState: 'published', result: 'Report 2',
+    expect(envelope?.workerUpdate).toMatchObject({ ownerState: 'published', headline: 'Published an update', result: 'Report 2',
       deliverables: [{ kind: 'workspace_file', sessionId: 'source', path: 'report-2.md' }],
       transcriptPointer: { kind: 'session', sessionId: 'source', seq: 2 } });
     expect(envelope?.observed).toMatchObject({ transcriptSeq: 2, turn: null });

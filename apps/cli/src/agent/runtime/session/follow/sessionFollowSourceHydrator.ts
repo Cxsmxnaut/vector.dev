@@ -26,7 +26,7 @@ import { parseSessionMessageAccountActorV1 } from '@happier-dev/protocol/session
 import { readSessionMessageProvenanceV1, SessionInputAdmissionResultV1Schema } from '@happier-dev/protocol/sessions/messages/sessionInputAdmission';
 import { SessionStoredMessageContentSchema } from '@happier-dev/protocol/sessions/messages/sessionStoredMessageContent';
 import { TranscriptRawAgentEventV1Schema } from '@happier-dev/protocol/sessions/messages/transcriptRawRecordV1';
-import { classifyWorkerUpdateEventV1, resolveWorkerUpdateWakeV1, WorkerUpdateV1Schema, workerDeliverablesBelongToSessionV1 } from '@happier-dev/protocol/sessions/relations/workerUpdateV1';
+import { classifyWorkerUpdateEventV1, composeSessionWorkerUpdateHeadlineV1, resolveWorkerUpdateWakeV1, WorkerUpdateV1Schema, workerDeliverablesBelongToSessionV1 } from '@happier-dev/protocol/sessions/relations/workerUpdateV1';
 import { SessionRuntimeIssueV1Schema } from '@happier-dev/protocol/sessions/control/runtimeIssueV1';
 import { getActionSpec } from '@happier-dev/protocol/actions/actionSpecs';
 import { createStoredReadSchema } from '@happier-dev/protocol/json/storedReadSchema';
@@ -698,10 +698,11 @@ export function createSessionFollowSourceHydrator(input: Readonly<{
         const repeatedFinalText = workerText && lastOutgoingSend?.accepted
           && lastOutgoingSend.target === observation.destinationSessionId && lastOutgoingSend.message.includes(workerText.text);
         const result = publishedReport ?? (repeatedFinalText ? null : workerText);
-        const headline = `${awareness.title ?? observation.sourceSessionId} · ${ownerState}`;
+        const wake = resolveWorkerUpdateWakeV1(event);
+        const headline = composeSessionWorkerUpdateHeadlineV1({ ownerState, wake });
         return WorkerUpdateV1Schema.parse({
           v: 1, workerKind: 'session', workerId: observation.sourceSessionId, ownerState,
-          wake: resolveWorkerUpdateWakeV1(event),
+          wake,
           ...(issue?.success ? { runtimeIssueV1: issue.data } : {}),
           headline, ...(result ? { result: result.text.slice(0, 8000) } : {}),
           ...(publishedReport?.deliverables ? { deliverables: publishedReport.deliverables } : {}),
