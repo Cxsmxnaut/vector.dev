@@ -61,7 +61,9 @@ describe('CommandMenuSurface', () => {
         expect(capturedPopoverProps.current?.portal).toBe(MODAL_AWARE_FLOATING_POPOVER_PORTAL_OPTIONS);
     });
 
-    it('forwards the keyboard inset, backdrop and outside-press overrides to Popover', async () => {
+    it('forwards the boundary, keyboard inset, backdrop and outside-press overrides to Popover', async () => {
+        // An explicit boundary (the composer passes null on web) overrides Popover's context boundary; a dropped prop falls back to it.
+        const boundaryRef = React.createRef<View>();
         const backdrop = {
             style: { backgroundColor: 'transparent' },
             blockOutsidePointerEvents: 'above-anchor' as const,
@@ -71,6 +73,7 @@ describe('CommandMenuSurface', () => {
             <CommandMenuSurface
                 open
                 anchor={RECT_ANCHOR}
+                boundaryRef={boundaryRef}
                 keyboardBottomInset={320}
                 backdrop={backdrop}
                 consumeOutsidePointerDown={false}
@@ -81,6 +84,7 @@ describe('CommandMenuSurface', () => {
             </CommandMenuSurface>,
         );
 
+        expect(capturedPopoverProps.current?.boundaryRef).toBe(boundaryRef);
         expect(capturedPopoverProps.current?.keyboardBottomInset).toBe(320);
         expect(capturedPopoverProps.current?.backdrop).toBe(backdrop);
         expect(capturedPopoverProps.current?.consumeOutsidePointerDown).toBe(false);
