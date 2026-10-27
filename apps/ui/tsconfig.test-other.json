@@ -2813,7 +2813,6 @@
     "sources/utils/runtime/ensureGlobalBuffer.test.ts",
     "sources/utils/runtime/isRuntimeActive.test.ts",
     "sources/utils/runtime/useHostActivelyViewed.test.tsx",
-    "sources/utils/secrets/normalizeSecretInput.test.ts",
     "sources/utils/secrets/normalizeSecretStringPromptInput.test.ts",
     "sources/utils/secrets/secretRequirementApply.test.ts",
     "sources/utils/secrets/secretRequirementPromptEligibility.test.ts",
