@@ -3692,7 +3692,6 @@
     "sources/utils/system/remoteLogger.ts",
     "sources/utils/system/requestReview.ts",
     "sources/utils/system/restartBugReportIntent.ts",
-    "sources/utils/system/systemUtilityTestHelpers.ts",
     "sources/utils/url/installTauriExternalLinkClicks.ts",
     "sources/utils/url/urlSafety.ts",
     "sources/utils/web/faviconGenerator.ts",
