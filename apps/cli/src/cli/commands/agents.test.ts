@@ -269,6 +269,23 @@ describe('happier agents --json', () => {
     }
   });
 
+  it('plans an admitted Agent install locally for agents install --dry-run', async () => {
+    const output = captureConsoleLogAndMuteStdout();
+    try {
+      await handleAgentsCommand(['install', 'acme.providers.list', '--dry-run', '--json']);
+      const parsed = JSON.parse(output.logs.join('\n').trim());
+      expect(parsed.ok).toBe(true);
+      expect(parsed.kind).toBe('agents_install');
+      expect(parsed.data.agentId).toBe('acme.providers.list');
+      expect(parsed.data.plan).toEqual(expect.objectContaining({
+        agentId: 'acme.providers.list',
+        installMode: 'managed_package',
+      }));
+    } finally {
+      output.restore();
+    }
+  });
+
   it('prints a typed agents_install JSON error for unknown agent ids', async () => {
     const output = captureConsoleLogAndMuteStdout();
     try {
