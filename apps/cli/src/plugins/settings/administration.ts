@@ -438,7 +438,7 @@ function effectiveAccountFieldValue(
 }
 
 /** Projects one atomic Account snapshot into the generic administration view. */
-export function projectAccountSettingsAdministrationSnapshot(params: Readonly<{
+function projectAccountSettingsAdministrationSnapshot(params: Readonly<{
   descriptors: readonly PluginSettingDescriptor[];
   hiddenFieldIds: ReadonlySet<string>;
   snapshot: SettingsSnapshot;
