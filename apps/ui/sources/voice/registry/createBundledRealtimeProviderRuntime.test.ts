@@ -2931,6 +2931,8 @@ describe('createBundledRealtimeProviderRuntime', () => {
       projectTranscript.mockClear();
       log.clear();
       releaseAudioMode.mockClear();
+      // Disposal joins the drain even when the fallible native audio release rejects.
+      rejectAudioModeRelease = true;
       releaseDirectMediaConversation.mockClear();
       onStopped.mockClear();
       controllerStop.mockClear();
@@ -3024,6 +3026,9 @@ describe('createBundledRealtimeProviderRuntime', () => {
         duplicateStoppingDuringDisposal,
       ]);
       expect(onStopped).toHaveBeenCalledTimes(1);
+      // The disposal phase really ran with a rejecting native audio release.
+      await expect(releaseAudioMode.mock.results[0]!.value).rejects.toThrow('audio_mode_release_failed');
+      rejectAudioModeRelease = false;
     } finally {
       pendingCarrierRebind?.resolve();
       releaseReboundCarrier.resolve();
