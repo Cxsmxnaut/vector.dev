@@ -316,6 +316,10 @@ export function createMachineRpcTerminalStreamCarrier(
                 controlCursorTerminalId = request.terminalId;
                 controlCursor = 0;
             }
+            // A zero-credit control read leaves maxBytes absent: the byte RPC
+            // admits positive page sizes only, with credit separately pausing bytes.
+            const maxBytes = request.maxBytes ?? (request.creditBytes !== undefined && request.creditBytes > 0
+                ? request.creditBytes : undefined);
             const readBytes = (includeControlCursor: boolean) => readMachineBytes(
                 {
                     terminalId: request.terminalId,
@@ -323,7 +327,9 @@ export function createMachineRpcTerminalStreamCarrier(
                     ...(includeControlCursor ? { controlCursor } : {}),
                     ...(request.ackedByteOffset === undefined ? {} : { ackedByteOffset: request.ackedByteOffset }),
                     ...(request.creditBytes === undefined ? {} : { creditBytes: request.creditBytes }),
-                    ...(request.maxBytes === undefined ? {} : { maxBytes: request.maxBytes }),
+                    // Byte replay uses the admitted credit window instead of the
+                    // daemon's smaller default write chunk. Legacy keeps its own defaults.
+                    ...(maxBytes === undefined ? {} : { maxBytes }),
                     ...(request.maxFrames === undefined ? {} : { maxFrames: request.maxFrames }),
                     ...(request.rendererId === undefined ? {} : { rendererId: request.rendererId }),
                     ...(request.surfaceEpoch === undefined ? {} : { surfaceEpoch: request.surfaceEpoch }),

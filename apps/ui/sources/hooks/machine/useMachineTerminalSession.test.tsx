@@ -6,7 +6,7 @@ import { MACHINE_PLAIN_DATA_KEY_MARKER } from '@happier-dev/protocol/machines/ma
 
 import { createDeferred, createMachineFixture, flushHookEffects, renderHook, renderScreen, standardCleanup } from '@/dev/testkit';
 import { ActionOperationSnapshotV1Schema } from '@happier-dev/protocol/actions/operations/v1';
-import { TerminalStreamReadResponseSchema } from '@happier-dev/protocol/terminal/stream';
+import { TerminalStreamReadResponseSchema, TERMINAL_STREAM_MAX_READ_BYTES, TERMINAL_STREAM_MAX_FRAME_DECODED_BYTES } from '@happier-dev/protocol/terminal/stream';
 import { createRpcCallError } from '@happier-dev/protocol/rpcErrors';
 import { RPC_ERROR_CODES } from '@happier-dev/protocol/rpc';
 import { isRecoverableTerminalRpcError, resolveTerminalAutoRetryDelayMs, TERMINAL_AUTO_RETRY_MAX_ATTEMPTS } from '@/components/sessions/terminal/terminalRpcRecovery';
@@ -397,6 +397,51 @@ describe('useMachineTerminalSession', () => {
         expect(terminalOps.ensure).not.toHaveBeenCalled();
         expect(terminalOps.restart).not.toHaveBeenCalled();
         expect(terminalOps.close).not.toHaveBeenCalled();
+    });
+
+    it('drains a retained flood through its tail using the admitted read budget', async () => {
+        const terminalId = 'retained-flood';
+        const terminalKey = 'retained-flood-budget';
+        const output = Buffer.from(Array.from({ length: 24_000 }, (_, i) => `trace ${i + 1}: ${'output '.repeat(16)}\r\n`).join('') + 'flood done\r\n');
+        const retainedFrom = output.length - TERMINAL_STREAM_MAX_READ_BYTES;
+        terminalOps.streamReadBytes.mockImplementation((_machineId: string, request: { byteOffset: number; maxBytes?: number }) => {
+            const start = Math.max(retainedFrom, request.byteOffset);
+            const end = Math.min(output.length, start + (request.maxBytes ?? 16_384));
+            const frames = [];
+            if (request.byteOffset < retainedFrom) frames.push({ t: 'gap', terminalId,
+                droppedBeforeByteOffset: retainedFrom, nextAvailableByteOffset: retainedFrom, reason: 'ring_overflow' });
+            for (let offset = start; offset < end; offset += TERMINAL_STREAM_MAX_FRAME_DECODED_BYTES) {
+                const bytes = output.subarray(offset, Math.min(end, offset + TERMINAL_STREAM_MAX_FRAME_DECODED_BYTES));
+                frames.push({ t: 'bytes', terminalId, seq: offset, byteOffset: offset, byteLength: bytes.length,
+                    encoding: 'base64', data: bytes.toString('base64') });
+            }
+            if (end === output.length) frames.push({ t: 'exit', terminalId, byteOffset: end, exitCode: 0, signal: null });
+            return TerminalStreamReadResponseSchema.parse({ ok: true, terminalId, frames, nextByteOffset: end,
+                availableByteOffset: output.length, droppedBeforeByteOffset: retainedFrom, done: end === output.length });
+        });
+        let rendered = '';
+        const terminalRef = { current: { write: (text: string) => { rendered += text; },
+            writeBytes: (input: EmbeddedTerminalWriteBytesInput) => { rendered += new TextDecoder().decode(input.bytes); return true; },
+            clear: () => { rendered = ''; } } };
+        const { useMachineTerminalSession } = await import('./useMachineTerminalSession');
+        const hook = await renderHook(() => useMachineTerminalSession({ machineId: 'machine', serverId: homeIds.primary,
+            cwd: '/repo', terminalKey, terminalRef, attachedTerminalId: terminalId, readOnly: true }));
+        await flushHookEffects({ cycles: 4, turns: 2, runOnlyPendingTimers: true });
+        expect(rendered.endsWith('flood done\r\n')).toBe(true);
+        expect(readTerminalSurfaceState(terminalKey)).toMatchObject({ cursor: output.length,
+            output: expect.stringMatching(/flood done\r\n$/) });
+        expect(hook.getCurrent()).toMatchObject({ status: 'exited', outputRetention: {
+            retainedFromCursor: retainedFrom, availableCursor: output.length, truncated: true } });
+        // One admitted window, one physical output read; renderer-credit reads are separate.
+        expect(terminalOps.streamReadBytes).toHaveBeenCalledTimes(1);
+        await hook.unmount();
+        // Pausing byte credit must still admit a control-only read through the
+        // real Action and strict request schema (maxBytes itself cannot be zero).
+        const { createMachineRpcTerminalStreamCarrier } = await import('@/sync/domains/terminal/stream/carrier');
+        const carrier = createMachineRpcTerminalStreamCarrier({ machineId: 'machine', serverId: homeIds.primary,
+            accountId: 'terminal-account' });
+        await expect(carrier.read({ terminalId, cursor: { mode: 'byte-offset', value: output.length }, creditBytes: 0 }))
+            .resolves.toMatchObject({ ok: true, nextCursor: output.length, done: true });
     });
 
     it('finishes retained replay only after the current renderer acknowledges its final bytes', async () => {
