@@ -7,8 +7,6 @@ import { createVitest } from 'vitest/node';
 
 import unitConfig from '../../vitest.config';
 import integrationConfig from '../../vitest.integration.config';
-import g3ComposedConfig from '../../vitest.g3-composed.config';
-import providersTempConfig from '../../vitest.providers.temp.config';
 import slowConfig from '../../vitest.slow.config';
 import { workspacePackageSourcesPlugin } from '../vitestWorkspacePackageResolution';
 import { resolveVitestWorkers } from '../../../../scripts/testing/vitestWorkers';
@@ -27,8 +25,6 @@ describe('Vitest lane separation', () => {
                 [unitConfig, 'src/example.test.ts'],
                 [integrationConfig, 'src/example.integration.test.ts'],
                 [slowConfig, 'src/example.slow.test.ts'],
-                [g3ComposedConfig, 'src/example.test.ts'],
-                [providersTempConfig, 'src/example.test.ts'],
             ] as const) {
                 // Vitest includes dotfiles; Node's globSync does not and would
                 // conceal the metadata discovery defect this contract guards.
@@ -189,8 +185,6 @@ describe('Vitest lane separation', () => {
         for (const config of [
             unitConfig,
             integrationConfig,
-            g3ComposedConfig,
-            providersTempConfig,
         ]) {
             const aliases = config.resolve?.alias;
             expect(Array.isArray(aliases)).toBe(true);
