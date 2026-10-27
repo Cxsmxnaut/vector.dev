@@ -25,6 +25,7 @@ import type { PersonalFollowOccurrenceDispatch, PersonalFollowOccurrenceDispatch
 import type { SessionActivityChangedResult } from '@/daemon/sessions/sessionActivityChangedContract';
 import { createAccountSessionFollowRuleCache } from './accountSessionFollowRuleCache';
 import { logger } from '@/ui/logger';
+import { SESSION_FOLLOW_INFORMATION_NOTICE } from './sessionFollowNotice';
 import { readCommittedSessionFollowSourceOccurrence, type SessionFollowAccountOccurrence } from './sessionFollowRuleSourceEvidence';
 import { resolveSessionTransportContext } from '@/session/services/resolveSessionTransportContext';
 import { fetchEncryptedTranscriptMessagesPage } from '@/session/replay/fetchEncryptedTranscriptMessages';
@@ -194,7 +195,7 @@ export function createSessionFollowOccurrenceDispatcher(input: Readonly<{
       await runWithServerHttpBaseUrl(input.serverHttpBaseUrl, () => sendSessionMessage({ credentials: input.credentials,
         idOrPrefix: route.destinationSessionId, wait: false,
         localId: deriveSessionFollowInputLocalIdV1({ destinationSessionId: route.destinationSessionId, original: delivery.original }),
-        timeoutMs: resolveSessionMessageAdmissionTimeoutMs(), message: `Followed Run ${occurrence.event.kind}: ${JSON.stringify(source)}. Use the delivered context. Inspect the source only through an independently authorized read; following grants no access.`,
+        timeoutMs: resolveSessionMessageAdmissionTimeoutMs(), message: `Followed Run ${occurrence.event.kind}: ${JSON.stringify(source)}. ${SESSION_FOLLOW_INFORMATION_NOTICE}`,
         inputAdmission: { provenance: admission.provenance,
           request: SessionInputRequestV1Schema.parse({ ...admission.request, followDeliveryV1: delivery }) },
         followRelations: SessionFollowRelationWitnessesV1Schema.parse([relation]), informationDelivery: 'session_follow', executionAuthority: 'account_automation',
@@ -483,7 +484,7 @@ export function createSessionFollowOccurrenceDispatcher(input: Readonly<{
           const result = await runWithServerHttpBaseUrl(input.serverHttpBaseUrl, async () => await sendSessionMessage({
             credentials: input.credentials, idOrPrefix: destinationSessionId, wait: false,
             localId: deriveSessionFollowInputLocalIdV1({ destinationSessionId, original: delivery.original }),
-            timeoutMs: resolveSessionMessageAdmissionTimeoutMs(), message: 'Followed source changed. Use the delivered context. Inspect the source only through an independently authorized read; following grants no access.',
+            timeoutMs: resolveSessionMessageAdmissionTimeoutMs(), message: `Followed source changed. ${SESSION_FOLLOW_INFORMATION_NOTICE}`,
             inputAdmission: { provenance: admission.provenance, request: SessionInputRequestV1Schema.parse({ ...admission.request, followDeliveryV1: delivery }) },
             ...(candidate.witnesses.length ? { followSources: candidate.witnesses } : {}),
             ...(candidate.relations.length ? { followRelations: candidate.relations } : {}),
