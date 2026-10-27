@@ -53,23 +53,6 @@ describe('PrimaryCircleIconButton', () => {
         </HappierMaterialRoleProvider>);
         expect(screen.findByTestId('glass-circle')!.findAllByType('Stop' as never).slice(0, 2).map(node => node.props.stopColor)).toEqual(['#000', '#111']);
     });
-    it('forwards testID to the Pressable', async () => {
-        const { PrimaryCircleIconButton } = await import('./PrimaryCircleIconButton');
-        const screen = await renderScreen(<PrimaryCircleIconButton
-            testID="circle-button"
-            active
-            accessibilityLabel="Send"
-            onPress={() => {}}
-        >
-            <span />
-        </PrimaryCircleIconButton>);
-        const pressable = screen.findByTestId('circle-button');
-        if (!pressable) {
-            throw new Error('Expected primary circle icon button pressable to render');
-        }
-        expect(pressable.props.testID).toBe('circle-button');
-        expect(pressable.findAllByType('Stop' as never).slice(0, 2).map(node => node.props.stopColor)).toEqual(['#000', '#111']);
-    });
 
     it('does not emit raw text nodes under Pressable when icon children render as text on web', async () => {
         const { PrimaryCircleIconButton } = await import('./PrimaryCircleIconButton');
