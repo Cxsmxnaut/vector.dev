@@ -3298,7 +3298,6 @@
     "tools/i18n/validateTranslationMap.test.ts",
     "tools/migrations/inlineMockClassifier.test.ts",
     "tools/migrations/mockFamilyRewriter.test.ts",
-    "tools/migrations/rendererCreateRewriter.test.ts",
     "tools/migrations/rewrite-flush-hook-effects.test.ts",
     "tools/migrations/rewrite-inline-mock-families.test.ts",
     "tools/migrations/rewrite-render-screen-tree-walks.test.ts",

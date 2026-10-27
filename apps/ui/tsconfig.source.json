@@ -3842,7 +3842,6 @@
     "tools/migrations/__fixtures__/pickerThemeHarness.ts",
     "tools/migrations/inlineMockClassifier.ts",
     "tools/migrations/mockFamilyRewriter.ts",
-    "tools/migrations/rendererCreateRewriter.ts",
     "tools/migrations/rewrite-flush-hook-effects.ts",
     "tools/migrations/rewrite-imports.ts",
     "tools/migrations/rewrite-inline-mock-families.ts",
