@@ -111,6 +111,9 @@ export function describeProjectAgentGuidance(
       : []),
     ...(guidance.scripts === null ? [t('projectWorkers.guideUnavailable'), t('common.retry')]
       : scripts.length === 0 ? [t('projectWorkers.guideNoScripts')] : []),
+    ...((guidance.services?.length ?? 0) > 0
+      ? [`${t('projects.pages.services')}: ${guidance.services!.map(service => service.name).join(', ')}`]
+      : []),
     ...scriptTargetLines,
     ...targetLines,
     '',

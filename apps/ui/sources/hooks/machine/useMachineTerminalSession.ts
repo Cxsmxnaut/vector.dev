@@ -230,6 +230,8 @@ export function useMachineTerminalSession(params: Readonly<{
     }, [clearActiveTerminalStream, scheduleAutoRetry]);
     const {
         detectedUrl,
+        outputRetention,
+        syncOutputRetention,
         clearTerminalOutput,
         hydrateTerminalRendererIfNeeded,
         replaceSurfaceState,
@@ -542,6 +544,8 @@ export function useMachineTerminalSession(params: Readonly<{
                 replayMode,
             });
             terminalIdRef.current = ensured.terminalId;
+            syncOutputRetention(ensured.terminalId, cachedSurfaceState.terminalId === ensured.terminalId
+                ? cachedSurfaceState.outputRetention ?? null : null);
             cursorRef.current = replayPlan.initialCursor.value;
             cursorModeRef.current = replayPlan.initialCursor.mode;
             replaceCachedPreviewOnReplayRef.current = replayPlan.replacePreviewOnReplay;
@@ -697,6 +701,7 @@ export function useMachineTerminalSession(params: Readonly<{
                 // A successful ensure does not prove that its stream can be
                 // read. Reset recovery only after transport actually recovers.
                 if (autoRetryAttemptRef.current > 0) resetAutoRetryState();
+                syncOutputRetention(terminalId, read.outputRetention ?? null);
 
                 if (read.mode === 'legacy-event-cursor') {
                     terminalCreditStateRef.current = null;
@@ -865,6 +870,7 @@ export function useMachineTerminalSession(params: Readonly<{
         replaceCachedPreviewWithReplay,
         resetAutoRetryState,
         scheduleAutoRetry,
+        syncOutputRetention,
         setDetectedUrl,
         syncDetectedUrl,
         updateSurfaceState,
@@ -1029,6 +1035,10 @@ export function useMachineTerminalSession(params: Readonly<{
         error,
         exitCode,
         exitSignal,
+        outputRetention: admission.lifetime?.isCurrent()
+            && areServerAccountScopesEqual(attachmentScopeRef.current, admission.lifetime.scope)
+            && (!params.readOnly || params.attachedTerminalId === terminalIdRef.current)
+            && outputRetention?.terminalId === terminalIdRef.current ? outputRetention.value : null,
         connectionLost: status === 'error' && everConnectedRef.current,
         detectedUrl,
         onInput,

@@ -77,6 +77,8 @@ export type ProjectSetupReviewPresentation = Readonly<{
         headCommit?: string;
         branch?: string;
         fileState: 'modified' | 'untracked' | 'unknown' | 'absent';
+        /** Additive display evidence; legacy fileState readers remain valid. Never consent. */
+        committed?: Readonly<{ commit: string }>;
     }>;
 }>;
 
@@ -153,16 +155,34 @@ function associationMatches(input: ProjectSetupPreparationInput): boolean {
             .every(field => workspace.data[field] === associated.data[field]);
 }
 
-async function readReviewProvenance(input: ProjectSetupPreparationInput, root: string, manifestPresent: boolean): Promise<ProjectSetupReviewPresentation['provenance']> {
+async function readReviewProvenance(input: ProjectSetupPreparationInput, root: string, basis: ProjectManifestFileSnapshot['basis']): Promise<ProjectSetupReviewPresentation['provenance']> {
+    const manifestPresent = basis.kind === 'present';
     const base = { file: '.happier/project.json' as const, fileState: manifestPresent ? 'unknown' as const : 'absent' as const };
     try {
         return await runWithScmBackendRegistryLease(input.scmRegistry, async (registry): Promise<ProjectSetupReviewPresentation['provenance']> => {
             // No installed detector has observed the path; absence of a catalog is not non-repository evidence.
             if (registry.listBackends().length === 0) return { ...base, kind: 'unavailable' };
+            let committedAt: string | undefined;
             const response = await runScmRoute<{ cwd: string }, ScmStatusSnapshotResponse>({
                 request: { cwd: root }, workingDirectory: root, registry, signal: input.signal,
                 onNonRepository: ({ cwd, workingDirectory }) => createNonRepositoryScmSnapshotResponse({ cwd, workingDirectory }),
-                runWithBackend: ({ context, selection }) => selection.backend.statusSnapshot({ context, request: { cwd: root } }),
+                runWithBackend: async ({ context, selection }) => {
+                    const status = await selection.backend.statusSnapshot({ context, request: { cwd: root } });
+                    const snapshot = status.success ? status.snapshot : undefined;
+                    const manifestPath = snapshot?.repo.rootPath
+                        ? relative(snapshot.repo.rootPath, resolve(root, base.file)).replaceAll('\\', '/') : null;
+                    if (basis.kind !== 'present' || !snapshot?.branch.headOid || !manifestPath
+                        || snapshot.entries.some(entry => entry.path === manifestPath) || !selection.backend.fileAtRevision) return status;
+                    // Status omits both clean tracked and ignored files. Read through the
+                    // selected SCM owner and match the exact bytes already reviewed.
+                    const committed = await selection.backend.fileAtRevision({ context, request: {
+                        cwd: root, path: manifestPath, selector: { side: 'before', area: 'included' },
+                    } });
+                    if (committed.success && committed.sha256 === basis.hash) {
+                        committedAt = snapshot.branch.headOid;
+                    }
+                    return status;
+                },
             });
             if (!response.success || !response.snapshot) return { ...base, kind: 'unavailable' };
             const snapshot = response.snapshot;
@@ -174,7 +194,8 @@ async function readReviewProvenance(input: ProjectSetupPreparationInput, root: s
                 ...base, kind: 'repository',
                 ...(snapshot.branch.headOid ? { headCommit: snapshot.branch.headOid } : {}),
                 ...(snapshot.branch.head && !snapshot.branch.detached ? { branch: snapshot.branch.head } : {}),
-                // A clean status alone cannot distinguish tracked from ignored bytes; never call it committed.
+                ...(committedAt ? { committed: { commit: committedAt } } : {}),
+                // Preserve the legacy enum; only the separate proven fact means committed.
                 fileState: !manifestPresent ? 'absent' : entry ? entry.kind === 'untracked' ? 'untracked' : 'modified' : 'unknown',
             };
         });
@@ -365,7 +386,7 @@ export async function reviewProjectSetupEffect(input: ProjectSetupPreparationInp
         // SCM provenance is display context, excluded from the consent digest.
         // Native-launch checkpoints remeasure effect inputs, not repository UI.
         const provenanceStartedAt = performance.now();
-        const provenance = presentation?.provenance ?? await readReviewProvenance(input, root, manifest !== null);
+        const provenance = presentation?.provenance ?? await readReviewProvenance(input, root, snapshot.basis);
         logger.debug('[ProjectSetup] launch phase', { phase: 'review_provenance', retained: presentation !== undefined,
             durationMs: Math.round(performance.now() - provenanceStartedAt) });
         if (input.signal?.aborted) return refuse('project_setup_cancelled');
