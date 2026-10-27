@@ -162,4 +162,14 @@ describe('journeyBeats', () => {
         });
     });
 
+    it('points every beat at its own narration copy', () => {
+        for (const beat of journeyBeats) {
+            const keyPrefix = `journey.beats.${beat.id.toLowerCase()}.`;
+            expect(beat.narrationKeys).toEqual({
+                eyebrow: `${keyPrefix}eyebrow`,
+                title: `${keyPrefix}title`,
+                body: `${keyPrefix}body`,
+            });
+        }
+    });
 });
