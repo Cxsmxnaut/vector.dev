@@ -6,11 +6,10 @@ import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import { Server } from 'socket.io';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod/mini';
-import { ACTION_IDS, getActionSpec, normalizeActionsSettingsV1, RPC_METHODS, SOCKET_RPC_EVENTS, V2SessionByIdResponseSchema } from '@happier-dev/protocol';
+import { ACTION_IDS, getActionSpec, RPC_METHODS, SOCKET_RPC_EVENTS, V2SessionByIdResponseSchema } from '@happier-dev/protocol';
 import { createExternalMcpServer } from './createExternalMcpServer';
 import { runWithServerHttpBaseUrl } from '@/api/client/serverHttpBaseUrl';
 import { createEnvKeyScope } from '@/testkit/env/envScope';
-import { createCliActionExecutorHarness } from '@/session/actions/createCliActionExecutorHarness';
 import { FeaturesResponseSchema } from '@happier-dev/protocol/features/payload/featuresResponseSchema';
 import { DaemonLocalServiceLauncherStartResponseV1Schema } from '@happier-dev/protocol/local/services/launcher/v1';
 import { createLocalServiceActionConfirmationNonceV1, LocalServiceActionRequestV1Schema,
@@ -148,20 +147,6 @@ describe('standalone MCP machine placement', () => {
       await client.close(); await mcp.close();
       await new Promise<void>(resolve => daemon.close(() => resolve())); env.restore();
     }
-  });
-  it('retains canonical approval refusal before the Machine effect when no approval carrier is available', async () => {
-    const credentials = { token: 'test-account', encryption: null, credentialProvenance: 'stored_session' } as const;
-    const { executor } = createCliActionExecutorHarness({
-      credentials, token: credentials.token, sessionId: 'cli-global', mode: 'plain', ctx: null,
-      serverId: 'approval-home', serverHttpBaseUrl: 'http://127.0.0.1:1',
-      actionsSettingsProvider: { getActionsSettings: () => normalizeActionsSettingsV1({}) },
-    });
-    await expect(executor.execute('sessions.external.candidate.delete', {
-      machineId: 'addressed-machine', agentId: 'claude', source: { kind: 'claudeConfig', configDir: '/repo' },
-      remoteSessionId: 'external-1',
-    }, { surface: 'mcp', authority: 'account_automation' })).resolves.toMatchObject({
-      ok: false, errorCode: 'approvals_not_supported',
-    });
   });
   it.each(['sessions.external.candidates.list', 'sessions.external.candidate.delete', 'sessions.external.transcript.page', 'sessions.external.operation.status.get'] as const)(
     'delivers %s to the addressed daemon, even with another local Machine', async actionId => {

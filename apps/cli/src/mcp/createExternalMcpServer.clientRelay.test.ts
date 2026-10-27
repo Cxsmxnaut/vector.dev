@@ -237,6 +237,7 @@ describe('standalone MCP client Action admission', () => {
       const text = response.content.find(entry => entry.type === 'text');
       if (!text || text.type !== 'text') throw new Error('Missing MCP text result');
       expect(JSON.parse(text.text)).toEqual({ errorCode: 'daemon_unavailable', error: 'daemon_unavailable' });
+      expect(response.isError).toBe(true);
     } finally { await client.close(); await mcp.close(); }
   });
 

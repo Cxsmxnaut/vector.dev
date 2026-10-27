@@ -35,15 +35,9 @@ describe('standalone MCP Action exposure', () => {
   afterEach(() => vi.unstubAllEnvs());
 
   it('lists only the shared direct defaults rather than the full Action inventory', async () => {
-    const { listed: names } = await listTools({});
-    expect(names).toEqual(defaultToolNames);
-    expect(names).toHaveLength(defaultToolNames.length);
-  });
-
-  it('lists watch whenever the standalone factory advertises it through listHappierMcpToolNames', async () => {
     const { listed, registered } = await listTools({});
-    expect(registered).toContain('watch');
-    expect(listed).toEqual(registered);
+    expect(listed).toEqual(defaultToolNames);
+    expect(registered).toEqual(listed);
   });
 
   it('adds exactly one Action for an Account direct override', async () => {
