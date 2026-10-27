@@ -5,7 +5,7 @@ import { createProjectServiceDeclarationTargetIdV1, type ProjectServiceDeclarati
 import { readProjectManifest } from '@/workspaces/projectSetup/projectManifestFile';
 import { inspectProjectDefinitions } from '@/workspaces/projectSetup/projectDefinitionInspection';
 import { collectNativePackageDirectories, readNativePackage, resolveNativePackageManager, type NativePackageManager } from '@/workspaces/projectSetup/nativePackageScripts';
-import { resolveNativePackageScript } from '@/workspaces/projectSetup/projectNativeResolution';
+import { projectNativeSourceKey, resolveNativePackageScript } from '@/workspaces/projectSetup/projectNativeResolution';
 import { isWorkspacePathWithin } from '../inventory/provenance';
 
 export type LocalServicePackageManager = NativePackageManager;
@@ -140,15 +140,20 @@ export async function discoverLocalServiceRunTargets(input: Readonly<{
 
     const declarations: LocalServiceDeclarationRunTarget[] = [];
     for (const workspace of input.acceptedWorkspaceRefs ?? []) {
+        const manifestServices = manifest.document?.status === 'valid' ? manifest.document.manifest.services ?? {} : {};
+        const declaredSources = new Set(Object.values(manifestServices).flatMap(service => service.source.kind === 'command'
+            ? [] : [projectNativeSourceKey(workspace.rootPath, service.source)]));
+        const isDeclared = (source: Extract<ProjectServiceDeclarationRefV1['selection'], { kind: 'native' }>['source']) =>
+            Object.hasOwn(manifestServices, source.target) || declaredSources.has(projectNativeSourceKey(workspace.rootPath, source));
         for (const target of targets.filter(target => isWorkspacePathWithin(workspace.rootPath, target.cwd))) {
             const { manager: packageManager } = await resolveNativePackageManager(target.cwd, workspace.rootPath);
             const selected = declarationTarget(workspace, { kind: 'native', source: { kind: 'native', tool: 'package_script',
                 file: relative(workspace.rootPath, join(target.cwd, 'package.json')).replaceAll('\\', '/'), target: target.scriptName } });
+            if (selected.declaration.selection.kind === 'native' && isDeclared(selected.declaration.selection.source)) continue;
             declarations.push({ ...selected, cwd: target.cwd, title: `${target.packageName}:${target.scriptName}`,
                 packageScript: { packageName: target.packageName, packageManager, scriptName: target.scriptName } });
         }
         const manifest = await readProjectManifest({ root: workspace.rootPath });
-        const manifestServices = manifest.document?.status === 'valid' ? manifest.document.manifest.services ?? {} : {};
         if (manifest.document?.status === 'valid') {
             for (const [name, service] of Object.entries(manifest.document.manifest.services ?? {})) {
                 declarations.push({ ...declarationTarget(workspace, { kind: 'manifest', name }),
@@ -158,9 +163,8 @@ export async function discoverLocalServiceRunTargets(input: Readonly<{
         }
         const detected = await inspectProjectDefinitions(workspace.rootPath);
         for (const entry of detected.entries) {
-            // Named Project declarations own their service; native discovery is an offer only
-            // when the Project has not already declared that name for this checkout.
-            if (entry.usage === 'service' && !Object.hasOwn(manifestServices, entry.source.target)) {
+            // One named declaration owns its native source even when renamed in project.json.
+            if (entry.usage === 'service' && !isDeclared(entry.source)) {
                 declarations.push(declarationTarget(workspace, { kind: 'native', source: entry.source }));
             }
         }

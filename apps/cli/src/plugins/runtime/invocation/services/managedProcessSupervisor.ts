@@ -1559,7 +1559,10 @@ export function createManagedServiceProcessSupervisorHost(params: Readonly<{
                 listeners: scan.listeners, processes: scan.processes, workspaces: scan.workspaces,
             });
             const selected = selectManagedOwnedTreeEndpoint({
-                entries: inventorySnapshot.entries.filter(candidate => candidate.state === 'listening' && candidate.address.kind === 'loopback'),
+                // An owned wildcard listener also answers on this Machine's loopback.
+                // Keep process-tree ownership/ambiguity checks; never admit a foreign interface.
+                entries: inventorySnapshot.entries.filter(candidate => candidate.state === 'listening'
+                    && (candidate.address.kind === 'loopback' || candidate.address.kind === 'wildcard')),
                 managedPid, minimumConfidence: spec.mode.endpointDetection.minimumConfidence,
             });
             const host = selected && inventorySnapshot.entries.find(({ id }) => id === selected.id)?.address.family === 'ipv6'

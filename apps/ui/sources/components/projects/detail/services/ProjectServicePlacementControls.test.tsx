@@ -748,6 +748,34 @@ describe('Service Runs on through the placement and relocation Actions', () => {
     } finally { bindingRead.resolve(); await h.screen.unmount(); }
   });
 
+  it('keeps the receiving Machine unspecified while the first Start placement read is pending', async () => {
+    const placement = createDeferred<void>();
+    const entered = createDeferred<void>();
+    const dispatched = createDeferred<void>();
+    const reply = createDeferred<void>();
+    const { createDefaultRuntimeActionExecutor } = await import('@/sync/ops/actions/defaultRuntimeActionExecutor');
+    const execute = createFrontDoorRuntimeActionExecutor(createActionExecutor(createActionExecutorBoundaryFixture({
+      isActionApprovalRequired: () => false, runtimeActionExecute: createDefaultRuntimeActionExecutor(),
+    })));
+    const h = await setup({ running: false, sharedObservation: true, withRow: true, collapsedRow: true, waitEnabled: false,
+      serviceRuntime: execute, waiveStartApproval: true,
+      onStart: async () => { dispatched.resolve(); await reply.promise; },
+      beforePlacementRead: async () => { entered.resolve(); await placement.promise; } });
+    let start: Promise<unknown> | undefined;
+    try {
+      await vi.waitFor(() => expect(h.screen.findByTestId('service-row-start')).toBeTruthy());
+      await act(async () => { start = h.screen.pressByTestIdAsync('service-row-start'); });
+      await entered.promise;
+      expect(h.screen.getTextContent()).toContain('localServices.rowStatus.starting');
+      expect(h.screen.getTextContent()).not.toContain('projectServices.otherMachine');
+      expect(h.screen.getTextContent()).not.toContain('localServices.row.startingOn');
+      await act(async () => { placement.resolve(); });
+      await dispatched.promise;
+      expect(h.screen.getTextContent()).toContain('localServices.row.startingOn:{"machine":"Source workstation"}');
+      expect(h.screen.getTextContent()).not.toContain('projectServices.otherMachine');
+    } finally { placement.resolve(); reply.resolve(); await start; await h.screen.unmount(); }
+  });
+
   it('names the saved receiving Machine throughout app Start before native admission and clears a refused dispatch', async () => {
     const reply = createDeferred<void>();
     const entered = createDeferred<void>();

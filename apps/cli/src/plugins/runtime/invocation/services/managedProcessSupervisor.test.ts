@@ -410,6 +410,28 @@ describe('createManagedServiceProcessSupervisorHost', () => {
         expect(LocalServiceEstablishmentFailureV1Schema.parse(failure.details.establishmentFailure).cause).toBe(cause);
     });
 
+    it.each(['0.0.0.0', '::'])('discovers an owned wildcard listener at %s through its loopback endpoint', async address => {
+        vi.useFakeTimers();
+        vi.spyOn(localServiceScan, 'scanPlatformLocalServices').mockResolvedValue({
+            listeners: [{ address, port: 5173, protocol: 'tcp', pid: 42 }],
+            processes: new Map([[42, { pid: 42, command: 'python3 -m http.server 5173', processOwnership: 'self' }]]),
+            workspaces: [], diagnostics: [],
+        });
+        const { servers } = createHarness();
+        const pending = servers.supervise(managedSpec('wildcard-listener', {
+            startupTimeoutMs: 100,
+            mode: { kind: 'managedSpawn', port: 5173, endpointDetection: { kind: 'detectAfterLaunch', minimumConfidence: 'high' } },
+        })).then(handle => ({ handle }), (error: unknown) => ({ error }));
+        await vi.advanceTimersByTimeAsync(100);
+        const result = await pending;
+        expect(result).toHaveProperty('handle');
+        if (!('handle' in result)) throw result.error;
+        try {
+            expect(result.handle.snapshot()).toMatchObject({ state: 'healthy', port: 5173,
+                baseUrl: address === '::' ? 'http://[::1]:5173' : 'http://127.0.0.1:5173' });
+        } finally { await result.handle.dispose(); }
+    });
+
     it('discovers an owned endpoint after the former startup cutoff without an authored deadline', async () => {
         vi.useFakeTimers();
         const firstScan = deferred<localServiceScan.LocalServicesScanResult>();

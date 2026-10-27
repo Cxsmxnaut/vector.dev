@@ -500,7 +500,9 @@ export function useProjectServicePlacementObservation(serviceName: string, manag
   const destinationMachine = useServerScopedMachine(context?.source.serverId ?? '', destinationMachineId ?? '');
   const destinationName = (destinationMachine ? getMachineDisplayName(destinationMachine) : null) ?? t('projectServices.otherMachine');
   const progressText = awaitingBinding ? `${t('common.loading')} · ${t('localServices.row.onMachine', { machine: destinationName })}`
-    : startPending ? t('localServices.row.startingOn', { machine: destinationName })
+    : startPending ? destinationMachineId
+      ? t('localServices.row.startingOn', { machine: destinationName })
+      : t('localServices.rowStatus.starting')
     : !active ? null : unknown ? t(starting ? 'localServices.actions.failure.outcomeUnknown' : 'projectServices.moveUnknown')
     : phase === 'stopping' ? t('localServices.rowStatus.stopping')
     : phase === 'stopped' ? t('localServices.rowStatus.stopped')
