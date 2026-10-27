@@ -5,7 +5,6 @@ import { stableJsonStringify } from '@/utils/json/stableJsonStringify';
 
 import {
   createVoiceCredentialRuntimeAuthoritySnapshot,
-  createVoiceSelectedCredentialAuthorityFingerprint,
   hasVoiceCredentialRuntimeAuthorityChanged,
   readVoiceCredentialAuthorityRefs,
 } from './voiceCredentialAuthorityRefs';
@@ -181,19 +180,5 @@ describe('Voice credential runtime authority', () => {
     });
 
     expect(hasVoiceCredentialRuntimeAuthorityChanged(first, changed)).toBe(true);
-  });
-
-  it('ignores unrelated credential collections after canonical selection', () => {
-    const selected = createVoiceSelectedCredentialAuthorityFingerprint({
-      sourceResolution: { selection: { kind: 'savedSecret' }, savedSecret: { secretId: 'selected' } },
-      selectedSavedSecret: { id: 'selected', updatedAt: 2 },
-      selectedConnectedAccountAuthority: 'unbound',
-    });
-    const afterUnrelatedChange = createVoiceSelectedCredentialAuthorityFingerprint({
-      sourceResolution: { selection: { kind: 'savedSecret' }, savedSecret: { secretId: 'selected' } },
-      selectedSavedSecret: { id: 'selected', updatedAt: 2 },
-      selectedConnectedAccountAuthority: 'unbound',
-    });
-    expect(afterUnrelatedChange).toBe(selected);
   });
 });

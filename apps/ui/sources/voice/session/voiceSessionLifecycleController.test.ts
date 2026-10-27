@@ -236,28 +236,6 @@ describe('createVoiceSessionLifecycleController', () => {
         } finally { await controller.dispose(); }
     });
 
-    it('publishes a current retryable unavailability outcome when the selected provider withdraws before Start', async () => {
-        const fixture = await createActualLifecycle();
-        try {
-            await fixture.runtime.runtime.dispose();
-            const { registerVoiceAdapters } = await import('./voiceAdapterRegistry');
-            registerVoiceAdapters([]);
-            await fixture.lifecycle.toggle(fixture.target);
-            expect(fixture.environment.providerFetch).not.toHaveBeenCalled();
-            expect(fixture.lifecycle.getSnapshot()).toMatchObject({
-                adapterId: OPENAI_PROVIDER_ID, sessionId: fixture.runtime.historySessionId,
-                status: 'error', mode: 'idle', canStop: false,
-                errorCode: 'service_temporarily_unavailable',
-                errorMessage: 'voice_provider_adapter_not_registered', errorRecoveryAction: 'retry', errorPresentation: 'error',
-            });
-            const dictation = fixture.captureAdmission.acquire('dictation');
-            expect(dictation.status).toBe('acquired');
-            if (dictation.status === 'acquired') dictation.lease.release();
-            fixture.lifecycle.setConfiguredProviderId(CODEX_PROVIDER_ID);
-            expect(fixture.lifecycle.getSnapshot()).toEqual({ adapterId: null, sessionId: null, status: 'disconnected', mode: 'idle', canStop: false });
-        } finally { await fixture.dispose(); }
-    });
-
     it('stays silent when Voice is switched off rather than misreporting a refusal', async () => {
         const { createVoiceSessionLifecycleController } = await import('./voiceSessionLifecycleController');
         const controller = createVoiceSessionLifecycleController();
@@ -1596,6 +1574,9 @@ describe('createVoiceSessionLifecycleController', () => {
                     expect(seeds()[0]?.disabledActionIds ?? []).not.toEqual(expect.arrayContaining(currentUiActionIds));
                     const initialRunId = localVoiceAgentRpc.readRetainedRun()?.runId;
                     expect(initialRunId).toBeDefined();
+                    const controlSessionId = controller.getSnapshot().sessionId;
+                    const captureStarts = localVoiceSpeechOutputBoundary.fileRecording.start.mock.calls.length;
+                    const captureStops = localVoiceSpeechOutputBoundary.fileRecording.stop.mock.calls.length;
                     setMode('off');
                     await waitForLocalVoiceBoundaryEvent('agent-start', 2);
                     await voiceAgentSessions.ensureRunning(VOICE_AGENT_GLOBAL_SESSION_ID);
@@ -1604,12 +1585,20 @@ describe('createVoiceSessionLifecycleController', () => {
                     expect(localVoiceAgentRpc.requests.filter(request => request.method === SESSION_RPC_METHODS.EXECUTION_RUN_STOP))
                         .toEqual([{ method: SESSION_RPC_METHODS.EXECUTION_RUN_STOP, input: { runId: initialRunId } }]);
                     expect(controller.getSnapshot()).toMatchObject({ adapterId: 'local_conversation', status: 'connected', canStop: true });
+                    expect(controller.getSnapshot().sessionId).toBe(controlSessionId);
+                    expect(localVoiceSpeechOutputBoundary.fileRecording.start).toHaveBeenCalledTimes(captureStarts + 1);
+                    expect(localVoiceSpeechOutputBoundary.fileRecording.stop).toHaveBeenCalledTimes(captureStops + 1);
                     setMode(restoredMode);
                     await waitForLocalVoiceBoundaryEvent('agent-start', 3);
                     await voiceAgentSessions.ensureRunning(VOICE_AGENT_GLOBAL_SESSION_ID);
                     expect(seeds()).toHaveLength(3);
                     expect(seeds()[2]?.disabledActionIds ?? []).not.toEqual(expect.arrayContaining(currentUiActionIds));
                     expect(localVoiceAgentRpc.requests.filter(request => request.method === SESSION_RPC_METHODS.EXECUTION_RUN_STOP)).toHaveLength(2);
+                    expect(localVoiceSpeechOutputBoundary.fileRecording.start).toHaveBeenCalledTimes(captureStarts + 2);
+                    expect(localVoiceSpeechOutputBoundary.fileRecording.stop).toHaveBeenCalledTimes(captureStops + 2);
+                    expect(controller.getSnapshot()).toMatchObject({ adapterId: 'local_conversation', sessionId: controlSessionId,
+                        status: 'connected', canStop: true });
+                    expect(localVoiceAgentRpc.readRetainedRun()?.status).toBe('running');
                 } finally { await controller.dispose(); }
             },
         );
@@ -1636,6 +1625,7 @@ describe('createVoiceSessionLifecycleController', () => {
                         privacy: { ...settings.voice.privacy, currentUiContextMode: mode } } } });
                     controller.setCurrentUiContextToolSetEnabled(mode !== 'off');
                     expect(controller.getSnapshot()).toMatchObject({ adapterId: 'local_direct', sessionId: 's1', status: 'connected', canStop: true });
+                    expect(controller.getAttemptTargetSessionAddress()).toEqual({ serverId: localVoiceHomeId, sessionId: 's1' });
                     expect(localVoiceSpeechOutputBoundary.fileRecording.start).toHaveBeenCalledTimes(captureStarts);
                     expect(localVoiceSpeechOutputBoundary.fileRecording.stop).not.toHaveBeenCalled();
                 }

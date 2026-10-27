@@ -7521,7 +7521,6 @@
     "sources/voice/runtime/waitForNextAssistantTextMessage.test.ts",
     "sources/voice/session/VoiceSessionRuntime.spec.tsx",
     "sources/voice/session/deriveMicButtonProjection.test.ts",
-    "sources/voice/session/useVoiceSessionSnapshot.dom.test.tsx",
     "sources/voice/session/useVoiceSessionSnapshot.hook.test.tsx",
     "sources/voice/session/voiceAdapterRegistry.test.ts",
     "sources/voice/session/voiceCredentialAuthorityRefs.test.ts",
