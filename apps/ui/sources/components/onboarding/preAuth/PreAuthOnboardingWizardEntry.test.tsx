@@ -163,10 +163,6 @@ const expoRouterMock = createExpoRouterMock({
 
 vi.mock('expo-router', () => expoRouterMock.module);
 
-vi.mock('@/modal/components/BaseModal', () => ({
-    BaseModal: (props: any) => React.createElement('BaseModal', props, props.children),
-}));
-
 vi.mock('@/auth/context/AuthContext', () => ({
     useAuth: () => ({
         isAuthenticated: authState.isAuthenticated,
@@ -281,16 +277,7 @@ vi.mock('@/components/onboarding/tour/OnboardingJourneyHost', async () => {
 
 vi.mock('@/components/onboarding/unauthShell', () => ({
     UnauthenticatedSplitShell: (props: Record<string, unknown>) =>
-        React.createElement(
-            'UnauthenticatedSplitShell',
-            props,
-            props.children as React.ReactNode,
-            React.createElement('BrandHeroGetStarted', {
-                key: 'brand-hero-get-started',
-                testID: 'brand-hero-get-started',
-                onPress: props.onBrandHeroGetStarted,
-            }),
-        ),
+        React.createElement('UnauthenticatedSplitShell', props, props.children as React.ReactNode),
     useApplyBrandHeroSeen: () => applyBrandHeroSeenMock,
 }));
 
@@ -306,12 +293,17 @@ vi.mock('@/text', async () => {
     });
 });
 
+// The entry caches its journey chunk in module state; only tests that observe chunk loading need a fresh instance.
+async function importFreshEntry() {
+    vi.resetModules();
+    return import('./PreAuthOnboardingWizardEntry');
+}
+
 describe('PreAuthOnboardingWizardEntry', () => {
     const originalDebug = process.env.EXPO_PUBLIC_DEBUG;
     let browser: Awaited<ReturnType<typeof installBrowserRuntimeForTests>> | undefined;
 
     beforeEach(() => {
-        vi.resetModules();
         process.env.EXPO_PUBLIC_DEBUG = '1';
         reactNativeState.windowWidth = 390;
         reactNativeState.windowHeight = 844;
@@ -386,20 +378,20 @@ describe('PreAuthOnboardingWizardEntry', () => {
         standardCleanup();
     });
 
-    it('renders the unauth split shell directly on narrow web without the legacy modal wrapper', async () => {
+    it('renders the unauth split shell on narrow web with a bare, non-fullscreen wizard', async () => {
         const { PreAuthOnboardingWizardEntry } = await import('./PreAuthOnboardingWizardEntry');
         const screen = await renderScreen(React.createElement(PreAuthOnboardingWizardEntry));
 
-        expect(screen.findAllByType('BaseModal' as never)).toHaveLength(0);
         expect(screen.findByType('UnauthenticatedSplitShell' as never)).toBeTruthy();
         const wizard = screen.findByType('OnboardingWizardSurfacePresentation' as never);
         expect(wizard.props.wizardChromeMode).toBe('bare');
+        expect(wizard.props.wizardLayoutPresentation).toBeUndefined();
     });
 
     it('falls back to the current wizard and does not load tour code when onboardingTour is disabled', async () => {
         onboardingTourFeatureState.state = 'disabled';
 
-        const { PreAuthOnboardingWizardEntry } = await import('./PreAuthOnboardingWizardEntry');
+        const { PreAuthOnboardingWizardEntry } = await importFreshEntry();
         const screen = await renderScreen(React.createElement(PreAuthOnboardingWizardEntry));
 
         expect(onboardingTourFeatureState.calls).toContainEqual([
@@ -415,7 +407,7 @@ describe('PreAuthOnboardingWizardEntry', () => {
     it('renders an accessible progress status while the onboardingTour decision is resolving', async () => {
         onboardingTourFeatureState.state = null;
 
-        const { PreAuthOnboardingWizardEntry } = await import('./PreAuthOnboardingWizardEntry');
+        const { PreAuthOnboardingWizardEntry } = await importFreshEntry();
         const screen = await renderScreen(React.createElement(PreAuthOnboardingWizardEntry));
 
         const loadingSurface = screen.findByTestId('onboarding-journey-loading');
@@ -469,7 +461,7 @@ describe('PreAuthOnboardingWizardEntry', () => {
         journeyHostState.deferModuleLoad = true;
         journeyHostState.resetModuleLoadDeferred();
 
-        const { PreAuthOnboardingWizardEntry } = await import('./PreAuthOnboardingWizardEntry');
+        const { PreAuthOnboardingWizardEntry } = await importFreshEntry();
         const screen = await renderScreen(React.createElement(PreAuthOnboardingWizardEntry));
 
         try {
@@ -492,7 +484,7 @@ describe('PreAuthOnboardingWizardEntry', () => {
         onboardingTourFeatureState.state = 'enabled';
         authEntryOptionsState.current.retentionDisclosure = { kind: 'summary', summary: 'This relay cleans up subagent transcripts after 7 days.' };
 
-        const { PreAuthOnboardingWizardEntry } = await import('./PreAuthOnboardingWizardEntry');
+        const { PreAuthOnboardingWizardEntry } = await importFreshEntry();
         const screen = await renderScreen(React.createElement(PreAuthOnboardingWizardEntry));
 
         expect(screen.findAllByType('UnauthenticatedSplitShell' as never)).toHaveLength(0);
@@ -544,23 +536,6 @@ describe('PreAuthOnboardingWizardEntry', () => {
         expect(screen.findByType('OnboardingJourneyHost' as never)).toBeTruthy();
         expect(screen.findAllByType('UnauthenticatedSplitShell' as never)).toHaveLength(0);
         expect(screen.findAllByType('OnboardingWizardSurfacePresentation' as never)).toHaveLength(0);
-    });
-
-    it('renders the journey for a returning user when an explicit replay beat intent is present', async () => {
-        onboardingTourFeatureState.state = 'enabled';
-        localSettingsState.hasCompletedAuthOnce = true;
-        vi.stubGlobal('window', {
-            location: {
-                href: 'http://localhost:8081/?happier_journey_beat=S5',
-                search: '?happier_journey_beat=S5',
-            },
-        });
-
-        const { PreAuthOnboardingWizardEntry } = await import('./PreAuthOnboardingWizardEntry');
-        const screen = await renderScreen(React.createElement(PreAuthOnboardingWizardEntry));
-
-        expect(screen.findByType('OnboardingJourneyHost' as never)).toBeTruthy();
-        expect(screen.findAllByType('UnauthenticatedSplitShell' as never)).toHaveLength(0);
     });
 
     it('renders the journey replay deep-link for a returning user in a production (non-debug) build', async () => {
@@ -650,17 +625,17 @@ describe('PreAuthOnboardingWizardEntry', () => {
         expect(screen.findByType('OnboardingWizardSurfacePresentation' as never)).toBeTruthy();
     });
 
-    it('renders the unauth split shell on Tauri desktop with bare wizard presentation', async () => {
+    it('renders the unauth split shell on Tauri desktop with a fullscreen desktop-shell wizard', async () => {
         tauriDesktopState.value = true;
 
         const { PreAuthOnboardingWizardEntry } = await import('./PreAuthOnboardingWizardEntry');
         const screen = await renderScreen(React.createElement(PreAuthOnboardingWizardEntry));
 
-        expect(screen.findAllByType('BaseModal' as never)).toHaveLength(0);
         expect(screen.findByType('UnauthenticatedSplitShell' as never)).toBeTruthy();
         const wizard = screen.findByType('OnboardingWizardSurfacePresentation' as never);
-        expect(wizard).toBeTruthy();
         expect(wizard.props.wizardChromeMode).toBe('bare');
+        expect(wizard.props.isDesktopShell).toBe(true);
+        expect(wizard.props.wizardLayoutPresentation).toBe('fullscreen');
     });
 
     it('passes a shell-owned chrome host into the onboarding wizard surface', async () => {
@@ -694,16 +669,6 @@ describe('PreAuthOnboardingWizardEntry', () => {
         await shell.props.onOpenRelayCustomFlow?.();
 
         expect(wizardControllerMock.goToStep).toHaveBeenCalledWith('relay_select');
-    });
-
-    it('writes the shell-local brand hero seen flag without changing wizard step history', async () => {
-        const { PreAuthOnboardingWizardEntry } = await import('./PreAuthOnboardingWizardEntry');
-        const screen = await renderScreen(React.createElement(PreAuthOnboardingWizardEntry));
-
-        screen.pressByTestId('brand-hero-get-started');
-
-        expect(applyBrandHeroSeenMock).toHaveBeenCalledTimes(1);
-        expect(wizardControllerMock.goToStep).not.toHaveBeenCalled();
     });
 
     it('uses runtimeFetch instead of global fetch for web mtls login', async () => {

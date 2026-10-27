@@ -535,6 +535,8 @@ describe('PreAuthOnboardingWizardEntry shell integration', () => {
             (candidate: { execution: { kind: string } }) => candidate.execution.kind === 'generated_key',
         );
         if (!projected || !panel.props.authEntryOptions.homeTarget) throw new Error('Expected exact Home provision action');
+        const countFeatureFetches = () => serverFetchMock.mock.calls.filter(([path]) => path === '/v1/features').length;
+        const featureFetchesBeforeSignup = countFeatureFetches();
         await act(async () => {
             await panel.props.onContinueWithHomeAuthentication({
                 ...projected,
@@ -545,7 +547,7 @@ describe('PreAuthOnboardingWizardEntry shell integration', () => {
         await flushHookEffects({ cycles: 2, turns: 2 });
 
         await vi.waitFor(() => expect(modalAlertMock).toHaveBeenCalledWith('common.error', 'errors.signupDisabled'));
-        expect(serverFetchMock.mock.calls.some(([path]) => path === '/v1/features')).toBe(true);
+        expect(countFeatureFetches()).toBeGreaterThan(featureFetchesBeforeSignup);
         expect(authMock.login).not.toHaveBeenCalled();
     });
 
