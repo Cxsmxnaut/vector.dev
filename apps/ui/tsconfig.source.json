@@ -3727,7 +3727,6 @@
     "sources/voice/modelPacks/installerTestFs.ts",
     "sources/voice/pickers/VoiceSessionSpawnPickerModal.tsx",
     "sources/voice/pickers/openVoiceSessionSpawnPicker.ts",
-    "sources/voice/pickers/voicePickerTestHelpers.ts",
     "sources/voice/qa/ensureDefaultLocalVoiceQaBinding.ts",
     "sources/voice/qa/formatVoiceQaErrorMessage.ts",
     "sources/voice/qa/formatVoiceQaSessionLabel.ts",
