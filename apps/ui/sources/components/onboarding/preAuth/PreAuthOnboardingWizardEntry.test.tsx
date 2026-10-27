@@ -277,7 +277,16 @@ vi.mock('@/components/onboarding/tour/OnboardingJourneyHost', async () => {
 
 vi.mock('@/components/onboarding/unauthShell', () => ({
     UnauthenticatedSplitShell: (props: Record<string, unknown>) =>
-        React.createElement('UnauthenticatedSplitShell', props, props.children as React.ReactNode),
+        React.createElement(
+            'UnauthenticatedSplitShell',
+            props,
+            props.children as React.ReactNode,
+            React.createElement('BrandHeroGetStarted', {
+                key: 'brand-hero-get-started',
+                testID: 'brand-hero-get-started',
+                onPress: props.onBrandHeroGetStarted,
+            }),
+        ),
     useApplyBrandHeroSeen: () => applyBrandHeroSeenMock,
 }));
 
@@ -292,6 +301,9 @@ vi.mock('@/text', async () => {
         translate: (key: string) => key,
     });
 });
+
+// Load the entry graph once during collection rather than inside the first test.
+await import('./PreAuthOnboardingWizardEntry');
 
 // The entry caches its journey chunk in module state; only tests that observe chunk loading need a fresh instance.
 async function importFreshEntry() {
@@ -669,6 +681,16 @@ describe('PreAuthOnboardingWizardEntry', () => {
         await shell.props.onOpenRelayCustomFlow?.();
 
         expect(wizardControllerMock.goToStep).toHaveBeenCalledWith('relay_select');
+    });
+
+    it('writes the shell-local brand hero seen flag without changing wizard step history', async () => {
+        const { PreAuthOnboardingWizardEntry } = await import('./PreAuthOnboardingWizardEntry');
+        const screen = await renderScreen(React.createElement(PreAuthOnboardingWizardEntry));
+
+        screen.pressByTestId('brand-hero-get-started');
+
+        expect(applyBrandHeroSeenMock).toHaveBeenCalledTimes(1);
+        expect(wizardControllerMock.goToStep).not.toHaveBeenCalled();
     });
 
     it('uses runtimeFetch instead of global fetch for web mtls login', async () => {

@@ -160,7 +160,8 @@ vi.mock('@/track', () => ({
     trackAccountCreated: trackAccountCreatedMock,
 }));
 
-vi.mock('@/utils/platform/responsive', () => ({
+vi.mock('@/utils/platform/responsive', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@/utils/platform/responsive')>()),
     useIsLandscape: () => false,
 }));
 
