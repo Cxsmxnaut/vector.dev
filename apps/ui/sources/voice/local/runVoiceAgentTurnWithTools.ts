@@ -19,7 +19,6 @@ import { storage } from '@/sync/domains/state/storage';
 import { readVoicePrivacySettings } from '@/sync/domains/settings/readVoicePrivacySettings';
 import type { VoiceToolResultRedactionPrefs } from '@/voice/context/redactVoiceToolResult';
 import { buildToolResultsFollowUpPrompt, projectVoiceToolResultsForFollowUp } from '@/voice/context/buildVoiceToolResultsFollowUp';
-export { buildToolResultsFollowUpPrompt } from '@/voice/context/buildVoiceToolResultsFollowUp';
 import type { VoiceCurrentUiToolPort } from '@/voice/tools/currentUiContextToolPort';
 
 type VoiceToolAction = Readonly<{ t?: unknown; args?: unknown }>;

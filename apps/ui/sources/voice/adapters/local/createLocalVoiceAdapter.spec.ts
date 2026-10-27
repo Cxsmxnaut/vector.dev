@@ -32,7 +32,7 @@ function admittedProviderText() {
 }
 
 describe('createLocalVoiceAdapter', () => {
-  registerLocalVoiceEngineHarnessHooks({ resetModulesBetweenTests: false });
+  registerLocalVoiceEngineHarnessHooks();
 
   it('exposes the requested adapter id on the disconnected snapshot', async () => {
     const { createLocalVoiceAdapter } = await import('./createLocalVoiceAdapter');

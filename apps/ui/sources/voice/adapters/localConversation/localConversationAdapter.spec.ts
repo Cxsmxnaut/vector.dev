@@ -39,7 +39,7 @@ function admittedProviderText() {
 }
 
 describe('local conversation voice adapter', () => {
-  registerLocalVoiceEngineHarnessHooks({ resetModulesBetweenTests: false });
+  registerLocalVoiceEngineHarnessHooks();
   let adapter: ReturnType<typeof import('./localConversationAdapter')['createLocalConversationVoiceAdapter']>;
   beforeEach(async () => {
     await loadLocalVoiceEngineWithCompatState();

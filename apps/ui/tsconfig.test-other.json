@@ -3002,7 +3002,6 @@
     "sources/voice/local/localVoiceEngine.stop.spec.ts",
     "sources/voice/local/localVoiceEngine.tts.spec.ts",
     "sources/voice/local/localVoiceSettings.test.ts",
-    "sources/voice/local/localVoiceTelemetry.spec.ts",
     "sources/voice/local/runVoiceAgentTurnWithTools.custody.spec.ts",
     "sources/voice/local/runVoiceAgentTurnWithTools.permissionShortcut.spec.ts",
     "sources/voice/local/runVoiceAgentTurnWithTools.privacy.spec.ts",

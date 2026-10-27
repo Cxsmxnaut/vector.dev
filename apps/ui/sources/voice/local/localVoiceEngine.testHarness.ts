@@ -839,7 +839,6 @@ vi.mock('expo-audio', () => ({
 }));
 
 export function registerLocalVoiceEngineHarnessHooks(options?: Readonly<{
-    resetModulesBetweenTests?: boolean;
     serverIdentityId?: string;
 }>) {
     const originalFetch = globalThis.fetch;

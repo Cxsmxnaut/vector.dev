@@ -114,7 +114,7 @@ function readBundledEntryProviderId(entry: BundledConversationRuntimeEntry): str
 }
 
 describe('createBuiltinVoiceAdapterAssembly', () => {
-  registerLocalVoiceEngineHarnessHooks({ resetModulesBetweenTests: false });
+  registerLocalVoiceEngineHarnessHooks();
   beforeEach(async () => {
     // Preserve the genuine neighboring RPC responders installed by the
     // canonical Account/native fixture; each case overrides only its wire leaf.

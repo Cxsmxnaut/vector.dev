@@ -52,7 +52,7 @@ function targetPendingRequests() {
 }
 
 describe('runVoiceAgentTurnWithTools local effect custody', () => {
-  registerLocalVoiceEngineHarnessHooks({ resetModulesBetweenTests: false });
+  registerLocalVoiceEngineHarnessHooks();
   beforeEach(() => {
     turns = []; turnIndex = 0; outputs.clear(); wireTurns.length = 0; malformedReply = false;
     // Configure only daemon wire leaves; retained ensure/list/get/stop and every

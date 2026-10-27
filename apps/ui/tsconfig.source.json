@@ -3722,7 +3722,6 @@
     "sources/voice/kokoro/runtime/synthesizeKokoroWav.web.ts",
     "sources/voice/local/formatVoiceTestFailureMessage.ts",
     "sources/voice/local/localVoiceEngine.testHarness.ts",
-    "sources/voice/local/localVoiceTelemetry.ts",
     "sources/voice/modelPacks/formatBuildLabel.ts",
     "sources/voice/modelPacks/installerTestFs.ts",
     "sources/voice/pickers/VoiceSessionSpawnPickerModal.tsx",

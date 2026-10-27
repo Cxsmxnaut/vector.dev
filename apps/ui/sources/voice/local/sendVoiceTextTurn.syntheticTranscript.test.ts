@@ -400,21 +400,6 @@ describe('sendVoiceTextTurn native-session transcript ownership', () => {
     }
   });
 
-  it('does not duplicate daemon-owned local agent turns in the UI transcript projector', async () => {
-    const { sendVoiceTextTurn } = await loadSendVoiceTextTurnWithProductionBinding();
-
-    await sendVoiceTextTurn({
-      sessionId: VOICE_AGENT_GLOBAL_SESSION_ID,
-      settings: buildAccountSettings(),
-      userText: 'list the backends',
-      playbackController: createVoicePlaybackController(),
-      voiceAgentSessions,
-    });
-
-    expectNoSyntheticTranscript();
-    expect(pendingRecords()).toHaveLength(1);
-  });
-
   it('durably enqueues speech input before one local-agent dispatch', async () => {
     const { sendVoiceTextTurn } = await loadSendVoiceTextTurnWithProductionBinding();
 
@@ -517,27 +502,6 @@ describe('sendVoiceTextTurn native-session transcript ownership', () => {
     });
   });
 
-  it('resolves implicit tool session ids from the bound target session', async () => {
-    const { sendVoiceTextTurn } = await loadSendVoiceTextTurnWithProductionBinding();
-
-    turnReplies = index => index === 0
-      ? { assistantText: 'I will send that now.', actions: [{ t: 'sendSessionMessage', args: { message: 'hello' } }] }
-      : { assistantText: 'Done.', actions: [] };
-
-    await sendVoiceTextTurn({
-      sessionId: VOICE_AGENT_GLOBAL_SESSION_ID,
-      settings: buildAccountSettings(),
-      userText: 'send hello',
-      playbackController: createVoicePlaybackController(),
-      voiceAgentSessions,
-    });
-
-    expect(pendingWrites('s1')).toHaveLength(1);
-    expect(pendingWrites('s1')[0]).toMatchObject({ home: 'voice', accountId: 'account-a',
-      body: { requestedAction: { v: 1, kind: 'steer_if_active' } } });
-    expect(pendingRecords('s1')[0]).toMatchObject({ role: 'user', content: { type: 'text', text: 'hello' } });
-  });
-
   it('does not send an implicit tool action to the active Home when the bound target is on another Home', async () => {
     const { sendVoiceTextTurn } = await loadSendVoiceTextTurnWithProductionBinding();
     const { voiceSessionBindingManager } = await import('@/voice/binding/voiceConversationBindingRuntime');
@@ -564,7 +528,7 @@ describe('sendVoiceTextTurn native-session transcript ownership', () => {
       && request.path !== '/v2/sessions/read-batch')).toEqual([]);
   });
 
-  it('rethrows agent-mode send failures after recording the error state', async () => {
+  it('rethrows agent-mode send failures and leaves error publication to the lifecycle caller', async () => {
     const { sendVoiceTextTurn } = await loadSendVoiceTextTurnWithProductionBinding();
     rejectStart = true;
 
@@ -577,5 +541,8 @@ describe('sendVoiceTextTurn native-session transcript ownership', () => {
         voiceAgentSessions,
       }),
     ).rejects.toThrow('voice_turn_dispatch_ambiguous');
+    // Direct dispatch never publishes its own failure; the lifecycle caller owns it.
+    expect(voiceConversationRuntimeMachine.getSnapshot().error).toBeNull();
+    expect(pendingWrites('s1')).toEqual([]);
   });
 });

@@ -60,7 +60,6 @@ import {
 } from '@/voice/runtime/levels/voiceRuntimeLevelStore';
 import { voiceConversationBindingResolver } from '@/voice/binding/VoiceConversationBindingResolver';
 import { voiceSessionBindingManager } from '@/voice/binding/voiceConversationBindingRuntime';
-import { resetVoiceAgentPersistenceState } from '@/voice/persistence/resetVoiceAgentPersistenceState';
 import { appendVoiceConversationAssistantText } from '@/voice/transcript/voiceConversationTranscript';
 import { markVoiceConversationAssistantTurnInterrupted } from '@/voice/transcript/voiceTurnInterruption';
 import { createTtsPlaybackClock } from '@/voice/output/ttsPlaybackTiming';
@@ -1058,12 +1057,6 @@ export async function stopLocalVoiceAgent(sessionId: string): Promise<void> {
   localVoiceCaptureOwner.clearHandsFree({ sessionId, provider: 'device' });
   localVoiceCaptureOwner.clearHandsFree({ sessionId, provider: 'local_neural' });
   await voiceAgentSessions.stop(sessionId);
-}
-
-export async function resetLocalVoiceAgentPersistence(): Promise<void> {
-  await resetVoiceAgentPersistenceState({
-    stop: async () => await stopLocalVoiceAgent(VOICE_AGENT_GLOBAL_SESSION_ID),
-  });
 }
 
 export function isLocalVoiceAgentActive(sessionId: string): boolean {
