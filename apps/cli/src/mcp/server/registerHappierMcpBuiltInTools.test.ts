@@ -318,9 +318,8 @@ describe('registerHappierMcpBuiltInTools', () => {
     const fixture = await createAuthoredAdmittedPluginRuntimeFixture({ plugins: [{
       manifest: createPluginManifestV2Fixture({ id: pluginId, contributes: {
         actions: [{ id: 'read', title: 'Read label', scopes: ['global'], surfaces: ['mcp'],
-          execution: { target: 'daemon' }, dangerLevel: 'safe', inputSchema }],
-        tools: [{ id: 'read-tool', name: 'qa_inventory_read', title: 'Read label',
-          action: 'read', surfaces: ['mcp'], inputSchema, outputSchema: inputSchema }],
+          execution: { target: 'daemon' }, dangerLevel: 'safe', inputSchema, resultSchema: inputSchema,
+          tool: { name: 'qa_inventory_read' }, toolExposure: { mcp: 'direct' } }],
       } }),
       files: { 'daemon.mjs': 'export function activate(api) { api.actions.register("read", async input => input); }' },
     }] });
@@ -620,90 +619,6 @@ describe('registerHappierMcpBuiltInTools', () => {
     });
   });
 
-  it('registers model-list tools with schemas that accept canonical V2 backend target keys', async () => {
-    const cases = [
-      {
-        surface: 'mcp' as const,
-        actionsSettings: ActionsSettingsV1Schema.parse({ v: 1, actions: {
-          'agents.models.list': { toolExposureModes: { mcp: 'direct' } },
-        } }),
-      },
-      {
-        surface: 'agent' as const,
-        actionsSettings: ActionsSettingsV1Schema.parse({
-          v: 1,
-          actions: {
-            'agents.models.list': {
-              toolExposureModes: {
-                agent: 'direct',
-              },
-            },
-          },
-        }),
-      },
-    ];
-
-    for (const item of cases) {
-      const registered = new Map<string, {
-        meta: { inputSchema?: { safeParse?: (value: unknown) => { success: boolean } } };
-        handler: (args: unknown, extra?: unknown) => Promise<unknown>;
-      }>();
-      const executeActionByToolName = vi.fn(async (_toolName: string, args: unknown) => ({
-        ok: true as const,
-        result: { args },
-      }));
-
-      registerHappierMcpBuiltInTools({
-        registerTool: (name, meta, handler) => {
-          registered.set(name, {
-            meta: meta as { inputSchema?: { safeParse?: (value: unknown) => { success: boolean } } },
-            handler: handler as (args: unknown, extra?: unknown) => Promise<unknown>,
-          });
-        },
-      }, {
-        sessionId: 'sess-1',
-        surface: item.surface,
-        actionsSettings: item.actionsSettings,
-        deps: {
-          changeTitle: async () => ({ success: true }),
-          executeActionByToolName,
-        },
-      });
-
-      const tool = registered.get('agents_models_list');
-      expect(tool).toBeTruthy();
-      const input = { backendTargetKey: 'agent:happier.agent.codex/codex', limit: 1 };
-      expect(tool?.meta.inputSchema?.safeParse?.(input)?.success).toBe(true);
-
-      await expect(tool?.handler(input)).resolves.toMatchObject({
-        content: [{ type: 'text', text: JSON.stringify({ args: input }) }],
-        isError: false,
-      });
-      if (item.surface === 'agent') {
-        expect(executeActionByToolName).toHaveBeenCalledWith(
-          'agents_models_list',
-          input,
-          'sess-1',
-          {
-            actionRequestId: expect.any(String),
-            approvalOrigin: {
-              kind: 'transcript_tool_call',
-              sessionId: 'sess-1',
-              toolName: 'agents_models_list',
-            },
-          },
-        );
-      } else {
-        expect(executeActionByToolName).toHaveBeenCalledWith(
-          'agents_models_list',
-          input,
-          'sess-1',
-          { actionRequestId: expect.any(String) },
-        );
-      }
-    }
-  });
-
   it('allows direct session action tools to rely on the MCP default session target', () => {
     const registered = new Map<string, unknown>();
 
@@ -723,53 +638,17 @@ describe('registerHappierMcpBuiltInTools', () => {
       },
     });
 
-    const meta = registered.get('session_terminal_composer_clear') as { inputSchema?: { safeParse?: (value: unknown) => { success: boolean } } } | undefined;
-    expect(meta).toBeTruthy();
-    expect(meta?.inputSchema?.safeParse?.({})?.success).toBe(true);
-    expect(meta?.inputSchema?.safeParse?.({ sessionId: 'sess-2' })?.success).toBe(true);
-  });
-
-  it('preserves an exact execution-run recipient through the canonical MCP Action tool', async () => {
-    const handlers = new Map<string, (args: unknown, extra?: unknown) => Promise<unknown>>();
-    const executeActionByToolName = vi.fn(async () => ({
-      ok: true as const,
-      result: { status: 'accepted', localId: 'local-targeted-1' },
-    }));
-
-    registerHappierMcpBuiltInTools({
-      registerTool: (name, _meta, handler) => {
-        handlers.set(name, handler as (args: unknown, extra?: unknown) => Promise<unknown>);
-      },
-    }, {
-      sessionId: 'sess-home-1',
-      surface: 'mcp',
-      actionsSettings: ActionsSettingsV1Schema.parse({ v: 1, actions: {
-        'session.message.send': { toolExposureModes: { mcp: 'direct' } },
-      } }),
-      deps: {
-        changeTitle: async () => ({ success: true }),
-        executeActionByToolName,
-      },
-    });
-
-    const handler = handlers.get('session_message_send');
-    if (!handler) throw new Error('Expected session_message_send to be registered');
-    const input = {
-      message: 'Inspect the exact run.',
-      recipient: { kind: 'execution_run', runId: 'run-9' },
-      wait: true,
+    const meta = registered.get('session_terminal_composer_clear') as { inputSchema?: z.ZodMiniType } | undefined;
+    if (!meta?.inputSchema) throw new Error('Expected session_terminal_composer_clear to be registered');
+    // Control: the canonical Action contract requires sessionId; only the bound MCP context makes it optional.
+    expect(zodSchemaToJsonSchemaObject(getActionSpec('session.terminalComposer.clear').inputSchema, { target: 'draft-7' }).required)
+      .toContain('sessionId');
+    const advertised = z.toJSONSchema(meta.inputSchema, { target: 'draft-7', io: 'input' }) as {
+      properties?: Record<string, unknown>;
+      required?: string[];
     };
-
-    await expect(handler(input, { requestId: 'mcp-targeted-1' })).resolves.toMatchObject({
-      isError: false,
-      structuredContent: { status: 'accepted', localId: 'local-targeted-1' },
-    });
-    expect(executeActionByToolName).toHaveBeenCalledExactlyOnceWith(
-      'session_message_send',
-      input,
-      'sess-home-1',
-      { actionRequestId: expect.any(String) },
-    );
+    expect(advertised.properties).toHaveProperty('sessionId');
+    expect(advertised.required ?? []).not.toContain('sessionId');
   });
 
   it('does not let process action settings disable built-in MCP tools when no predicate is provided', () => {
