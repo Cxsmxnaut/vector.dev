@@ -467,13 +467,14 @@ describe('exact invoking-surface continuation', () => {
         expect(screen.getTextContent()).not.toContain('Open Account settings to continue connecting the Home');
     });
 
-    it('keeps a rejected approval on the fresh-attempt action even when the stage is retryable', async () => {
+    // `stop` is what the directory projects for a declined approval; `retry_stage` must not demote it to Retry.
+    it.each(['stop', 'retry_stage'] as const)('keeps a rejected approval on the fresh-attempt action (%s recovery)', async (recovery) => {
         const input = { service: fixture.service,
             credentialTokenDigest: ACCOUNT_CREDENTIAL_TOKEN_DIGEST,
             session: new AccountDirectorySession({ endpoint: fixture.service.endpointUrl, serverIdentityId: fixture.service.serverIdentityId }, { capability: fixture.service.capability }),
             intent: { kind: 'enroll' as const, homeServerIdentityId: fixture.home.homeServerIdentityId } };
         screen = await renderScreen(<AccountServiceContinuation input={input}
-            result={{ kind: 'failure', stage: 'enroll', code: { source: 'home', code: 'rejected' }, recovery: 'retry_stage', accountCredentialCommitted: true, homeCredentialCommitted: false }}
+            result={{ kind: 'failure', stage: 'enroll', code: { source: 'home', code: 'rejected' }, recovery, accountCredentialCommitted: true, homeCredentialCommitted: false }}
             onResult={() => {}} onBack={() => {}} />);
 
         expect(screen.getTextContent()).toContain('Start again');

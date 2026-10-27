@@ -243,17 +243,21 @@ describe('AccountServiceSelectionForm', () => {
             source: 'user' as const,
         };
         const response = createDeferred<Response>();
-        network.request.mockImplementation(async () => await response.promise);
+        network.request.mockImplementation(async (_endpointUrl: string, path: string) => (
+            path === '/v1/auth/entry' ? authEntryResponse() : await response.promise
+        ));
         const { setAccountServiceEndpoint, resolveSelectedAccountServiceEndpoint } = await import('@/sync/domains/server/serverProfiles');
         const { selectAccountServiceEndpoint } = await import('@/sync/ops/accountDirectory/selectAccountServiceEndpoint');
         const { AccountServiceSelectionForm } = await import('./AccountServiceSelectionForm');
         await setAccountServiceEndpoint(priorEndpoint);
         const onBack = vi.fn();
+        // Await the abandoned operation itself, so a selection that Back failed to cancel has time to persist.
+        let abandoned: Promise<unknown> | undefined;
         const screen = await renderScreen(
             <AccountServiceSelectionForm
                 currentEndpoint={priorEndpoint}
                 onBack={onBack}
-                onSelect={selectAccountServiceEndpoint}
+                onSelect={(url, options) => (abandoned = selectAccountServiceEndpoint(url, options))}
             />,
         );
         await screen.pressByTestIdAsync('account-service-another-choice');
@@ -274,7 +278,7 @@ describe('AccountServiceSelectionForm', () => {
             headers: { 'Content-Type': 'application/json' },
         }));
         await act(async () => {
-            await response.promise;
+            await abandoned;
         });
 
         expect(onBack).toHaveBeenCalledTimes(1);
