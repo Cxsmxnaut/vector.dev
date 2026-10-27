@@ -371,8 +371,9 @@ describe('ProjectRightPanelServicesView', () => {
         expect(screen.getTextContent()).toContain('echo setup');
         expect(modalAlertMock).not.toHaveBeenCalled();
         const startRequest = rpc.machine.mock.calls.find(([request]) => request.method === RPC_METHODS.DAEMON_LOCAL_SERVICES_LAUNCHER_START)?.[0];
-        // Native Start includes preparation/review; the caller's lifetime owns it, as for Scripts.
-        expect(startRequest).toMatchObject({ operationTimeoutMs: null, signal: expect.any(AbortSignal) });
+        // Submitted Start outlives the issuing view; native preparation has no shorter caller deadline.
+        expect(startRequest).toMatchObject({ operationTimeoutMs: null });
+        expect(startRequest?.signal).toBeUndefined();
         expect(home.requestsFor('/v1/actions/projects.prepare').map(request =>
             ExternalActionRequestEnvelopeV1Schema.parse(ExternalActionExecutionAuthorizationRequestV1Schema.parse(request.input).envelope).input))
             .toEqual([{ workspace: { ...workspace, serverId: serverIdentityId }, phase: 'setup' }]);
@@ -475,7 +476,6 @@ describe('ProjectRightPanelServicesView', () => {
             context: {
                 serverId,
                 expectedAccountId: 'project-account',
-                signal: expect.any(AbortSignal),
                 surface: 'ui',
             },
         });

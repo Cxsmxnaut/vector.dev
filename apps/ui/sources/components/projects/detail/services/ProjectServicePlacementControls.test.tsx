@@ -25,7 +25,7 @@ import { publishHomeAccountChange } from '@/sync/runtime/orchestration/homeAccou
 import { RPC_METHODS } from '@happier-dev/protocol/rpc';
 import { computeWorkspaceSyncPolicyDigest } from '@happier-dev/protocol/sessions/control/handoff/workspaceSyncSchemas';
 import { buildApprovalRequestArtifactHeaderV1, type ApprovalRequestV2 } from '@happier-dev/protocol';
-import { publishLocalServiceLauncherSnapshot, resetLocalServiceLauncherStoreForTests } from '@/sync/domains/local/services/launch/sharedStore';
+import { getLocalServiceLauncherState, publishLocalServiceLauncherSnapshot, resetLocalServiceLauncherStoreForTests } from '@/sync/domains/local/services/launch/sharedStore';
 import { publishLocalServiceInventorySnapshot, resetLocalServiceInventoryStoreForTests } from '@/sync/domains/local/services/inventory/sharedStore';
 import { ARTIFACT_PLAIN_DATA_KEY_MARKER, encodePlainArtifactStoredContent } from '@happier-dev/protocol/storage/artifactStoredContent';
 import { ProjectServiceRelocateInputV1Schema } from '@happier-dev/protocol/workspaces/projectServiceRelocationV1';
@@ -457,6 +457,9 @@ async function setup(options: Readonly<{
   };
   return { screen, writes, poolReads, choose, choosePool, runsOn, model: () => model!, serverId,
     catalogBinding,
+    bindingState: async (machineId: string) => getLocalServiceLauncherState({ ...await catalogBinding(), machineId,
+      scope: 'workspace', workspaceRoot: machineId === source.machineId ? source.rootPath : worker.rootPath,
+      projection: 'managed_bindings' }),
     setRunning: (value: boolean) => { running = value; refreshRow?.(); },
     setRowMachine: (machineId: string) => { rowMachineId = machineId; refreshRow?.(); },
     setActualFails: (failed: boolean) => { actualFails = failed; },
@@ -565,11 +568,11 @@ describe('Service Runs on through the placement and relocation Actions', () => {
         progress: { kind: 'phase', phase: 'starting', label: 'Starting' } });
       let start: Promise<unknown> | undefined;
       try {
-        await vi.waitFor(() => expect(h.screen.findByTestId('service-row-start')).toBeTruthy());
+        await vi.waitFor(() => expect(h.screen.findByTestId('service-row-start-row')).toBeTruthy());
         if (entry === 'app') {
           const firstFrames: string[] = [];
           captureFrame = () => firstFrames.push(h.screen.getTextContent());
-          await act(async () => { start = h.screen.pressByTestIdAsync('service-row-start'); });
+          await act(async () => { start = h.screen.pressByTestIdAsync('service-row-start-row'); });
           expect(firstFrames.length).toBeGreaterThan(0);
           expect(firstFrames.every(frame => frame.includes(startingText))).toBe(true);
           captureFrame = () => {};
@@ -603,14 +606,16 @@ describe('Service Runs on through the placement and relocation Actions', () => {
         operation = ActionOperationSnapshotV1Schema.parse({ ...operation, revision: 2, state: 'succeeded', settledAt: 20,
           domainRef: { ...operation.domainRef, workspace: { ...workspace, machineId, workspaceId: currentTarget.workspaceId, rootPath: currentTarget.cwd },
             declaration: currentTarget.declaration, currentTarget } });
-        captureFrame = () => frames.push(Boolean(h.screen.findByTestId('service-row-start') || h.screen.findByTestId('service-row-status-unavailable')));
+        captureFrame = () => frames.push(Boolean(h.screen.findByTestId('service-row-start-row') || h.screen.findByTestId('service-row-status-unavailable')));
         await act(async () => { publishActionOperationObservation({ serverId: h.serverId, machineId, observation: 'available', snapshots: [operation] });
           dispatch.resolve(); await start; });
         await readEntered.promise;
-        expect(h.screen.findByTestId('service-row-start')).toBeNull();
+        expect(h.screen.findByTestId('service-row-start-row')).toBeNull();
         expect(h.screen.findByTestId('service-row-status-unavailable')).toBeNull();
-        expect(h.screen.getTextContent()).toContain(`common.loading`);
-        expect(h.screen.getTextContent()).toContain(`localServices.row.onMachine:{"machine":"${machineId === 'devbox' ? 'Source workstation' : 'Worker workstation'}"}`);
+        expect(h.screen.findByTestId('service-row-status-operation')).toBeTruthy();
+        expect(h.screen.getTextContent()).not.toContain('common.loading');
+        // Pending admission is Starting. The exact Machine and Runs on value
+        // are checked below when the completed native binding reaches the row.
         expect(frames.length).toBeGreaterThan(0);
         expect(frames.every(exposedIdleOrUnavailable => !exposedIdleOrUnavailable)).toBe(true);
         const runningFrames: string[] = [];
@@ -644,12 +649,12 @@ describe('Service Runs on through the placement and relocation Actions', () => {
         holdPlacement = true;
         await act(async () => { h.setRunning(false); publishLocalServiceInventorySnapshot({ ...await h.catalogBinding(), machineId }, {
           v: 1, machineId, generatedAt: 2, refreshState: 'idle', entries: [], diagnostics: [] }); });
-        await vi.waitFor(() => expect(h.screen.findByTestId('service-row-start')).toBeTruthy());
+        await vi.waitFor(() => expect(h.screen.findByTestId('service-row-start-row')).toBeTruthy());
         expect(h.screen.findByTestId('service-row-status-operation')).toBeNull();
         if (entry === 'app') {
           const pendingFrames: string[] = [];
           captureFrame = () => pendingFrames.push(h.screen.getTextContent());
-          await act(async () => { start = h.screen.pressByTestIdAsync('service-row-start'); });
+          await act(async () => { start = h.screen.pressByTestIdAsync('service-row-start-row'); });
           expect(h.screen.getTextContent()).toContain(startingText);
           expect(pendingFrames.length).toBeGreaterThan(0);
           expect(pendingFrames.every(frame => frame.includes(startingText))).toBe(true);
@@ -743,7 +748,7 @@ describe('Service Runs on through the placement and relocation Actions', () => {
       await act(async () => { updatedAt = 3; h.setRunning(false); hold = false; bindingRead.resolve();
         publishLocalServiceInventorySnapshot({ ...await h.catalogBinding(), machineId: 'devbox' }, {
           v: 1, machineId: 'devbox', generatedAt: 3, refreshState: 'idle', entries: [], diagnostics: [] }); });
-      await vi.waitFor(() => expect(h.screen.findByTestId('service-row-start')).toBeTruthy());
+      await vi.waitFor(() => expect(h.screen.findByTestId('service-row-start-row')).toBeTruthy());
       expect(h.screen.getTextContent()).not.toContain('common.loading');
     } finally { bindingRead.resolve(); await h.screen.unmount(); }
   });
@@ -791,7 +796,7 @@ describe('Service Runs on through the placement and relocation Actions', () => {
       onStart: async () => { entered.resolve(); await reply.promise; } });
     let start: Promise<unknown> | undefined;
     try {
-      await act(async () => { start = h.screen.pressByTestIdAsync('service-row-start'); });
+      await act(async () => { start = h.screen.pressByTestIdAsync('service-row-start-row'); });
       await entered.promise;
       expect(h.screen.getTextContent()).toContain('localServices.row.startingOn:{"machine":"Worker workstation"}');
       expect(h.screen.getTextContent()).not.toContain('localServices.row.startingOn:{"machine":"Source workstation"}');
@@ -835,7 +840,7 @@ describe('Service Runs on through the placement and relocation Actions', () => {
       await publish({ ...approval, updatedAtMs: 3 }, true);
       await vi.waitFor(() => expect(h.screen.getTextContent()).toContain('localServices.row.startingOn:{"machine":"Worker workstation"}'));
       expect(h.screen.findByTestId('service-row-status-unavailable')).toBeNull();
-      expect(h.screen.findByTestId('service-row-start')).toBeNull();
+      expect(h.screen.findByTestId('service-row-start-row')).toBeNull();
       expect(h.screen.findByTestId('placement.move.operation')).toBeNull();
       const failed = ActionOperationSnapshotV1Schema.parse({ version: 1, operationId: 'cli-native-start', revision: 2,
         actionId: 'localServices.launcher.start', requestId: 'cli-start', state: 'failed',
@@ -865,7 +870,7 @@ describe('Service Runs on through the placement and relocation Actions', () => {
       await vi.waitFor(() => expect(h.screen.findByTestId('service-row-status-unavailable'), h.screen.getTextContent()).toBeTruthy());
       await act(async () => publishActionOperationObservation({ serverId: h.serverId, machineId, observation: 'available', snapshots: [operation] }));
       await vi.waitFor(() => expect(h.screen.getTextContent()).toContain('projectWorkers.copying'));
-      expect(h.screen.findByTestId('service-row-start')).toBeNull();
+      expect(h.screen.findByTestId('service-row-start-row')).toBeNull();
       expect(h.screen.findByTestId('service-row-status-unavailable')).toBeNull();
       expect(h.screen.findByTestId('placement.move.operation')).toBeNull();
       for (const phase of ['preparing', 'starting'] as const) {
@@ -886,7 +891,7 @@ describe('Service Runs on through the placement and relocation Actions', () => {
       await act(async () => publishActionOperationObservation({ serverId: h.serverId, machineId, observation: 'available', snapshots: [operation] }));
       await flushHookEffects();
       await vi.waitFor(() => expect(h.screen.findByTestId('service-row-status-unavailable'), h.screen.getTextContent()).toBeTruthy());
-      expect(h.screen.findByTestId('service-row-start')).toBeNull();
+      expect(h.screen.findByTestId('service-row-start-row')).toBeNull();
       expect(h.screen.getTextContent()).not.toContain('localServices.row.startingOn');
       expect(h.screen.getTextContent()).not.toContain('common.loading');
       h.setActualFails(false);
@@ -930,19 +935,22 @@ describe('Service Runs on through the placement and relocation Actions', () => {
       await act(async () => publishActionOperationObservation({ serverId: h.serverId, machineId: 'devbox', observation: 'available', snapshots: [operation] }));
       await flushHookEffects();
       await vi.waitFor(() => expect(h.screen.findByTestId('service-row-status-unavailable'), h.screen.getTextContent()).toBeTruthy());
-      expect(h.screen.findByTestId('service-row-start')).toBeNull();
+      expect(h.screen.findByTestId('service-row-start-row')).toBeNull();
       expect(h.screen.getTextContent()).not.toContain('common.loading');
       h.setActualFails(false);
       await act(async () => { h.setRowMachine(machineId); h.setRunning(true);
         publishLocalServiceInventorySnapshot({ ...await h.catalogBinding(), machineId }, {
           v: 1, machineId, generatedAt: 2, refreshState: 'idle', entries: [], diagnostics: [] }); });
       await vi.waitFor(() => expect(h.screen.findByTestId('service-row-status-running'), h.screen.getTextContent()).toBeTruthy());
-      // The receipt has handed off. A later failed census must say Unavailable,
-      // rather than replaying this historical success's loading treatment.
+      // The receipt has handed off. A later failed refresh carries no new native
+      // fact: retain the admitted Running binding without reviving receipt Loading.
       h.setActualFails(true);
       await act(async () => publishLocalServiceInventorySnapshot({ ...await h.catalogBinding(), machineId }, {
         v: 1, machineId, generatedAt: 3, refreshState: 'idle', entries: [], diagnostics: [] }));
-      await vi.waitFor(() => expect(h.screen.findByTestId('service-row-status-unavailable'), h.screen.getTextContent()).toBeTruthy());
+      await vi.waitFor(async () => expect((await h.bindingState(machineId)).refreshStatus).toBe('error'));
+      expect(h.screen.findByTestId('service-row-status-running')).toBeTruthy();
+      expect(h.screen.findByTestId('service-row-start-row')).toBeNull();
+      expect(h.screen.getTextContent()).not.toContain('common.loading');
     } finally { await h.screen.unmount(); }
   });
 
@@ -1061,7 +1069,7 @@ describe('Service Runs on through the placement and relocation Actions', () => {
     });
     await vi.waitFor(() => expect(h.screen.findByTestId('placement.move.retry'), h.screen.getTextContent()).toBeTruthy());
     expect(h.screen.getTextContent()).toContain('projectServices.moveFailedStopped');
-    expect(h.screen.findByTestId('service-row-start')).toBeTruthy();
+    expect(h.screen.findByTestId('service-row-start-row')).toBeTruthy();
     await act(async () => h.setSourceRef('other-checkout'));
     expect(h.screen.findByTestId('placement.move.inspect')).toBeNull();
     await act(async () => h.setSourceRef('checkout'));
@@ -1182,8 +1190,9 @@ describe('Service Runs on through the placement and relocation Actions', () => {
         error: { errorCode: 'indeterminate', error: 'indeterminate' } };
       publishActionOperationObservation({ serverId, machineId: 'devbox', observation: 'available', snapshots: [operation] });
     });
-    await vi.waitFor(() => expect(screen.findByTestId('service-row-start'), screen.getTextContent()).toBeTruthy());
+    await vi.waitFor(() => expect(screen.findByTestId('service-row-start-row'), screen.getTextContent()).toBeTruthy());
     expect(screen.findByTestId('service-row-status-running')).toBeNull();
+    await vi.waitFor(() => expect(screen.findByTestId('placement.move.retry')).toBeTruthy());
     expect(screen.getTextContent()).toContain('projectServices.moveFailedStopped');
     await screen.unmount();
   });
@@ -1270,7 +1279,7 @@ describe('Service Runs on through the placement and relocation Actions', () => {
     await vi.waitFor(() => expect(screen.getTextContent()).toContain('projectServices.moveFailedStopped'));
     expect(runsOn().props.disabled).toBe(false);
     expect(screen.findByTestId('placement.move.retry')).toBeTruthy();
-    expect(screen.findByTestId('service-row-start')).toBeTruthy();
+    expect(screen.findByTestId('service-row-start-row')).toBeTruthy();
     await screen.pressByTestIdAsync('placement.move.operation.details');
     expect(screen.getTextContent()).toContain('RPC_FORBIDDEN');
     await screen.pressByTestIdAsync('placement.move.retry');
@@ -1372,7 +1381,8 @@ describe('Service Runs on through the placement and relocation Actions', () => {
       allocation: 'bound', resource: { contributionRef: launch.provider, schemaVersion: 1, value: { id: 'native' } },
       creationState: 'active', desired: 'start', desiredWhen: 'now', intentRevision: 1, retention,
       wakeOnAcceptedMessage: false, ...(mode === 'inventory' ? {} : { enrolledMachineId: 'new-service-worker' }) };
-    const draft = createManagedMachineSelectionDraft({ selection: mode === 'preset' ? { kind: 'preset', homeId, id: 'service-preset', revision: 1 }
+    const draft = createManagedMachineSelectionDraft({ enrollmentIdentity: { kind: 'existingUser', role: 'personal' },
+      selection: mode === 'preset' ? { kind: 'preset', homeId, id: 'service-preset', revision: 1 }
       : { kind: 'one-off', homeId, launch, controller, retention, wakeOnAcceptedMessage: false },
       receipt: { launch, controller, optionStatus: 'current', prerequisites: [], billing: { location: 'local', stoppedBilling: 'not-billed' },
         retentionCapabilities: { supportedIntents: ['start', 'stop', 'delete'] }, retention, wakeOnAcceptedMessage: false } });
@@ -1541,10 +1551,10 @@ describe('Service Runs on through the placement and relocation Actions', () => {
           publishActionOperationObservation({ serverId: h.serverId, machineId: 'devbox', observation: 'available', snapshots: [operation] });
           if (actionId === 'projects.service.relocate') h.attach(operation);
         });
-        await vi.waitFor(() => expect(h.screen.findByTestId('service-row-start')).toBeNull());
+        await vi.waitFor(() => expect(h.screen.findByTestId('service-row-start-row')).toBeNull());
         // A transport interruption alone must retain the receipt and block another Start.
         await act(async () => actionOperationStore.setMachineObservation({ serverId: h.serverId, machineId: 'devbox' }, 'reconnecting'));
-        expect(h.screen.findByTestId('service-row-start')).toBeNull();
+        expect(h.screen.findByTestId('service-row-start-row')).toBeNull();
         await act(async () => publishActionOperationObservation({ serverId: h.serverId, machineId: 'devbox', observation: 'available',
           snapshots: [ActionOperationSnapshotV1Schema.parse({ ...operation, revision: 2, state: 'failed', settledAt: 3,
             error: { errorCode: 'service_preparation_failed', error: 'Preparation failed' } })] }));
@@ -1554,7 +1564,7 @@ describe('Service Runs on through the placement and relocation Actions', () => {
         expect(actionOperationStore.getSnapshot().operationsByKey.size).toBe(0);
         await vi.waitFor(() => expect(h.screen.findByTestId('placement.move.inspect')).toBeNull());
         expect(h.screen.getTextContent()).not.toContain('projectServices.moveUnknown');
-        expect(h.screen.findByTestId('service-row-start')).toBeTruthy();
+        expect(h.screen.findByTestId('service-row-start-row')).toBeTruthy();
         expect(h.runsOn().props.disabled).toBe(false);
         expect(h.screen.findAllByTestId('placement.picker')[0]?.props.selected).toEqual({ kind: 'primary' });
         expect(h.writes).toEqual([]);
