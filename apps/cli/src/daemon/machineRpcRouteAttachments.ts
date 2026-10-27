@@ -20,6 +20,7 @@ export type DaemonMachineRpcRouteRegistrar = Pick<
   ApiMachineClient,
   | 'registerLocalServicesPreviewRoutes'
   | 'registerLocalServicesRoutes'
+  | 'registerMachineAccessLossReceiver'
   | 'registerMachineVitalsRoutes'
   | 'registerMachineProcessesRoutes'
   | 'registerMachineResourcesPolicyRoutes'
@@ -40,7 +41,10 @@ type DaemonMachineConnectedAccountPurposeBindingRuntime = Parameters<
   DaemonMachineRpcRouteRegistrar['registerConnectedAccountPurposeBindingRuntime']
 >[0];
 
+type MachineAccessLossReceiverOptions = Parameters<ApiMachineClient['registerMachineAccessLossReceiver']>[0];
+
 export type DaemonMachineRpcRouteAttachmentCache = Readonly<{
+  attachMachineAccessLossReceiver(options: MachineAccessLossReceiverOptions): void;
   attachLocalServicesPreviewRoutes(routes: LocalServicePreviewRoutes): void;
   attachLocalServicesRoutes(routes: DaemonLocalServicesMachineRpcRoutes): void;
   attachMachineVitalsRoutes(routes: DaemonMachineVitalsRoutes): void;
@@ -66,6 +70,7 @@ export type DaemonMachineRpcRouteAttachmentCache = Readonly<{
 export function createDaemonMachineRpcRouteAttachmentCache(input: Readonly<{
   getApiMachineForSessions: () => DaemonMachineRpcRouteRegistrar | null;
 }>): DaemonMachineRpcRouteAttachmentCache {
+  let machineAccessLossReceiver: MachineAccessLossReceiverOptions | null = null;
   let localServicesPreviewRoutes: LocalServicePreviewRoutes | null = null;
   let localServicesRoutes: DaemonLocalServicesMachineRpcRoutes | null = null;
   let machineVitalsRoutes: DaemonMachineVitalsRoutes | null = null;
@@ -142,6 +147,10 @@ export function createDaemonMachineRpcRouteAttachmentCache(input: Readonly<{
   }
 
   return {
+    attachMachineAccessLossReceiver(options) {
+      machineAccessLossReceiver = options;
+      input.getApiMachineForSessions()?.registerMachineAccessLossReceiver(options);
+    },
     attachComputerRoutes(resolve) {
       resolveComputer = resolve;
       input.getApiMachineForSessions()?.registerComputerRoutes(resolve);
@@ -232,6 +241,9 @@ export function createDaemonMachineRpcRouteAttachmentCache(input: Readonly<{
 
     attachApiMachineForSessions(apiMachineForSessions) {
       if (!apiMachineForSessions) return;
+      if (machineAccessLossReceiver) {
+        apiMachineForSessions.registerMachineAccessLossReceiver(machineAccessLossReceiver);
+      }
       if (connectedServicePoolSelectionRead) {
         apiMachineForSessions.registerConnectedServicePoolSelectionRead(connectedServicePoolSelectionRead);
       }

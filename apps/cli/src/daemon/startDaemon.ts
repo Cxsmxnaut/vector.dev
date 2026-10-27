@@ -2275,6 +2275,7 @@ export async function startDaemon(
       onBrowserRecordingRoutesReady: machineRpcRouteAttachments.attachBrowserRecordingRoutes,
       onBrowserRecordingRuntimeReady: bindStorageRecordings,
       onSimulatorPreviewRoutesReady: machineRpcRouteAttachments.attachSimulatorPreviewRoutes,
+      onMachineAccessLossReceiverReady: machineRpcRouteAttachments.attachMachineAccessLossReceiver,
       onConnectedServicePoolSelectionReadReady: machineRpcRouteAttachments.attachConnectedServicePoolSelectionRead,
       resolveServerFeaturesSnapshot: refreshServerFeaturesSnapshot,
       liveStreamCaptureRegistry,

@@ -2241,8 +2241,16 @@ export class ApiMachineClient {
         };
     }
 
-    registerMachineAccessLossReceiver(options: Omit<Parameters<typeof registerMachineAccessLossReceiver>[1], 'machineId'>): void {
-        registerMachineAccessLossReceiver(this.rpcHandlerManager, { ...options, machineId: this.machine.id });
+    registerMachineAccessLossReceiver(options: Omit<Parameters<typeof registerMachineAccessLossReceiver>[1],
+        'machineId' | 'cleanupRequesterMachineActionOperations' | 'cleanupRequesterMachineTerminals'>): void {
+        registerMachineAccessLossReceiver(this.rpcHandlerManager, { ...options, machineId: this.machine.id,
+            cleanupRequesterMachineActionOperations: input => this.cleanupRequesterMachineOperations({
+                ...input, serverId: options.serverId,
+            }),
+            cleanupRequesterMachineTerminals: input => this.cleanupRequesterMachineTerminals({
+                ...input, serverId: options.serverId,
+            }),
+        });
     }
 
     /** Host uploads share the filesystem lifecycle independently of public prepared RPC registration. */

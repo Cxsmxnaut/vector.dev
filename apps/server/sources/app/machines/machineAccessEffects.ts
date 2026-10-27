@@ -124,16 +124,19 @@ export async function applyMachineAccessImpactsInTx(
             afterTx(tx, () => {
                 eventRouter.disconnectMachineAndSessionSockets({ accountId, machineId, sessionBindings: actorBindings });
                 if (!machine.installationId) {
-                    log({ module: "machine-access", level: "warn", machineId }, "Requester Session access-loss cleanup remains incomplete: installation unavailable");
+                    log({ module: "machine-access", level: "warn", machineId, subjectAccountId: accountId,
+                        reason: "installation_unavailable" }, "Requester Session access-loss cleanup remains incomplete: installation unavailable");
                     return;
                 }
                 void dispatchMachineAccessLossCustody({ machineId, subjectAccountId: accountId,
                     expectedCustodianAccountId: machine.accountId, expectedInstallationId: machine.installationId,
                 }).then(outcome => {
-                    log({ module: "machine-access", level: outcome.kind === "settled" ? "info" : "warn", machineId },
+                    log({ module: "machine-access", level: outcome.kind === "settled" ? "info" : "warn", machineId,
+                        subjectAccountId: accountId, ...(outcome.kind === "incomplete" ? { reason: outcome.reason } : {}) },
                         `Requester Session access-loss cleanup ${outcome.kind}`);
                 }).catch(() => {
-                    log({ module: "machine-access", level: "warn", machineId }, "Requester Session access-loss cleanup remains incomplete");
+                    log({ module: "machine-access", level: "warn", machineId, subjectAccountId: accountId,
+                        reason: "custody_unavailable" }, "Requester Session access-loss cleanup remains incomplete");
                 });
             });
         }

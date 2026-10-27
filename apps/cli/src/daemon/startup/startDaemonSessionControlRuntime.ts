@@ -2570,6 +2570,9 @@ export async function startDaemonSessionControlRuntime(
       typeof executeSpawnSessionRequest
     >[0]['persistedTakeoverAdmissionWaiter'];
     getApiMachineForSessions: () => ApiMachineClient | null;
+    onMachineAccessLossReceiverReady?: (
+      options: Parameters<ApiMachineClient['registerMachineAccessLossReceiver']>[0],
+    ) => void;
     onComputerRoutesReady?: (resolveComputer: () => ComputerRoutes | null) => void;
     onLocalServicesPreviewRoutesReady?: (
       routes: LocalServicePreviewRoutes,
@@ -12882,8 +12885,7 @@ export async function startDaemonSessionControlRuntime(
     localServicesRuntime.previewRoutes,
   );
   params.onSimulatorPreviewRoutesReady?.(simulatorPreviewRuntime.routes);
-  const apiMachineForSessions = params.getApiMachineForSessions();
-  if (apiMachineForSessions) {
+  {
     const cleanupSessions = createRequesterMachineSessionAccessLossCleanup({
       serverId: params.serverId,
       machineId: params.machineId,
@@ -12966,25 +12968,21 @@ export async function startDaemonSessionControlRuntime(
         return { kind: 'incomplete' };
       }
     };
-    apiMachineForSessions.registerMachineAccessLossReceiver({
+    const machineAccessLossReceiver: Parameters<ApiMachineClient['registerMachineAccessLossReceiver']>[0] = {
       serverId: params.serverId,
       readLiveWorkInventory: params.readLiveWorkInventory,
       resolveInstallationId: () =>
         readInstallationIdentityIfExistsSync()?.installationId ?? null,
       cleanupRequesterMachineSessions: cleanupSessions,
-      cleanupRequesterMachineActionOperations: (input) =>
-        apiMachineForSessions.cleanupRequesterMachineOperations({
-          ...input,
-          serverId: params.serverId,
-        }),
-      cleanupRequesterMachineTerminals: (input) =>
-        apiMachineForSessions.cleanupRequesterMachineTerminals({
-          ...input,
-          serverId: params.serverId,
-        }),
       cleanupRequesterMachineServices: cleanupServices,
-    });
+    };
+    if (params.onMachineAccessLossReceiverReady) {
+      params.onMachineAccessLossReceiverReady(machineAccessLossReceiver);
+    } else {
+      params.getApiMachineForSessions()?.registerMachineAccessLossReceiver(machineAccessLossReceiver);
+    }
   }
+  const apiMachineForSessions = params.getApiMachineForSessions();
   apiMachineForSessions?.registerLocalServicesRoutes(
     localServicesMachineRpcRoutes,
   );
