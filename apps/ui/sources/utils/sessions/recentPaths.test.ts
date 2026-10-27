@@ -90,10 +90,12 @@ describe('getRecentPathsForMachine', () => {
             updatedAt: 25,
             active: false,
         });
+        // Another host: only the explicit replacement, not same-locality routing, can attribute the path.
+        const target = createMachine('machine-target');
         storage.setState({
             machines: {
                 'machine-old': createMachine('machine-old', replacedBy('machine-target')),
-                'machine-target': createMachine('machine-target'),
+                'machine-target': { ...target, metadata: { ...target.metadata!, host: 'target.local' } },
             },
             sessions: { 'session-1': session },
         });
