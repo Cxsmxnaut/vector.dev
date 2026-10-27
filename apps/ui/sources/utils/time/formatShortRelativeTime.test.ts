@@ -244,13 +244,9 @@ describe('formatShortRelativeTime', () => {
     });
 
     describe('years range (>= 12 months)', () => {
-        it('returns "1y" at 360 days', () => {
+        it.each([360, 364])('returns "1y" once twelve 30-day months have passed (%s days), never "0y"', days => {
             setNow(NOW);
-            // months = Math.floor(360 / 30) = 12, exits months branch
-            // years = Math.floor(360 / 365) = 0... but let's verify
-            // Actually: 360 / 30 = 12, so months >= 12, falls through
-            // years = Math.floor(360 / 365) = 0
-            expect(formatShortRelativeTime(NOW - 360 * DAY)).toBe('0y');
+            expect(formatShortRelativeTime(NOW - days * DAY)).toBe('1y');
         });
 
         it('returns "1y" at 365 days', () => {
