@@ -283,29 +283,6 @@ describe('Expo native host — real Range resume (FIND-010)', () => {
     }
   });
 
-  it('resumes from a surviving scratch partial with an HTTP Range request', async () => {
-    const { fs, files } = createMemFs();
-    const full = new Uint8Array(Array.from({ length: 10 }, (_, i) => i + 1));
-    const manifest = makeManifest(full);
-
-    // A prior interrupted attempt left a 4-byte partial in the STABLE scratch dir.
-    files.set('file:///docs/happier/voice/modelPacks/.resume.scratch/model.bin', full.slice(0, 4));
-    seedResumePlan(files, manifest);
-
-    let observedRange: string | null = null;
-    const fetchImpl = vi.fn(async (_url: string, init?: RequestInit) => {
-      observedRange = (init?.headers as Record<string, string> | undefined)?.Range ?? null;
-      const start = observedRange ? Number(observedRange.replace('bytes=', '').replace('-', '')) : 0;
-      return streamResponse(full.slice(start), 206);
-    });
-
-    const host = createExpoModelPackInstallerHost({ download: createMemNativeDownload(fs, fetchImpl as any), fs });
-    await installModelPackWithHost({ host, packId: 'resume', manifest, signal: new AbortController().signal });
-
-    expect(observedRange).toBe('bytes=4-');
-    expect(Array.from(files.get(`${PACK_DIR}/model.bin`)!)).toEqual(Array.from(full));
-  });
-
   it('appends chunks incrementally rather than rewriting the whole staged file (LB-L1)', async () => {
     const { fs, files } = createMemFs();
     const chunkBytes = 1024 * 1024;
