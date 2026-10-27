@@ -192,7 +192,7 @@ describe('useServerCredentialAccountScopes', () => {
 
             await vi.waitFor(() => expect(hook.getCurrent().get('srv_home_b')?.accountId).toBe('account-b'));
             expect(hook.getCurrent().has('local-home-b')).toBe(false);
-            const lookupKeys = credentialRead.mock.calls.map(([, options]) => options.serverId);
+            const lookupKeys = credentialRead.mock.calls.map(([, options]) => options?.serverId);
             expect(lookupKeys).toContain('srv_home_b');
             expect(lookupKeys).not.toContain('local-home-b');
         } finally { credentialRead.mockRestore(); }
