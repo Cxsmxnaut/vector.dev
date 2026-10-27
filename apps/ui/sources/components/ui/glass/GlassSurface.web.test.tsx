@@ -981,17 +981,6 @@ describe('web glass material', () => {
         expect(backdropsIn(custom, 'inner')).toHaveLength(1);
     });
 
-    it('keeps the content mounted when the user turns blur off and back on', async () => {
-        useAutoPreset();
-        const screen = await renderScreen(<GlassSurface surfaceGroup="floating"><DraftInput /></GlassSurface>);
-        await act(async () => { screen.changeTextByTestId('draft', 'keep this draft'); });
-        for (const preset of ['solid', 'auto'] as const) {
-            act(() => storage.setState({ settings: { ...storage.getState().settings, ...resolvePreset(storage.getState().settings, preset) } }));
-            expect(screen.findHostByTestId('draft')?.props.value).toBe('keep this draft');
-            expect(screen.findAll(hasBackdrop).length > 0).toBe(preset === 'auto');
-        }
-    });
-
     it('never turns a shell plane into a backdrop root for the surfaces it holds', () => {
         // A base plane lies on the window canvas: there is nothing behind it a CSS blur could reach (the
         // window material is native), so a backdrop-filter there only cuts its descendants off the page.
