@@ -225,6 +225,27 @@ describe('plugin author doctor', () => {
     });
   });
 
+  it('prepares a non-materialized package root, then evaluates it', async () => {
+    await withAuthorRoot('happier-doctor-prepared-', async (root) => {
+      await writePackageRootPlugin(
+        root,
+        createPluginManifestV2Fixture({ id: 'example.prepared', version: '0.1.0' }),
+        { materialized: false },
+      );
+      const prepareDependencies = vi.fn(async ({ projectRoot }: { projectRoot: string }) => ({ ok: true as const, projectRoot }));
+
+      await expect(runPluginAuthorDoctor({
+        locator: root,
+        prepareDependencies: prepareDependencies as never,
+      })).resolves.toMatchObject({
+        ok: true,
+        pluginId: 'example.prepared',
+        entryPath: join(root, 'src', 'index.ts'),
+      });
+      expect(prepareDependencies).toHaveBeenCalledExactlyOnceWith({ projectRoot: root });
+    });
+  });
+
   it('reuses a materialized package root instead of reinstalling before evaluation', async () => {
     await withAuthorRoot('happier-doctor-materialized-', async (root) => {
       await writePackageRootPlugin(

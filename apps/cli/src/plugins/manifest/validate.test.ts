@@ -382,6 +382,45 @@ describe('validatePluginManifest', () => {
     });
   });
 
+  it('admits the current custom Agent declaration and refuses retired surface handlers', () => {
+    const agent = {
+      id: 'agent',
+      title: 'Agent',
+      runtime: { kind: 'custom' },
+      primary: 'sessions',
+      capabilities: {
+        sessions: { open: ['create'], delivery: ['newTurn'], cancel: true },
+      },
+    };
+    const current = createManifest('acme.current-agent');
+    current.contributes = { agents: [agent] };
+    expect(validatePluginManifest(current, { sourceProvenance: 'registryCustodied' })).toEqual(expect.objectContaining({ ok: true }));
+
+    const retired = createManifest('acme.retired-surface');
+    retired.contributes = {
+      agents: [{
+        ...agent,
+        surfaceHandlers: [{
+          surfaceApiVersion: 1,
+          id: 'checkpoint-restore',
+          kind: 'checkpoint',
+          operation: 'restore',
+          support: 'conditional',
+        }],
+      }],
+    };
+    const result = validatePluginManifest(retired, { sourceProvenance: 'registryCustodied' });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.diagnostics).toEqual([
+        expect.objectContaining({
+          code: 'plugin_manifest_invalid',
+          message: expect.stringContaining('contributes.agents.0'),
+        }),
+      ]);
+    }
+  });
+
   it('scopes the reserved happier namespace to registry-custodied artifacts', () => {
     // The rule stops a *published* artifact from impersonating a first-party
     // plugin. A working tree on this machine is the maintainer's own dev loop:

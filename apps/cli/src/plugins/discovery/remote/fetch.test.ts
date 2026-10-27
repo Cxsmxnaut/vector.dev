@@ -3,7 +3,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import type { AddressInfo } from 'node:net';
 import { join } from 'node:path';
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import { createTempDir, removeTempDir } from '@/testkit/fs/tempDir';
 import { createEnvKeyScope } from '@/testkit/env/envScope';
@@ -94,7 +94,10 @@ describe('remote plugin body budget', () => {
 
   it('accepts discovery that settles after the former acquisition cutoff', async () => {
     archiveEnv.patch({ HAPPIER_PLUGIN_REMOTE_FETCH_TIMEOUT_MS: undefined });
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
+    // The acquisition lifetime reads node:perf_hooks; drive that monotonic clock from the fake clock.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    const monotonicClock = vi.spyOn(performance, 'now').mockImplementation(() => Date.now());
+    onTestFinished(() => monotonicClock.mockRestore());
     let resolveDns!: (answers: readonly { address: string; family: 4 }[]) => void;
     const operation = (async () => {
       const opened = await openRemoteAcquisition({

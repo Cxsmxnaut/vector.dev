@@ -9,6 +9,7 @@ import type { PluginInstallationReview } from '@happier-dev/protocol/marketplace
 import {
   decideUserPluginChange,
   formatPluginInstallationReviewForTerminal,
+  readUserPluginChangeStatus,
   requestUserPluginChange,
 } from './changeClient';
 import type { PluginChangeRequestResult } from './changeContract';
@@ -52,6 +53,22 @@ describe('requestUserPluginChange', () => {
     } finally {
       terminalInput.mockRestore();
     }
+  });
+
+  it('rejoins a pending change by status after the daemon starts, and never reads status without it', async () => {
+    const ensureDaemon = vi.fn(async () => undefined);
+    const readStatus = vi.fn(async () => ({ kind: 'expired' as const }));
+    await expect(readUserPluginChangeStatus({ pendingChangeId: '  pending-1 ' }, { ensureDaemon, readStatus }))
+      .resolves.toEqual({ kind: 'expired' });
+    expect(ensureDaemon).toHaveBeenCalledOnce();
+    expect(readStatus).toHaveBeenCalledExactlyOnceWith({ pendingChangeId: 'pending-1' });
+
+    const unread = vi.fn();
+    await expect(readUserPluginChangeStatus({ pendingChangeId: 'pending-1' }, {
+      ensureDaemon: async () => { throw new Error('daemon down'); },
+      readStatus: unread,
+    })).resolves.toEqual({ kind: 'daemonUnavailable' });
+    expect(unread).not.toHaveBeenCalled();
   });
 
   it('continues one pending project-trust review through one explicit decision', async () => {
