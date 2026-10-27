@@ -12,6 +12,13 @@ import { localServiceListenerGroupKey } from '@happier-dev/protocol/local/servic
 import { normalizeWorkspaceRootPathV1 } from '@happier-dev/protocol/workspaces/workspaceRefResolutionV1';
 import { hasUncertainLocalServiceNativeCustodyV1, isLocalServiceStateRunningV1 } from '@happier-dev/protocol/local/services/launcher/v1';
 
+/** What the Project definition says a declared service runs and which file that command comes from. */
+export type DeclaredServiceFacts = Readonly<{ command: string | null; badge: string | null }>;
+export type DescribeServiceDeclaration = (
+    declaration: NonNullable<LocalServiceLaunchTarget['declaration']>,
+    target: LocalServiceLaunchTarget,
+) => DeclaredServiceFacts | null;
+
 export type ServiceRowScope = 'thisSession' | 'workspace' | 'machine' | 'suggestion';
 export type ServiceRowStatus = 'loading' | 'running' | 'starting' | 'stopping' | 'stale' | 'stopped' | 'failed' | 'unavailable';
 
@@ -339,6 +346,11 @@ export function buildLocalServiceRows(input: Readonly<{
     rowIdsByTargetId?: ReadonlyMap<string, string>;
     sessionId: string | null;
     scope: 'workspace' | 'machine';
+    /**
+     * The Project definition's own words for a declared service (the Scripts presentation owner's
+     * command and source file). The feed carries a command only for a literal one.
+     */
+    describeDeclaration?: DescribeServiceDeclaration;
 }>): readonly ServiceRow[] {
     const inventoryById = new Map<string, LocalServiceInventoryRow>();
     for (const row of input.inventoryRows) {
@@ -348,7 +360,8 @@ export function buildLocalServiceRows(input: Readonly<{
         const inventoryId = inventoryIdFromTarget(target);
         const inventoryRow = inventoryId ? inventoryById.get(inventoryId) : undefined;
         const status = resolveStatus(target, inventoryRow);
-        const processLabel = readProcessLabel(inventoryRow, target);
+        const declared = target.declaration ? input.describeDeclaration?.(target.declaration, target) ?? null : null;
+        const processLabel = readProcessLabel(inventoryRow, target) ?? declared?.command ?? null;
         // The inventory's numeric port is the authority; the target's subtitle is the fallback.
         const portLabel = (inventoryRow ? resolveLocalServicePortLabel(inventoryRow) : null)
             ?? resolveLocalServiceLaunchTargetPortLabel(target);
@@ -372,7 +385,7 @@ export function buildLocalServiceRows(input: Readonly<{
                 ?? executableName(processLabel),
             addressLabel,
             sourceLabel: SOURCE_LABEL_KEYS[target.source],
-            sourceBadge: resolveSourceBadge(target),
+            sourceBadge: declared?.badge ?? resolveSourceBadge(target),
             addressNote: resolveAddressNote(target, Boolean(addressLabel || portLabel || readHost(inventoryRow))),
             status,
             // A declaration that offers Start has no refusal to explain yet: its feed placeholder

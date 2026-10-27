@@ -16,7 +16,7 @@ import type { LocalServicePreviewPlatform } from '@/sync/domains/local/services/
 import type { PluginUiProjectionModel } from '@/sync/domains/plugins/ui/projection';
 
 import { DetectedLocalServicesPane } from './DetectedLocalServicesPane';
-import type { ServiceRow } from '@/sync/domains/local/services/serviceRow';
+import type { DescribeServiceDeclaration, ServiceRow } from '@/sync/domains/local/services/serviceRow';
 import type { ServiceRowOpenHandler } from './ServiceRowView';
 import { useLocalServiceEntryActions } from './useLocalServiceEntryActions';
 import { useLocalServiceLiveFeeds } from './useLocalServiceLiveFeeds';
@@ -49,6 +49,8 @@ export type LocalServicesSurfaceHostProps = Readonly<{
     onAddService?: () => void;
     /** The placement owner's per-row "Runs on" control (plan 32), hosted in each row's expansion. */
     renderServicePlacement?: (row: ServiceRow) => React.ReactNode;
+    /** The Project definition's command and source file for a declared service. */
+    describeDeclaration?: DescribeServiceDeclaration;
     testID: string;
 }>;
 
@@ -140,6 +142,7 @@ export function LocalServicesSurfaceHost(props: LocalServicesSurfaceHostProps): 
             presentation={props.presentation}
             onAddService={props.onAddService}
             renderServicePlacement={props.renderServicePlacement}
+            describeDeclaration={props.describeDeclaration}
             viewerAccountId={entryActions.viewerAccountId}
             effectReview={entryActions.review}
             testID={props.testID}

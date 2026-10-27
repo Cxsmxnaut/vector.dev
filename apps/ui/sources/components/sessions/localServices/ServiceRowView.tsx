@@ -71,8 +71,10 @@ const stylesheet = StyleSheet.create((theme) => ({
         alignItems: 'center',
         gap: theme.space.s8,
     },
+    // The name is what tells rows apart: it keeps its width and the status word beside it gives way first.
     title: {
-        flexShrink: 1,
+        flexShrink: 0,
+        maxWidth: '100%',
         color: theme.colors.text.primary,
         fontWeight: '600',
     },
@@ -82,6 +84,8 @@ const stylesheet = StyleSheet.create((theme) => ({
         fontWeight: '400',
     },
     statusLabel: {
+        flexShrink: 1,
+        minWidth: 0,
         ...Typography.variant('meta'),
         color: theme.colors.text.secondary,
     },
@@ -102,13 +106,33 @@ const stylesheet = StyleSheet.create((theme) => ({
     },
     /**
      * The lead (an address, a command) stays readable: when the pane is too narrow for the trailing
-     * facts beside it (a phone), they wrap to their own line instead of cutting the address.
+     * facts beside it (the desktop rail), they wrap to their own line instead of cutting the address.
      */
     factsLead: {
         maxWidth: '100%',
     },
     factsTail: {
         flexShrink: 1,
+    },
+    /** Phone (lab PAGEp): the facts stay ONE line and ellipsize at its end, as the lab's rows do. */
+    factsRowOneLine: {
+        flexWrap: 'nowrap',
+    },
+    /** The address keeps its width while trailing facts follow it: they give way first. */
+    factsLeadOneLine: {
+        flexShrink: 0,
+    },
+    /** With nothing after it, a long command (the lead) is what ellipsizes. */
+    factsLeadAloneOneLine: {
+        flexShrink: 1,
+        minWidth: 0,
+    },
+    factsTailOneLine: {
+        minWidth: 0,
+    },
+    /** The source chip is the line's fixed mark: it never shrinks or breaks. */
+    factsBadgeOneLine: {
+        flexShrink: 0,
     },
     badgeLabel: {
         ...Typography.mono(),
@@ -154,8 +178,8 @@ const stylesheet = StyleSheet.create((theme) => ({
     actionsSpacer: {
         flex: 1,
     },
-    /** The header's controls when an open row has nothing else for an action line (a lone overflow). */
-    headerControls: {
+    /** The row's trailing controls: the overflow, then the row's own Open or Start. */
+    trailing: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: ROW_ACTION_GAP_PX,
@@ -210,15 +234,23 @@ function ServiceRowTitle(props: Readonly<{
     operationText?: string | null;
     /** The machine stopped answering: the row shows what was last known, not a live status. */
     offline?: boolean;
+    /** The Machine a starting row names ("Starting on devbox…"), when the row knows it. */
+    machineName?: string | null;
     animationEnabled?: boolean;
     testID: string;
 }>): React.ReactElement {
     const styles = stylesheet;
     const unsettled = !props.offline && hasUnsettledLocalServiceCustody(props.row);
+    const startingLabel = props.machineName
+        ? t('localServices.row.startingOn', { machine: props.machineName })
+        : t('localServices.rowStatus.starting');
     const statusLabel = props.operationText ?? (props.offline
         ? t('localServices.rowStatus.lastKnown')
-        : unsettled ? t('localServices.rowStatus.unknown') : t(STATUS_LABEL_KEYS[props.row.status]));
-    const ready = !props.operationText && ((props.row.scope === 'suggestion' && props.row.status === 'stopped') || isNotStarted(props.row));
+        : unsettled ? t('localServices.rowStatus.unknown')
+            : props.row.status === 'starting' ? startingLabel : t(STATUS_LABEL_KEYS[props.row.status]));
+    // Hydration is not a state of the service: a loading row reads like a Ready one, with its own spinner.
+    const ready = !props.operationText && ((props.row.scope === 'suggestion' && props.row.status === 'stopped')
+        || isNotStarted(props.row) || props.row.status === 'loading');
     return (
         <View style={styles.titleRow}>
             <Text style={[styles.title, isInert(props.row) ? styles.titleInert : null]} numberOfLines={1}>{props.row.title}</Text>
@@ -257,18 +289,19 @@ function resolveRowFacts(row: ServiceRow, machineName: string | null, startedByN
             ? t('localServices.row.startedByOn', { name: startedByName, machine: machineName })
             : t('localServices.row.startedBy', { name: startedByName })
         : machineName ? t('localServices.row.onMachine', { machine: machineName }) : null;
-    // Offline: the host says so once, with Check again; the row keeps its last-known facts under
-    // a "Last known" status instead of repeating the outage on every row.
-    if (row.status === 'starting') {
-        return { lead: [machineName ? t('localServices.row.startingOn', { machine: machineName }) : t('localServices.rowStatus.starting')], tail: [], tailReason: null, reason };
+    // A row keeps its anatomy across idle, starting, running and failed: while it starts, the facts line is
+    // the idle row's (command, then the source chip) and the status beside the name carries the Machine.
+    if (row.status === 'starting' || row.status === 'loading') {
+        const lead = [row.processLabel].filter((part): part is string => Boolean(part));
+        return { lead, tail: [], tailReason: null, reason };
     }
     if (row.addressNote === 'waiting') {
         return { lead: [t('localServices.row.waitingAddress')], tail: [], tailReason: null, reason };
     }
-    // A failed start says so whether or not Start is offered again (Retry): its output is one press away.
+    // A failed start is said once, by the status beside the name; its output is one press away.
     if (row.status === 'failed' || isNotStarted(row) || isInert(row) || hasUnsettledLocalServiceCustody(row)) {
         const lead = [row.processLabel].filter((part): part is string => Boolean(part));
-        if (row.status === 'failed') return { lead, tail: [t('localServices.row.failed')], tailReason: null, reason };
+        if (row.status === 'failed') return { lead, tail: [], tailReason: null, reason };
         if (reason) return { lead, tail: [reason.body], tailReason: reason, reason: null };
         // "Ready to start" already says it is not started: one quiet line, the command then the same
         // source chip a running row draws (lab s-services).
@@ -336,10 +369,12 @@ function ServiceRowFacts(props: Readonly<{
     machineName: string | null;
     startedByName: string | null;
     unavailableMachineName: string | null;
+    /** A phone row: the facts are one ellipsized line. */
+    oneLine: boolean;
     testID: string;
 }>): React.ReactElement {
     const styles = stylesheet;
-    const { row } = props;
+    const { row, oneLine } = props;
     const facts = resolveRowFacts(row, props.machineName, props.startedByName, props.unavailableMachineName);
     const badge = row.sourceBadge ?? null;
     const lead = facts.lead.join(' · ');
@@ -348,14 +383,15 @@ function ServiceRowFacts(props: Readonly<{
     const leadText = lead && (badge || tail) ? `${lead} ·` : lead;
     return (
         <View style={styles.facts}>
-            <View testID={`${props.testID}-meta`} style={styles.factsRow}>
-                {leadText ? <Text style={[styles.factsLine, tail || badge ? styles.factsLead : null]} numberOfLines={1}>{leadText}</Text> : null}
+            <View testID={`${props.testID}-meta`} style={[styles.factsRow, oneLine ? styles.factsRowOneLine : null]}>
+                {leadText ? <Text style={[styles.factsLine, tail || badge ? styles.factsLead : null, oneLine ? (tail ? styles.factsLeadOneLine : styles.factsLeadAloneOneLine) : null]} numberOfLines={1}>{leadText}</Text> : null}
                 {badge ? (
                     <StatusPill
                         testID={`${props.testID}-source`}
                         variant="neutral"
                         label={badge}
                         hideDot
+                        style={oneLine ? styles.factsBadgeOneLine : undefined}
                         labelStyle={styles.badgeLabel}
                     />
                 ) : null}
@@ -363,7 +399,7 @@ function ServiceRowFacts(props: Readonly<{
                     <Text
                         testID={facts.tailReason ? `${props.testID}-reason` : undefined}
                         accessibilityHint={facts.tailReason?.diagnosticCode ?? undefined}
-                        style={[styles.factsLine, styles.factsTail]}
+                        style={[styles.factsLine, styles.factsTail, oneLine ? styles.factsTailOneLine : null]}
                         // Facts stay one line (a narrow pane truncates them rather than breaking a
                         // machine name across lines); a reason keeps room for its sentence.
                         numberOfLines={facts.tailReason ? 2 : 1}
@@ -490,7 +526,10 @@ export function ServiceRowView(props: Readonly<{
             managedServiceId: row.target.sourceClass?.kind === 'managed_service' ? row.target.sourceClass.managedServiceId : undefined });
     const recoverable = relocation.stoppedBeforeStart;
     const operationActive = relocation.active || relocation.awaitingBinding;
-    const operationText = recoverable ? t('localServices.rowStatus.stopped') : operationActive ? relocation.progressText : null;
+    // Awaiting the managed binding is still Starting: "Loading…" is hydration, never a state word beside the name.
+    const operationText = recoverable ? t('localServices.rowStatus.stopped')
+        : relocation.awaitingBinding && !relocation.active ? t('localServices.rowStatus.starting')
+            : operationActive ? relocation.progressText : null;
     // A refused action reads in place under its own row, never in a dialog over the page.
     const runner = useLocalServiceActionRunner({ presentation: 'inline',
         observedNativeBinding: row.target.sourceClass?.kind === 'managed_service'
@@ -671,6 +710,8 @@ export function ServiceRowView(props: Readonly<{
 
     const minimumTargetSize = resolveMinimumInteractiveTargetSize(Platform.OS);
     const pending = runner.pendingId === menuPendingId;
+    // A row still hydrating its binding shows the row spinner instead of a word; a pending menu action does too.
+    const rowLoading = pending || row.status === 'loading';
     // A row that can only be started (a package script) or not acted on at all has nothing to
     // grow into: it stays a plain row, with ▶ as its one control.
     const hasPublicLink = !operationActive && Boolean(props.publicPreviewState && props.publicPreviewActions)
@@ -730,9 +771,7 @@ export function ServiceRowView(props: Readonly<{
     ) : null;
 
 
-    // With no address to copy and no Open or ▶ on the row, the overflow stays on the row (lab `jobs`).
-    const overflowOnRow = !addressValue && !openControl && !startControl;
-    const primaryControl = openControl ?? startControl ?? (overflowOnRow ? overflowControl : null);
+    const primaryControl = openControl ?? startControl;
     // "Share a link" sits in the action line beside Copy address (services lab O); an issued link and
     // the reasons a link cannot be made are the public-preview block's below it.
     const shareOffer = !operationActive && props.publicPreviewActions
@@ -749,10 +788,15 @@ export function ServiceRowView(props: Readonly<{
             actions={props.publicPreviewActions}
         />
     ) : null;
-    // An open row whose only extra is the overflow has no action line to put it on: the overflow joins
-    // the header's control, before it so the row's own control keeps its place, instead of leaving a strip with one lone ellipsis.
-    const loneOverflow = overflowControl !== null && !overflowOnRow && !addressValue && !shareControl;
-    const headerOverflow = loneOverflow && expanded ? overflowControl : null;
+    // A live service keeps its overflow (Restart, Stop) on the row beside its own control, collapsed or open, so
+    // Stop is reachable without expanding it: the overflow sits before the row's control, which keeps its column.
+    // A row that only offers Hide stays quiet (healthy is quiet) unless the overflow is its only control. On a
+    // phone the row pushes its detail, which ends with Stop, so the row keeps one control and the width for its facts.
+    const liveOverflow = (canStop || canRestart || canTerminate) && props.onOpenDetail === undefined;
+    const overflowOnRow = overflowControl !== null && (liveOverflow || primaryControl === null);
+    const trailingControls = overflowOnRow && primaryControl
+        ? <View style={styles.trailing}>{overflowControl}{primaryControl}</View>
+        : overflowOnRow ? overflowControl : primaryControl;
     // The phone detail's header keeps the menu and Start; Open is its Address row.
     const rowControl = detail
         ? (overflowControl || startControl ? <View style={styles.headerControls}>{overflowControl}{startControl}</View> : null)
@@ -769,8 +813,13 @@ export function ServiceRowView(props: Readonly<{
                 />
             ) : null}
             {shareControl}
-            <View style={styles.actionsSpacer} />
-            {overflowOnRow ? null : overflowControl}
+            {/* Hide-only overflow stays quiet on the collapsed row and ends the open row's action line. */}
+            {overflowOnRow ? null : (
+                <>
+                    <View style={styles.actionsSpacer} />
+                    {overflowControl}
+                </>
+            )}
         </View>
     ) : null;
     // One body for the desktop expansion and the phone's pushed detail; only the container differs.
@@ -806,19 +855,20 @@ export function ServiceRowView(props: Readonly<{
                     mode="info"
                     showChevron={false}
                     showDivider={false}
-                    loading={pending}
+                    loading={rowLoading}
                     rightElement={rowControl}
                     bottomElement={output}
                     bottomElementInset="text"
                 />
                 {failureNotice}
                 {hasListRows ? (
-                    <ItemGroup header="none">
+                    <ItemGroup>
                         {addressValue ? (
                             <Item
                                 testID={`${props.testID}-address`}
                                 title={t('localServices.row.address')}
                                 subtitle={canOpen ? t('localServices.row.addressOpensHere') : undefined}
+                                subtitleLines={2}
                                 detail={row.portLabel ?? row.addressLabel ?? addressValue}
                                 showChevron={canOpen}
                                 onPress={canOpen ? handleOpen : addressCopy.copy}
@@ -844,13 +894,13 @@ export function ServiceRowView(props: Readonly<{
                     testID={`${props.testID}-public-preview`}
                 />
                 {canStop ? (
-                    <ItemGroup header="none">
+                    <ItemGroup>
                         <Item
                             testID={`${props.testID}-stop`}
                             title={t('localServices.actions.stopConfirmCta')}
                             destructive
                             showChevron={false}
-                            loading={pending}
+                            loading={rowLoading}
                             onPress={handleStop}
                         />
                     </ItemGroup>
@@ -870,7 +920,7 @@ export function ServiceRowView(props: Readonly<{
                     subtitle={subtitle}
                     subtitleLines={2}
                     showDivider={props.showDivider}
-                    loading={pending}
+                    loading={rowLoading}
                     onPress={onOpenDetail}
                     pressableRef={props.pressableRef}
                     rightElement={rowControl}
@@ -896,8 +946,8 @@ export function ServiceRowView(props: Readonly<{
                     mode="info"
                     showChevron={false}
                     showDivider={props.showDivider}
-                    loading={pending}
-                    rightElement={openControl ?? startControl ?? overflowControl}
+                    loading={rowLoading}
+                    rightElement={trailingControls}
                     bottomElement={output}
                     bottomElementInset="text"
                 />
@@ -920,7 +970,7 @@ export function ServiceRowView(props: Readonly<{
                         icon={identity}
                         subtitle={subtitle}
                         subtitleLines={2}
-                        loading={pending}
+                        loading={rowLoading}
                         rightElement={rowControl}
                         // Open, ▶ and a worker's overflow are their own buttons: never nest them in the row's press.
                         rightElementOutsidePressable={rowControl !== null}

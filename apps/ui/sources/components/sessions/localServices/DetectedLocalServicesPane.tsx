@@ -37,7 +37,7 @@ import { readLocalServiceDiagnostics } from '@/sync/domains/local/services/prese
 import {
     buildLocalServiceRows,
     groupLocalServiceRowsBySection,
-    selectLocalServiceRunningCount,
+    type DescribeServiceDeclaration,
     selectRunningOpenTargetOnPort,
     type ServiceRow,
     type ServiceRowSection,
@@ -128,6 +128,10 @@ const stylesheet = StyleSheet.create((theme) => ({
     /** On the Services page the scope sits under the purpose at its own width, not across the column. */
     scopeTogglePage: {
         alignSelf: 'flex-start',
+    },
+    /** The phone page has no purpose line: the scope sits under the cockpit's checkout selector, with air of its own. */
+    scopeTogglePhone: {
+        marginTop: theme.space.s16,
     },
     offlineLine: {
         marginTop: theme.space.s4,
@@ -242,6 +246,7 @@ function ServicesScopeBar(props: Readonly<{
     scope: ServicesScope;
     onChangeScope: (scope: ServicesScope) => void;
     page: boolean;
+    phone: boolean;
     testID: string;
 }>): React.ReactElement {
     const styles = stylesheet;
@@ -250,7 +255,7 @@ function ServicesScopeBar(props: Readonly<{
         { id: 'machine' as const, label: t('localServices.scope.machine') },
     ]), []);
     return (
-        <View style={[styles.scopeToggle, props.page ? styles.scopeTogglePage : null]}>
+        <View style={[styles.scopeToggle, props.page ? styles.scopeTogglePage : null, props.page && props.phone ? styles.scopeTogglePhone : null]}>
             <SegmentedTabBar
                 tabs={tabs}
                 activeTabId={props.scope}
@@ -327,6 +332,8 @@ export function DetectedLocalServicesPane(props: Readonly<{
     presentation?: 'pane' | 'page';
     /** The placement owner's per-row "Runs on" control, hosted in the row's expansion (plan 32). */
     renderServicePlacement?: (row: ServiceRow) => React.ReactNode;
+    /** The Project definition's command and source file for a declared service (the feed carries only a literal command). */
+    describeDeclaration?: DescribeServiceDeclaration;
     /** A Start/Restart waiting on the person's review of its current effect, drawn by the host. */
     effectReview?: React.ReactNode;
     /** The Account viewing the surface: its own services carry no "Started by". */
@@ -377,8 +384,9 @@ export function DetectedLocalServicesPane(props: Readonly<{
             rowIdsByTargetId: launcherState.rowIdsByTargetId,
             sessionId: activeSessionId,
             scope,
+            describeDeclaration: props.describeDeclaration,
         }),
-        [activeSessionId, launcherTargets, launcherState.rowIdsByTargetId, scope, viewModel.rows],
+        [activeSessionId, launcherTargets, launcherState.rowIdsByTargetId, scope, viewModel.rows, props.describeDeclaration],
     );
 
     const sections = React.useMemo(() => groupLocalServiceRowsBySection(rows), [rows]);
@@ -465,6 +473,8 @@ export function DetectedLocalServicesPane(props: Readonly<{
         <TargetServiceRow
             key={row.id}
             row={row}
+            // Rows breathe on their own padding, as the lab draws them: no hairline between or after them.
+            showDivider={false}
             onOpenServiceInBrowser={props.onOpenServiceInBrowser}
             onStartLauncherTarget={props.onStartLauncherTarget}
             findRunningOpenTarget={findRunningOpenTarget}
@@ -676,6 +686,7 @@ export function DetectedLocalServicesPane(props: Readonly<{
                                 scope={scope}
                                 onChangeScope={props.onChangeScope}
                                 page={page}
+                                phone={phone}
                                 testID={`${testID}-scope-toggle`}
                             />
                         ) : null}

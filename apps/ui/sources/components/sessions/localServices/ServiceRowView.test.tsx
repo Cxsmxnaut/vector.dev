@@ -84,6 +84,10 @@ function flattenStyle(style: unknown): Record<string, unknown> {
     return {};
 }
 
+function collectMetaText(node: { children: ReadonlyArray<unknown> }): string {
+    return node.children.map((child) => typeof child === 'string' ? child : collectMetaText(child as { children: ReadonlyArray<unknown> })).join(' ');
+}
+
 describe('ServiceRowView', () => {
     it('shows pending binding discovery as loading without an unavailable reason or Start', async () => {
         const target = LocalServiceLaunchTargetV1Schema.parse(launchTarget({ source: 'managed_service',
@@ -92,7 +96,12 @@ describe('ServiceRowView', () => {
             unavailableReason: 'project_service_binding_pending' }));
         const [row] = buildLocalServiceRows({ inventoryRows: [], launchTargets: [target], sessionId: null, scope: 'workspace' });
         const screen = await renderScreen(<ServiceRowView row={row!} onStartLauncherTarget={vi.fn()} testID="row" />);
-        expect(screen.findByTestId('row-status-loading')).not.toBeNull();
+        // Hydration is not a state of the service: no status word beside the name, just the row's own spinner,
+        // with the same facts line the idle row draws so the row keeps its height.
+        expect(screen.findByTestId('row-status-loading')).toBeNull();
+        expect(screen.getTextContent()).not.toContain('Loading');
+        expect(screen.findByType(Item).props.loading).toBe(true);
+        expect(screen.findByTestId('row-source')).toBeTruthy();
         expect(screen.findByTestId('row-start')).toBeNull();
         expect(screen.findByTestId('row-reason')).toBeNull();
         expect(screen.findByTestId('row-dot-halo')).toBeNull();
@@ -183,9 +192,12 @@ describe('ServiceRowView', () => {
         const start = vi.fn(() => new Promise<unknown>((resolve) => { settle = resolve; }));
         const screen = await renderScreen(<ServiceRowView row={row} machineName="devbox" onStartLauncherTarget={start} testID="row" />);
         expect(screen.getTextContent()).not.toContain('Starting');
+        const idleMeta = collectMetaText(screen.findByTestId('row-meta')!).replace(/\s+/g, ' ');
         await act(async () => { void pressTestInstanceAsync(screen.findByTestId('row-start'), 'row-start'); });
         expect(screen.getTextContent()).toContain('Starting');
         expect(screen.getTextContent()).toContain('Starting on devbox');
+        expect(collectMetaText(screen.findByTestId('row-meta')!).replace(/\s+/g, ' ')).toBe(idleMeta);
+        expect(screen.findByTestId('row-source')).toBeTruthy();
         await screen.update(<ServiceRowView row={{ ...row, status: 'unavailable', primaryAction: null,
             reasonCode: 'project_service_binding_unavailable' }} machineName="devbox" onStartLauncherTarget={start} testID="row" />);
         expect(screen.findByTestId('row-status-starting')).toBeTruthy();
@@ -670,6 +682,24 @@ describe('ServiceRowView', () => {
         expect(onExpandedChange).not.toHaveBeenCalled();
     });
 
+    it('keeps Stop reachable from the collapsed row beside Open, and the overflow in one place when expanded', async () => {
+        const row = projectRow(projectTarget({ state: 'available', serviceState: 'running', actions: ['manage'],
+            endpointUrl: 'http://localhost:5173/',
+            browserTarget: { kind: 'localServicePreview', targetId: 'preview_web', sessionId: 'session-a', machineId: 'machine-a' } }));
+        const handlers = { onOpenServiceInBrowser: vi.fn(), onStopManagedService: vi.fn(), onRestartManagedService: vi.fn() };
+        const collapsed = await renderScreen(<ServiceRowView row={row} machineName="devbox" {...handlers}
+            expanded={false} onExpandedChange={vi.fn()} testID="row" />);
+        expect(collapsed.findByTestId('row-open')).not.toBeNull();
+        expect(collapsed.findByTestId('row-overflow')).not.toBeNull();
+        expect(rowOverflowActions(collapsed).map((action) => action.id)).toContain('stop');
+        await collapsed.unmount();
+
+        const expanded = await renderScreen(<ServiceRowView row={row} machineName="devbox" {...handlers}
+            expanded onExpandedChange={vi.fn()} testID="row" />);
+        expect(expanded.findAllByType(ItemRowActions)).toHaveLength(1);
+        expect(expanded.findByTestId('row-copy-address')).toBeTruthy();
+    });
+
     it('keeps one Open when the row is expanded: the expansion does not repeat it', async () => {
         const screen = await renderScreen(
             <ServiceRowView
@@ -828,7 +858,9 @@ describe('ServiceRowView', () => {
         const diagnostics = [{ code: 'native_service_output', severity: 'info', message: 'EADDRINUSE: address already in use :::3005' }] as const;
         const failed = projectRow(projectTarget({ state: 'available', serviceState: 'failed', actions: ['manage'], diagnostics: [...diagnostics] }));
         const screen = await renderScreen(<ServiceRowView row={failed} onStartLauncherTarget={vi.fn()} testID="row" />);
-        expect(screen.getTextContent()).toContain('Service could not start.');
+        // Failed is said once, by the status beside the name, not again as a tail.
+        expect(screen.findByTestId('row-status-failed')).toBeTruthy();
+        expect(screen.getTextContent()).not.toContain('Service could not start.');
         expect(screen.getTextContent()).toContain('Review output');
         // The output stays closed until asked for, and a code never stands in for a sentence.
         expect(screen.getTextContent()).not.toContain('EADDRINUSE');

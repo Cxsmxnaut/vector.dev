@@ -4,6 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { LocalServiceLauncherSnapshotV1, LocalServicePreviewResourceV1 } from '@happier-dev/protocol';
 
 import { RPC_METHODS } from '@happier-dev/protocol/rpc';
+import { readProjectManifestDocument } from '@happier-dev/protocol/workspaces/projectSetup/projectManifestDocument';
+import { ProjectDefinitionInspectOutputSchema } from '@happier-dev/protocol/actions/projectDefinitionActionFamily';
+import { LocalServiceLaunchTargetV1Schema } from '@happier-dev/protocol/local/services/launcher/v1';
 import { ActionOperationSnapshotV1Schema, ACTION_OPERATION_RPC_METHODS_V2 } from '@happier-dev/protocol/actions/operations/v1';
 import { ProjectCommandActionOutputV1Schema } from '@happier-dev/protocol/actions/actionCompletion';
 import { ExternalActionMachineBootstrapV1Schema, ExternalActionExecutionAuthorizationRequestV1Schema,
@@ -22,6 +25,7 @@ import { createHomeGovernanceHarness, installHomeGovernanceBoundaries } from '@/
 import { installDisconnectedServerSocketBoundary } from '@/dev/testkit/harness/serverAccountConnectionHarness';
 import { loadSyncSingletonForTests } from '@/dev/testkit/harness/syncSingletonLoader';
 import { createRootLayoutFeaturesResponse } from '@/dev/testkit/fixtures/featureFixtures';
+import type { ServiceRow } from '@/sync/domains/local/services/serviceRow';
 import { decideApprovalAsInbox, installOwnMachineApprovalReplayBoundary } from '@/dev/testkit/harness/approvalInbox';
 import { getActiveServerSnapshot } from '@/sync/domains/server/serverRuntime';
 import { publishAppliedActiveServerSnapshot } from '@/sync/runtime/orchestration/appliedActiveServerRuntime';
@@ -38,6 +42,7 @@ installHomeGovernanceBoundaries(home);
 await loadSyncSingletonForTests();
 const { applyLocalServiceLauncherSnapshot, createLocalServiceLauncherState } = await import('@/sync/domains/local/services/launch');
 const { ProjectRightPanelServicesView } = await import('./ProjectRightPanelServicesView');
+const { ServiceRowView } = await import('@/components/sessions/localServices/ServiceRowView');
 const { createFrontDoorRuntimeActionExecutor } = await import('@/sync/ops/actions/frontDoorRuntimeActionExecutor');
 const { createDefaultRuntimeActionExecutor } = await import('@/sync/ops/actions/defaultRuntimeActionExecutor');
 const { storage } = await import('@/sync/domains/state/storage');
@@ -190,6 +195,69 @@ describe('ProjectRightPanelServicesView', () => {
         modalShowMock.mockImplementation(() => 'modal-id');
     });
     afterEach(async () => { await home.reset(); });
+
+    it('keeps same-name checkout descriptions separate across workspace and machine scope, retaining worker copies', async () => {
+        const workspace = { serverId, machineId: 'machine-a', workspaceId: 'accepted', rootPath: '/repo' };
+        const source = { kind: 'native', tool: 'package_script', file: 'package.json', target: 'dev' } as const;
+        const inspection = ProjectDefinitionInspectOutputSchema.parse({
+            definition: { basis: { kind: 'present', hash: 'a'.repeat(64) }, document: readProjectManifestDocument(JSON.stringify({
+                version: 1, services: { web: { source, execution: 'portable' } },
+            })) },
+            detection: { entries: [], toolchains: [], devcontainers: [], coverage: 'complete', diagnostics: [] }, importCandidates: [],
+            commands: [{ name: 'web', usage: 'service', source, availability: 'available', invocation: { tool: 'npm', args: ['run', 'dev'], cwd: '.' } }],
+        });
+        home.answer(serverId, '/v1/machines/machine-a', { body: { machine: createPlainMachineRowFixture({ id: 'machine-a', accountId: 'project-account' }) } });
+        home.answer(serverId, '/v1/actions/projects.inspect', { select: body => {
+            const request = ExternalActionRequestEnvelopeV1Schema.parse(body);
+            return { body: ExternalActionResponseEnvelopeV1Schema.parse({ v: 1, actionId: 'projects.inspect', requestId: request.requestId,
+                execution: { ok: true, result: inspection } }) };
+        } });
+        rpc.machine.mockImplementation(async ({ method }) => {
+            if (method === 'daemon.projects.inspect.v1') return inspection;
+            throw new Error(`unexpected_rpc:${method}`);
+        });
+        const target = (id: string, machineId: string, workspaceRefId: string, rootPath: string) => LocalServiceLaunchTargetV1Schema.parse({
+            id, source: 'managed_service', machineId, workspace: { ...workspace, machineId, workspaceId: workspaceRefId, rootPath },
+            declaration: { workspaceRefId, selection: { kind: 'manifest', name: 'web' } }, title: 'web',
+            confidence: 'high', state: 'available', serviceState: 'running', actions: ['manage'],
+        });
+        const own = target('own-web', 'machine-a', 'accepted', '/repo');
+        const worker = target('worker-web', 'machine-b', 'worker-copy', '/worker');
+        const foreign = { ...target('foreign-web', 'machine-a', 'other', '/other'), commandPreview: 'docker compose up web',
+            declaration: { workspaceRefId: 'other', selection: { kind: 'native' as const,
+                source: { kind: 'native' as const, tool: 'compose' as const, file: 'compose.yaml', target: 'web' } } } };
+        const foreignManifest = { ...target('foreign-manifest-web', 'machine-a', 'third', '/third'), commandPreview: 'echo foreign' };
+        const launcherSnapshotClient = vi.fn(async (input: { scope?: 'workspace' | 'machine' | null }) => ({ ok: true as const,
+            snapshot: { v: 1 as const, machineId: 'machine-a', updatedAt: 1,
+                targets: input.scope === 'machine' ? [own, worker, foreign, foreignManifest] : [own, worker] } }));
+        const screen = await renderScreen(<ProjectRightPanelServicesView {...{ serverId }} machineId="machine-a"
+            workspaceRefId="accepted" workspaceRoot="/repo" inventoryState={buildLocalServiceInventoryState({ rows: [] })}
+            launcherSnapshotClient={launcherSnapshotClient} />);
+        const text = (id: string) => {
+            const row = screen.findByTestId(`project-rightpanel-services-row:${id}`);
+            const collect = (node: { children: readonly unknown[] }): string => node.children.map(child => typeof child === 'string'
+                ? child : collect(child as { children: readonly unknown[] })).join(' ');
+            return row ? collect(row) : '';
+        };
+        // The real row boundary carries the full command; running rows may display only its executable.
+        const row = (id: string): ServiceRow | undefined => screen.findAllByType(ServiceRowView)
+            .find(node => node.props.row.target.id === id)?.props.row;
+        await vi.waitFor(() => expect(row('own-web')).toMatchObject({ processLabel: 'npm run dev', sourceBadge: 'package.json' }));
+        expect(text('own-web')).toContain('package.json');
+        expect(row('worker-web')).toMatchObject({ processLabel: 'npm run dev', sourceBadge: 'package.json' });
+        expect(text('worker-web')).toContain('package.json');
+        expect(text('foreign-web')).toBe('');
+        await screen.pressByTestIdAsync('project-rightpanel-services-scope-toggle:machine');
+        await vi.waitFor(() => expect(row('foreign-web')).toMatchObject({ processLabel: 'docker compose up web', sourceBadge: 'compose.yaml' }));
+        expect(text('foreign-web')).toContain('compose.yaml');
+        expect(text('foreign-web')).not.toContain('package.json');
+        expect(row('foreign-manifest-web')).toMatchObject({ processLabel: 'echo foreign', sourceBadge: 'project.json' });
+        expect(text('foreign-manifest-web')).toContain('project.json');
+        expect(text('foreign-manifest-web')).not.toContain('package.json');
+        expect(row('own-web')).toMatchObject({ processLabel: 'npm run dev', sourceBadge: 'package.json' });
+        expect(row('worker-web')).toMatchObject({ processLabel: 'npm run dev', sourceBadge: 'package.json' });
+        await screen.unmount();
+    });
 
     it('opens and consumes the shared approval for a declared Service Start without granting the feed launch authority', async () => {
         const workspace = { serverId, machineId: 'machine-a', workspaceId: 'accepted', rootPath: '/repo' };

@@ -43,9 +43,10 @@ import type { ServerScopedMachinePoolSelection } from '@/components/sessions/new
 import type { FrontDoorRuntimeActionExecute } from '@/sync/ops/actions/frontDoorRuntimeActionExecutor';
 import { describeManagedCreationProgress } from '@/components/settings/machines/managed/managedCreationProgressPresentation';
 import { resolveReasonCopy } from '@/sync/domains/surfaces/copy/resolveReasonCopy';
+import { isProjectServiceTargetFromSource, type ProjectServiceSource } from './projectServiceSource';
 
 /** The SOURCE checkout a declared service belongs to: its Home, accepted ref and own Machine. */
-export type ProjectServiceSource = Readonly<{ serverId: string; refId: string; machineId: string }>;
+export type { ProjectServiceSource } from './projectServiceSource';
 
 type ReadyPlacement = Extract<
   ProjectServicePlacementGetResultV1,
@@ -600,6 +601,9 @@ function ProjectServicePlacementControlsBody(props: React.ComponentProps<typeof 
     });
   };
 
+  // A statement with its own sentence ("runs on the primary checkout") leaves a phone row no room for the value
+  // beside it: the value reads under the sentence, at full width, instead of squeezing the sentence into a column.
+  const plainValueBeneath = compact && !portable && Boolean(value) && Boolean(hint);
   return (
     <ItemGroupRowPositionBoundary>
     <View testID={testID}>
@@ -610,7 +614,7 @@ function ProjectServicePlacementControlsBody(props: React.ComponentProps<typeof 
           subtitle={hint ?? (compact ? where : undefined)}
           showDivider={compact && (portable || trailingDivider)}
           showChevron={compact && portable}
-          accessoryLayout="adaptive"
+          accessoryLayout={plainValueBeneath ? 'stacked' : 'adaptive'}
           // A primary-only service has nothing to choose: its row is a plain statement, not a dimmed control.
           disabled={portable && disabled}
           accessibilityExpanded={pickerOpen}
@@ -619,7 +623,9 @@ function ProjectServicePlacementControlsBody(props: React.ComponentProps<typeof 
             refresh();
             setPickerOpen(true);
           } } : {})}
-          {...(compact || !portable
+          {...(plainValueBeneath
+            ? { rightElement: <Text variant="body" style={{ color: theme.colors.text.primary }}>{value}</Text> }
+            : compact || !portable
             ? { detail: value ?? undefined }
             : {
                 rightElement: renderDropdownItemTriggerRightElement({
@@ -765,7 +771,7 @@ export function createProjectServicePlacementRenderer(
     if (!declaration || declaration.selection.kind !== 'manifest') return null;
     // Another checkout's service (This machine scope) has its own placement; only this checkout's
     // declarations, or their copies running on a worker, show this checkout's Runs on.
-    if (declaration.workspaceRefId !== source.refId && row.target.machineId === source.machineId) return null;
+    if (!isProjectServiceTargetFromSource(source, row.target)) return null;
     // Placement lives on the SOURCE checkout's ref; a running worker copy carries its own ref.
     return (
       <ProjectServicePlacementControls

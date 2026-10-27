@@ -574,4 +574,23 @@ describe('buildLocalServiceRows', () => {
             ['ready', ['package:docs']],
         ]);
     });
+
+    it('names what a declared service runs from the Project definition: its command and the file the command comes from', () => {
+        const workspace = { serverId: 'home-a', machineId: 'machine-a', workspaceId: 'accepted', rootPath: '/repo' };
+        const manifestService = packageTarget({ id: 'managed:web', source: 'managed_service', title: 'web', workspace,
+            declaration: { workspaceRefId: 'accepted', selection: { kind: 'manifest', name: 'web' } } });
+        const literalService = packageTarget({ id: 'managed:jobs', source: 'managed_service', title: 'jobs', workspace,
+            declaration: { workspaceRefId: 'accepted', selection: { kind: 'manifest', name: 'jobs' } } });
+        const describeDeclaration = (declaration: NonNullable<LocalServiceLaunchTarget['declaration']>) =>
+            declaration.selection.kind === 'manifest' && declaration.selection.name === 'web'
+                ? { command: 'yarn dev', badge: 'package.json' }
+                : null;
+        const rows = buildLocalServiceRows({
+            inventoryRows: [], launchTargets: [manifestService, literalService], sessionId: null, scope: 'workspace', describeDeclaration,
+        });
+        const byId = new Map(rows.map((row) => [row.id, row]));
+        expect(byId.get('managed:web')).toMatchObject({ processLabel: 'yarn dev', sourceBadge: 'package.json' });
+        // A declaration the definition cannot describe keeps the manifest as its source and invents no command.
+        expect(byId.get('managed:jobs')).toMatchObject({ processLabel: null, sourceBadge: 'project.json' });
+    });
 });
