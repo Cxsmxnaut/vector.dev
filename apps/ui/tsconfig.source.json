@@ -3824,7 +3824,6 @@
     "sources/voice/settings/voiceAgentSelection.ts",
     "sources/voice/settings/voiceDeviceModelPackOperation.native.ts",
     "sources/voice/settings/voiceSettingsIntents.ts",
-    "sources/voice/shared/sentenceBoundary.ts",
     "sources/voice/sherpa/stt/sherpaStreamingSttPacks.ts",
     "sources/voice/tools/actionImpl/spawnSessionAgent.ts",
     "sources/voice/tools/actionImpl/voiceToolActionImplTestHelpers.ts",
