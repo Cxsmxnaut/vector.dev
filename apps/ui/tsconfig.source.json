@@ -2566,7 +2566,6 @@
     "sources/components/ui/cards/PanelCard.tsx",
     "sources/components/ui/cards/SummaryCard.tsx",
     "sources/components/ui/cards/UserCard.tsx",
-    "sources/components/ui/cards/index.ts",
     "sources/components/ui/code/blocks/CodeBlockView.web.tsx",
     "sources/components/ui/code/blocks/OsCommandBlock.tsx",
     "sources/components/ui/code/blocks/codeBlockTestHelpers.ts",
