@@ -572,12 +572,15 @@ const ja: typeof en = {
     chips: {
         engineTitle: '応答するエージェント',
         addReviewer: 'レビュアーを追加',
+        reviewer: 'レビュアー',
+        reviewerNeeded: '開始するにはレビュアーを追加',
         removeReviewer: ({ name }) => `${name} を外す`,
         scope: 'レビュー対象',
         advanced: '詳細',
     },
     reportToSession: 'このセッションに報告',
     startsWhenYouSend: ({ count }) => count > 1 ? `送信すると ${count} 件のレビューが始まります` : '送信すると始まります',
+    thisFolder: 'このフォルダ',
     offline: ({ machine }) => `${machine} はオフラインです。エージェントはそこで始まります。戻るまで下書きはここに残ります。`,
     menu: {
         askSection: 'エージェントに依頼',
@@ -9195,7 +9198,7 @@ const runPageTranslations = { ja: {
         launcher: {
             titles: { review: 'レビューを依頼', plan: 'プランを依頼', delegate: 'タスクを任せる' },
             descriptions: {
-                review: ({ machine }) => `各エージェントが ${machine} の変更を個別にレビューし、それぞれの結果がここに届きます。`,
+                review: ({ folder }) => `各エージェントが ${folder} の変更を個別にレビューし、それぞれの結果がここに届きます。`,
                 plan: ({ machine }) => `エージェントが ${machine} のコードを読み、ここにプランを提案します。何も変更しません。`,
                 delegate: ({ machine }) => `エージェントが下の権限で ${machine} 上で作業し、ここに報告します。`,
             },

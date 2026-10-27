@@ -572,12 +572,15 @@ const fr: typeof en = {
     chips: {
         engineTitle: 'Qui répond',
         addReviewer: 'Ajouter un relecteur',
+        reviewer: 'Relecteur',
+        reviewerNeeded: 'Ajoute un relecteur pour démarrer',
         removeReviewer: ({ name }) => `Retirer ${name}`,
         scope: 'Quoi relire',
         advanced: 'Avancé',
     },
     reportToSession: 'Rendre compte à cette session',
     startsWhenYouSend: ({ count }) => count > 1 ? `${count} relectures démarrent à l’envoi` : 'Démarre à l’envoi',
+    thisFolder: 'ce dossier',
     offline: ({ machine }) => `${machine} est hors ligne. L’agent démarre là-bas ; ton brouillon reste ici jusqu’à son retour.`,
     menu: {
         askSection: 'Demander à un agent',
@@ -9207,7 +9210,7 @@ const runPageTranslations = { fr: {
         launcher: {
             titles: { review: 'Demander une revue', plan: 'Demander un plan', delegate: 'Confier une tâche' },
             descriptions: {
-                review: ({ machine }) => `Chaque agent relit les changements sur ${machine} de son côté ; tu reçois ici un résultat de chacun.`,
+                review: ({ folder }) => `Chaque agent relit les changements dans ${folder} de son côté ; tu reçois ici un résultat de chacun.`,
                 plan: ({ machine }) => `L’agent lit le code sur ${machine} et propose un plan ici. Il ne modifie rien.`,
                 delegate: ({ machine }) => `L’agent travaille sur ${machine} avec les autorisations ci-dessous et rend compte ici.`,
             },

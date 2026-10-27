@@ -572,12 +572,15 @@ const pl: typeof en = {
     chips: {
         engineTitle: 'Kto odpowiada',
         addReviewer: 'Dodaj recenzenta',
+        reviewer: 'Recenzent',
+        reviewerNeeded: 'Dodaj recenzenta, aby zacząć',
         removeReviewer: ({ name }) => `Usuń ${name}`,
         scope: 'Co sprawdzić',
         advanced: 'Zaawansowane',
     },
     reportToSession: 'Zgłoś do tej sesji',
     startsWhenYouSend: ({ count }) => count > 1 ? `${count} recenzji zacznie się po wysłaniu` : 'Zacznie się po wysłaniu',
+    thisFolder: 'tym folderze',
     offline: ({ machine }) => `${machine} jest offline. Agent startuje tam; szkic zostaje tutaj, aż wróci.`,
     menu: {
         askSection: 'Poproś agenta',
@@ -9220,7 +9223,7 @@ const runPageTranslations = { pl: {
         launcher: {
             titles: { review: 'Poproś o przegląd', plan: 'Poproś o plan', delegate: 'Zleć zadanie' },
             descriptions: {
-                review: ({ machine }) => `Każdy agent osobno przegląda zmiany na ${machine}; tutaj dostajesz wynik od każdego.`,
+                review: ({ folder }) => `Każdy agent osobno przegląda zmiany w ${folder}; tutaj dostajesz wynik od każdego.`,
                 plan: ({ machine }) => `Agent czyta kod na ${machine} i proponuje tutaj plan. Niczego nie zmienia.`,
                 delegate: ({ machine }) => `Agent pracuje na ${machine} z poniższymi uprawnieniami i raportuje tutaj.`,
             },

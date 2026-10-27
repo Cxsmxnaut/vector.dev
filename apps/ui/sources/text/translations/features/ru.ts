@@ -572,12 +572,15 @@ const ru: typeof en = {
     chips: {
         engineTitle: 'Кто отвечает',
         addReviewer: 'Добавить рецензента',
+        reviewer: 'Рецензент',
+        reviewerNeeded: 'Добавьте рецензента, чтобы начать',
         removeReviewer: ({ name }) => `Убрать ${name}`,
         scope: 'Что проверить',
         advanced: 'Дополнительно',
     },
     reportToSession: 'Сообщить этой сессии',
     startsWhenYouSend: ({ count }) => count > 1 ? `Проверок начнётся при отправке: ${count}` : 'Начнётся при отправке',
+    thisFolder: 'этой папке',
     offline: ({ machine }) => `${machine} не в сети. Агент запускается там; черновик останется здесь, пока машина не вернётся.`,
     menu: {
         askSection: 'Попросить агента',
@@ -9231,7 +9234,7 @@ const runPageTranslations = { ru: {
         launcher: {
             titles: { review: 'Запросить ревью', plan: 'Запросить план', delegate: 'Поручить задачу' },
             descriptions: {
-                review: ({ machine }) => `Каждый агент отдельно проверяет изменения на ${machine}; здесь вы получите результат от каждого.`,
+                review: ({ folder }) => `Каждый агент отдельно проверяет изменения в ${folder}; здесь вы получите результат от каждого.`,
                 plan: ({ machine }) => `Агент читает код на ${machine} и предлагает здесь план. Он ничего не меняет.`,
                 delegate: ({ machine }) => `Агент работает на ${machine} с разрешениями ниже и отчитывается здесь.`,
             },

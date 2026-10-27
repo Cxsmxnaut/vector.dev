@@ -572,12 +572,15 @@ const ca: typeof en = {
     chips: {
         engineTitle: 'Qui respon',
         addReviewer: 'Afegeix un revisor',
+        reviewer: 'Revisor',
+        reviewerNeeded: 'Afegeix un revisor per començar',
         removeReviewer: ({ name }) => `Treu ${name}`,
         scope: 'Què cal revisar',
         advanced: 'Avançat',
     },
     reportToSession: 'Informa aquesta sessió',
     startsWhenYouSend: ({ count }) => count > 1 ? `${count} revisions comencen quan envies` : 'Comença quan envies',
+    thisFolder: 'aquesta carpeta',
     offline: ({ machine }) => `${machine} està fora de línia. L’agent hi comença; el teu esborrany es queda aquí fins que torni.`,
     menu: {
         askSection: 'Demana a un agent',
@@ -9206,7 +9209,7 @@ const runPageTranslations = { ca: {
         launcher: {
             titles: { review: 'Demana una revisió', plan: 'Demana un pla', delegate: 'Delega una tasca' },
             descriptions: {
-                review: ({ machine }) => `Cada agent revisa pel seu compte els canvis a ${machine}; aquí reps un resultat de cadascun.`,
+                review: ({ folder }) => `Cada agent revisa pel seu compte els canvis a ${folder}; aquí reps un resultat de cadascun.`,
                 plan: ({ machine }) => `L’agent llegeix el codi a ${machine} i proposa un pla aquí. No canvia res.`,
                 delegate: ({ machine }) => `L’agent treballa a ${machine} amb els permisos de sota i en dona compte aquí.`,
             },

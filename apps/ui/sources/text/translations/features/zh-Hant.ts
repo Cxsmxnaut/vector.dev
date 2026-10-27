@@ -572,12 +572,15 @@ const zhHant: typeof en = {
     chips: {
         engineTitle: '由誰回答',
         addReviewer: '新增審查者',
+        reviewer: '審查者',
+        reviewerNeeded: '新增審查者後即可開始',
         removeReviewer: ({ name }) => `移除 ${name}`,
         scope: '審查範圍',
         advanced: '進階',
     },
     reportToSession: '向此工作階段回報',
     startsWhenYouSend: ({ count }) => count > 1 ? `傳送後開始 ${count} 項審查` : '傳送後開始',
+    thisFolder: '此資料夾',
     offline: ({ machine }) => `${machine} 離線。代理會在那裡啟動；草稿會保留在這裡，直到它恢復。`,
     menu: {
         askSection: '讓代理',
@@ -9190,7 +9193,7 @@ const runPageTranslations = { 'zh-Hant': {
         launcher: {
             titles: { review: '請求審查', plan: '請求計畫', delegate: '委派任務' },
             descriptions: {
-                review: ({ machine }) => `每個智慧代理各自審查 ${machine} 上的變更；每個都會在這裡給出一個結果。`,
+                review: ({ folder }) => `每個智慧代理各自審查 ${folder} 中的變更；每個都會在這裡給出一個結果。`,
                 plan: ({ machine }) => `智慧代理閱讀 ${machine} 上的程式碼，並在這裡提出計畫。它不會變更任何內容。`,
                 delegate: ({ machine }) => `智慧代理依下方權限在 ${machine} 上工作，並在這裡回報。`,
             },

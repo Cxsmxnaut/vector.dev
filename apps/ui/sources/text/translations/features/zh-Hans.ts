@@ -572,12 +572,15 @@ const zhHans: typeof en = {
     chips: {
         engineTitle: '由谁回答',
         addReviewer: '添加审查者',
+        reviewer: '审查者',
+        reviewerNeeded: '添加审查者后即可开始',
         removeReviewer: ({ name }) => `移除 ${name}`,
         scope: '审查范围',
         advanced: '高级',
     },
     reportToSession: '向此会话汇报',
     startsWhenYouSend: ({ count }) => count > 1 ? `发送后开始 ${count} 项审查` : '发送后开始',
+    thisFolder: '此文件夹',
     offline: ({ machine }) => `${machine} 离线。代理会在那里启动；草稿会保留在这里，直到它恢复。`,
     menu: {
         askSection: '让代理',
@@ -9190,7 +9193,7 @@ const runPageTranslations = { 'zh-Hans': {
         launcher: {
             titles: { review: '请求审查', plan: '请求计划', delegate: '委派任务' },
             descriptions: {
-                review: ({ machine }) => `每个智能体各自审查 ${machine} 上的改动；每个都会在这里给出一个结果。`,
+                review: ({ folder }) => `每个智能体各自审查 ${folder} 中的改动；每个都会在这里给出一个结果。`,
                 plan: ({ machine }) => `智能体阅读 ${machine} 上的代码，并在这里提出计划。它不会更改任何内容。`,
                 delegate: ({ machine }) => `智能体按下面的权限在 ${machine} 上工作，并在这里汇报。`,
             },

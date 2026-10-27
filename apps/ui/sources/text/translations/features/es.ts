@@ -572,12 +572,15 @@ const es: typeof en = {
     chips: {
         engineTitle: 'Quién responde',
         addReviewer: 'Añadir revisor',
+        reviewer: 'Revisor',
+        reviewerNeeded: 'Añade un revisor para empezar',
         removeReviewer: ({ name }) => `Quitar a ${name}`,
         scope: 'Qué revisar',
         advanced: 'Avanzado',
     },
     reportToSession: 'Informar a esta sesión',
     startsWhenYouSend: ({ count }) => count > 1 ? `${count} revisiones empiezan al enviar` : 'Empieza al enviar',
+    thisFolder: 'esta carpeta',
     offline: ({ machine }) => `${machine} está sin conexión. El agente empieza allí; tu borrador se queda aquí hasta que vuelva.`,
     menu: {
         askSection: 'Pedir a un agente',
@@ -9210,7 +9213,7 @@ const runPageTranslations = { es: {
         launcher: {
             titles: { review: 'Pedir una revisión', plan: 'Pedir un plan', delegate: 'Delegar una tarea' },
             descriptions: {
-                review: ({ machine }) => `Cada agente revisa los cambios en ${machine} por su cuenta; aquí recibes un resultado de cada uno.`,
+                review: ({ folder }) => `Cada agente revisa los cambios en ${folder} por su cuenta; aquí recibes un resultado de cada uno.`,
                 plan: ({ machine }) => `El agente lee el código en ${machine} y propone un plan aquí. No cambia nada.`,
                 delegate: ({ machine }) => `El agente trabaja en ${machine} con los permisos de abajo e informa aquí.`,
             },
