@@ -298,6 +298,10 @@ export const EmbeddedTerminalPaneFrame = React.memo(function EmbeddedTerminalPan
                 </View>
             ) : null}
 
+            {readOnly && props.controller.outputRetention?.truncated ? (
+                <SurfaceFreshnessLine testID={testId('retained-notice')} reason={t('projects.scripts.output.earlierNotKept')} />
+            ) : null}
+
             {frameState.kind === 'line' && !hidesExitLine ? (
                 <SurfaceFreshnessLine
                     testID={testId('state-line')}

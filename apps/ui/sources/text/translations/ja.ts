@@ -17313,6 +17313,7 @@ settingsSession: {
             title: "出力",
             ranOn: "実行先",
             openInTerminal: "ターミナルで開く",
+            earlierNotKept: "以前の出力はもう保持されていません",
             purpose: {
                 setup: "セットアップ",
                 teardown: "後片付け",

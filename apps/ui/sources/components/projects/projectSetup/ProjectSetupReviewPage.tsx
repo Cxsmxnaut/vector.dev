@@ -47,7 +47,9 @@ export function useProjectSetupReviewDecision(
     machine,
     pending: controller.pendingKeys.setup === true,
     reviewedEffect: consent?.reviewedEffect ?? held?.reviewedEffect,
-    initialScope: consent?.consentScope ?? held?.consentScope,
+    // What the person picked, else what the review was held with: the card and the page read one choice.
+    scope: controller.reviewScope ?? consent?.consentScope ?? held?.consentScope ?? DEFAULT_PROJECT_SETUP_SCOPE,
+    setScope: controller.setReviewScope,
     run,
     dismiss: controller.dismissConsent,
   };
@@ -63,8 +65,6 @@ export function ProjectSetupReviewPage(
     testID: string;
     manifest: ProjectManifestV1;
     review: ReturnType<typeof useProjectSetupReviewDecision>;
-    scope: ProjectSetupScope | null;
-    onScopeChange: (scope: ProjectSetupScope) => void;
     onBack: () => void;
     onViewFile: (() => void) | null;
   }>,
@@ -72,7 +72,7 @@ export function ProjectSetupReviewPage(
   const { review, onBack } = props;
   useProjectPageBack(true, onBack);
   useNativeBackLayerBackHandler(true, React.useCallback(() => { onBack(); return true; }, [onBack]));
-  const scope = props.scope ?? review.initialScope ?? DEFAULT_PROJECT_SETUP_SCOPE;
+  const { scope } = review;
   return (
     <View testID={props.testID} style={styles.page}>
       <ItemList testID={`${props.testID}.scroll`}>
@@ -92,7 +92,7 @@ export function ProjectSetupReviewPage(
               reviewedEffect={review.reviewedEffect}
               framed
               scope={scope}
-              onScopeChange={props.onScopeChange}
+              onScopeChange={review.setScope}
               onViewFile={() => props.onViewFile?.()}
             />
           </View>

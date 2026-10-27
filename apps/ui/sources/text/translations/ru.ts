@@ -17352,6 +17352,7 @@ settingsSession: {
             title: "Вывод",
             ranOn: "Выполняется на",
             openInTerminal: "Открыть в терминале",
+            earlierNotKept: "Более ранний вывод больше не хранится",
             purpose: {
                 setup: "Настройка",
                 teardown: "Очистка",

@@ -17225,6 +17225,7 @@ settingsSession: {
             title: "Wyjście",
             ranOn: "Działa na",
             openInTerminal: "Otwórz w terminalu",
+            earlierNotKept: "Wcześniejsze dane wyjściowe nie są już przechowywane",
             purpose: {
                 setup: "Konfiguracja",
                 teardown: "Sprzątanie",

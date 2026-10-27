@@ -17402,6 +17402,7 @@ settingsSession: {
             title: "Output",
             ranOn: "Eseguito su",
             openInTerminal: "Apri nel terminale",
+            earlierNotKept: "L’output precedente non è più conservato",
             purpose: {
                 setup: "Configurazione",
                 teardown: "Smantellamento",

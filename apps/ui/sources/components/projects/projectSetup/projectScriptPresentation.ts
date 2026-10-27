@@ -256,8 +256,9 @@ export function presentProjectRun(
   }
   const settledAt = snapshot.settledAt ?? snapshot.createdAt;
   const at = formatAsOfTime(settledAt);
+  // A run that settled within a second has no duration worth reading ("0 s" is noise beside its outcome).
   const duration =
-    startedAt !== null ? ` · ${formatRunDuration(settledAt - startedAt)}` : '';
+    startedAt !== null && settledAt - startedAt >= 1000 ? ` · ${formatRunDuration(settledAt - startedAt)}` : '';
   const done = (
     glyph: ProjectRunGlyph,
     tone: ProjectRunTone,

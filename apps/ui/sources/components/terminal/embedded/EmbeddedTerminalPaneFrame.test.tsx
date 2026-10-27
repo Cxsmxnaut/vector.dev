@@ -181,6 +181,24 @@ describe('EmbeddedTerminalPaneFrame states (terminal lab ST)', () => {
         expect(offline.findByTestId('term-state-line')).toBeTruthy();
     });
 
+    it('says once that earlier output is no longer retained, for a borrowed retained output only', async () => {
+        const retention = (truncated: boolean) => ({ mode: 'byte-offset' as const, retainedFromCursor: truncated ? 4096 : 0, availableCursor: 9000, truncated });
+        const render = (controller: Partial<EmbeddedTerminalPaneController>) => renderScreen(React.createElement(EmbeddedTerminalPaneFrame, {
+            title: 'build',
+            chrome: 'none',
+            ownerStatesExit: true,
+            controller: makeController({ status: 'exited', exitCode: 0, ...controller }),
+            surface: React.createElement('TerminalSurface'),
+            testIdPrefix: 'term',
+            platformOS: 'web',
+        }));
+        expect((await render({ readOnly: true, outputRetention: retention(true) })).findByTestId('term-retained-notice')).toBeTruthy();
+        expect((await render({ readOnly: true, outputRetention: retention(false) })).findByTestId('term-retained-notice')).toBeFalsy();
+        // Unknown bounds (legacy transport) say nothing; a person's own shell scrollback is not announced.
+        expect((await render({ readOnly: true, outputRetention: null })).findByTestId('term-retained-notice')).toBeFalsy();
+        expect((await render({ readOnly: false, outputRetention: retention(true) })).findByTestId('term-retained-notice')).toBeFalsy();
+    });
+
     it('keeps the output when the machine goes offline, with one line and Check again', async () => {
         const retryConnect = vi.fn();
         const screen = await renderScreen(React.createElement(EmbeddedTerminalPaneFrame, {

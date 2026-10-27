@@ -296,6 +296,7 @@ describe('useMachineTerminalSession', () => {
             { t: 'exit', terminalId, byteOffset: 9, exitCode, signal },
         ], nextByteOffset: 9, availableByteOffset: 9, droppedBeforeByteOffset: 0, done: true }));
         const { ProjectCommandOutputPane } = await import('@/components/inbox/actionOperations/ProjectCommandOutputPane');
+        const { WorkspaceEmbeddedTerminalPane } = await import('@/components/projects/panes/details/views/WorkspaceEmbeddedTerminalPane');
         const { ProjectScriptRow } = await import('@/components/projects/projectSetup/ProjectScriptRow');
         const { ProjectCommandOutputPage } = await import('@/components/inbox/actionOperations/ProjectCommandOutputPage');
         const { AppPaneProvider } = await import('@/components/appShell/panes/AppPaneProvider');
@@ -312,7 +313,13 @@ describe('useMachineTerminalSession', () => {
                 serverId: homeIds.primary, machineId: 'machine', workspaceId: 'worker-checkout', rootPath: '/worker/repo',
             }, name: 'Script', badge: null, command: 'printf QA_FAIL', portable: false, operation: outputProps.operation,
             idleText: '', pending: false, failureCode: null, compact: false, onRun: () => {} })
-            : React.createElement(ProjectCommandOutputPane, outputProps)));
+            // A borrowed output states its own native outcome unless its owner (a Script row, the output page)
+            // already does; those owners are the stop and phone cases above and ProjectCommandOutputPane's own test.
+            : React.createElement(WorkspaceEmbeddedTerminalPane, { scopeId: `project-command:${homeIds.primary}:${snapshot.operationId}`,
+                workspaceRefId: 'worker-checkout', machineId: 'machine', serverId: homeIds.primary, rootPath: '/worker/repo',
+                attachedTerminalId: terminalId, workspace: { serverId: homeIds.primary, workspaceId: 'worker-checkout',
+                    machineId: 'machine', rootPath: '/worker/repo' },
+                terminalKey: `project-command:${terminalId}`, title: 'Script', closeOnUnmount: false })));
             if (phone) await act(async () => {
                 // Native layout is the external boundary that mounts the page's output body.
                 const layout = rendered.findAll(node => typeof node.type === 'string' && typeof node.props.onLayout === 'function')[0];
@@ -329,8 +336,9 @@ describe('useMachineTerminalSession', () => {
             await screen.pressByTestIdAsync(phone ? 'project-command-output-page.stop' : 'script.run');
             // Pending RPC and accepted Stop both retain Stopping, before the
             // independent settlement observation arrives.
-            await vi.waitFor(() => expect(phone ? screen.getTextContent()
-                : screen.findByTestId('workspace-embedded-terminal-state-line-text')?.props.children).toContain('Stopping'));
+            // The row (or the page) owns the status; the terminal under it leaves its own exit line out.
+            await vi.waitFor(() => expect(screen.getTextContent()).toContain('Stopping'));
+            expect(screen.findByTestId('workspace-embedded-terminal-state-line')).toBeNull();
             if (!phone) await act(async () => cancellation.resolve({ kind: 'requested' }));
         }
         await vi.waitFor(() => expect(screen.getTextContent()).toContain('QA_FAIL'));
@@ -371,7 +379,10 @@ describe('useMachineTerminalSession', () => {
             await act(async () => settlement.resolve({ kind: 'found', operation: ActionOperationSnapshotV1Schema.parse({
                 ...snapshot, revision: 3, state: 'cancelled', settledAt: 3,
             }) }));
-            await vi.waitFor(() => expect(screen.getTextContent()).toContain('Stopped'));
+            // The canonical read lands in the operation store (the row's own source of status); the terminal under
+            // the row adds no outcome line of its own.
+            await vi.waitFor(() => expect([...actionOperationStore.getSnapshot().operationsByKey.values()]
+                .find(value => value.snapshot.operationId === snapshot.operationId)?.snapshot.state).toBe('cancelled'));
             expect(screen.getTextContent()).not.toContain('Exit code:');
             await screen.unmount();
             return;

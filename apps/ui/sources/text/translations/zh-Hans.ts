@@ -17010,6 +17010,7 @@ settingsSession: {
             title: "输出",
             ranOn: "运行于",
             openInTerminal: "在终端中打开",
+            earlierNotKept: "较早的输出已不再保留",
             purpose: {
                 setup: "设置",
                 teardown: "清理",

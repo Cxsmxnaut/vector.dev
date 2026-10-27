@@ -17469,6 +17469,7 @@ settingsSession: {
                 title: "Ausgabe",
                 ranOn: "Läuft auf",
                 openInTerminal: "Im Terminal öffnen",
+                earlierNotKept: "Frühere Ausgabe wird nicht mehr aufbewahrt",
                 purpose: {
                     setup: "Einrichtung",
                     teardown: "Abbau",

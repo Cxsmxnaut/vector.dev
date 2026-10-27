@@ -10,7 +10,7 @@ import {
     type TerminalNativeRuntimePlatform,
 } from '@happier-dev/terminal-native';
 
-import { resolveCodeEditorFontMetrics } from '@/components/ui/code/editor/codeEditorFontMetrics';
+import { resolveTerminalFontMetrics } from './terminalFontMetrics';
 import { useFeatureEnabled } from '@/hooks/server/useFeatureEnabled';
 import { useKeyboardHeight } from '@/hooks/ui/useKeyboardHeight';
 import { useScreenReaderEnabled } from '@/hooks/ui/useScreenReaderEnabled';
@@ -67,7 +67,7 @@ export const EmbeddedTerminalPane = React.memo(function EmbeddedTerminalPaneNati
     const screenReaderActive = useScreenReaderEnabled();
     const nativeRendererQuarantine = useLocalSetting('terminalNativeRendererQuarantine');
     const osFontScale = typeof PixelRatio.getFontScale === 'function' ? PixelRatio.getFontScale() : 1;
-    const fontMetrics = React.useMemo(() => resolveCodeEditorFontMetrics({ uiFontScale, osFontScale }), [osFontScale, uiFontScale]);
+    const fontMetrics = React.useMemo(() => resolveTerminalFontMetrics({ uiFontScale, osFontScale }), [osFontScale, uiFontScale]);
     const keyboardBottomInset = useKeyboardHeight();
     const webViewRef = props.terminalRef as React.MutableRefObject<XtermWebViewSurfaceHandle | null>;
     const byteStreamFeatureEnabled = useFeatureEnabled('terminal.transport.byteStream');

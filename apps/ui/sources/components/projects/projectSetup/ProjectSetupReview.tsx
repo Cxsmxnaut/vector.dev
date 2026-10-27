@@ -109,13 +109,15 @@ export function listProjectSetupEffect(
 /**
  * Where the reviewed file came from, as the producer observed it (lab `s-scripts` SETUP: "at a41c9e2
  * on v0.3"). The repository's commit is context, never proof the file is committed: a modified,
- * untracked or unknown file says so.
+ * untracked or unknown file says so, until the producer reports the reviewed bytes as committed.
  */
 function describeSetupProvenance(presentation: ProjectSetupReviewPresentation | null): string | null {
   const provenance = presentation?.provenance;
   if (!provenance || provenance.kind === 'unavailable') return null;
   if (provenance.kind === 'nonRepository') return ` · ${t('projects.scripts.setup.provenanceNotRepository')}`;
-  const commit = provenance.headCommit?.slice(0, 7);
+  // The producer proved the reviewed bytes exist at that commit: the context is the whole statement.
+  const committed = provenance.committed?.commit.slice(0, 7);
+  const commit = committed ?? provenance.headCommit?.slice(0, 7);
   const at = commit
     ? provenance.branch
       ? t('projects.scripts.setup.provenanceAtBranch', { commit, branch: provenance.branch })
@@ -128,7 +130,7 @@ function describeSetupProvenance(presentation: ProjectSetupReviewPresentation | 
       : provenance.fileState === 'absent'
         ? t('projects.scripts.setup.provenanceAbsent')
         : t('projects.scripts.setup.provenanceUnknown');
-  return [at ? ` ${at}` : '', ` · ${state}`].join('');
+  return [at ? ` ${at}` : '', committed ? '' : ` · ${state}`].join('');
 }
 
 /** A review of a reviewed effect alone (approval page and card, Session ask): no manifest is read. */
@@ -375,17 +377,18 @@ export const ProjectSetupReview = React.memo(function ProjectSetupReview(
     pending: boolean;
     onRun: (scope: ProjectSetupScope) => void;
     reviewedEffect?: unknown;
-    initialScope?: ProjectSetupScope;
+    /** The chosen scope belongs to the review's owner, so the card and the phone page share it. */
+    scope: ProjectSetupScope;
+    onScopeChange: (scope: ProjectSetupScope) => void;
     onNotNow: () => void;
     onViewFile: () => void;
   }>,
 ) {
   const phone = useDeviceType() === 'phone';
-  const [scope, setScope] = React.useState<ProjectSetupScope>(props.initialScope ?? DEFAULT_PROJECT_SETUP_SCOPE);
   return (
     <View testID={props.testID} style={[styles.review, phone ? styles.reviewPhone : null]}>
-      <ProjectSetupReviewBody {...props} scope={scope} onScopeChange={setScope} />
-      <ProjectSetupReviewActions {...props} scope={scope} />
+      <ProjectSetupReviewBody {...props} />
+      <ProjectSetupReviewActions {...props} />
     </View>
   );
 });

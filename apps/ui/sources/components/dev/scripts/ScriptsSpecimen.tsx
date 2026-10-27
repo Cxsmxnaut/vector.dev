@@ -297,6 +297,8 @@ function controller(frame: string): ProjectScriptsController {
       retryUnconfirmedStop: false, requestStop: () => {}, pendingApproval: null },
     setupReviewOpen: frame === 'SETUP',
     openSetupReview: () => {},
+    reviewScope: null,
+    setReviewScope: () => {},
   };
 }
 
@@ -333,7 +335,7 @@ export function ScriptsSpecimen(
     ) : frame === 'SHARED' ? (
       <ItemGroup>
         <ProjectSetupReview testID="scripts-specimen.shared" manifest={MANIFEST as never} machineName="build-01" sharedRunAs="ben"
-          pending={false} onRun={() => {}} onNotNow={() => {}} onViewFile={() => {}} />
+          scope="thisTime" onScopeChange={() => {}} pending={false} onRun={() => {}} onNotNow={() => {}} onViewFile={() => {}} />
       </ItemGroup>
     ) : frame === 'RAIL' ? (
       <View style={styles.rail}>

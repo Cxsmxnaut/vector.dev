@@ -13055,6 +13055,7 @@ settingsSession: {
                 title: "輸出",
                 ranOn: "執行於",
                 openInTerminal: "在終端機中開啟",
+                earlierNotKept: "較早的輸出已不再保留",
                 purpose: {
                     setup: "設定",
                     teardown: "清理",

@@ -20963,6 +20963,7 @@ const enProjects = {
       title: "Output",
       ranOn: "Runs on",
       openInTerminal: "Open in terminal",
+      earlierNotKept: "Earlier output is no longer retained",
       purpose: {
         setup: "Setup",
         teardown: "Teardown",

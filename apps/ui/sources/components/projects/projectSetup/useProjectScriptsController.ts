@@ -143,11 +143,19 @@ export function useProjectScriptsController(
     (ProjectSetupConsent & Readonly<{ scopeKey: string }>) | null
   >(null);
   const [reviewOpenScope, setReviewOpenScope] = React.useState<string | null>(null);
+  // A held review opens the card; its decision, made here, on another device or on an approval, closes it
+  // again (the card must not stay open on a review that no longer exists).
+  const heldReviewPresent = Boolean(heldReview);
+  const heldReviewWasPresent = React.useRef(heldReviewPresent);
   React.useEffect(() => {
     if (heldReview) setReviewOpenScope(scopeKey);
-  }, [heldOperation?.snapshot.operationId, heldReview?.reviewedEffectDigest, scopeKey]);
+    else if (heldReviewWasPresent.current) setReviewOpenScope(null);
+    heldReviewWasPresent.current = heldReviewPresent;
+  }, [heldOperation?.snapshot.operationId, heldReview?.reviewedEffectDigest, heldReviewPresent, scopeKey]);
+  // The scope picked on the held review: one value for the card and the phone page, so widening keeps it.
+  const [reviewScope, setReviewScope] = React.useState<ProjectSetupDecision | null>(null);
   const openSetupReview = React.useCallback(() => setReviewOpenScope(scopeKey), [scopeKey]);
-  const dismissConsent = React.useCallback(() => { setConsent(null); setReviewOpenScope(null); }, []);
+  const dismissConsent = React.useCallback(() => { setConsent(null); setReviewOpenScope(null); setReviewScope(null); }, []);
   const lifetime = React.useMemo(() => new AbortController(), [binding, scopeKey]);
   const execute = React.useMemo(() => createFrontDoorActionExecute(options?.execute ? { execute: options.execute } : undefined), [options?.execute]);
   // Local continuation identity, never a worker preference or a second resource store.
@@ -393,6 +401,8 @@ export function useProjectScriptsController(
     setupStop,
     setupReviewOpen: reviewOpenScope === scopeKey || consent?.scopeKey === scopeKey,
     openSetupReview,
+    reviewScope,
+    setReviewScope,
     ready: client !== null,
     client,
     add,

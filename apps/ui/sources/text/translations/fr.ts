@@ -17274,6 +17274,7 @@ settingsSession: {
             title: "Sortie",
             ranOn: "S’exécute sur",
             openInTerminal: "Ouvrir dans le terminal",
+            earlierNotKept: "La sortie précédente n’est plus conservée",
             purpose: {
                 setup: "Configuration",
                 teardown: "Nettoyage",

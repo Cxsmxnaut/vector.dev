@@ -17400,6 +17400,7 @@ settingsSession: {
             title: "Salida",
             ranOn: "Se ejecuta en",
             openInTerminal: "Abrir en la terminal",
+            earlierNotKept: "La salida anterior ya no se conserva",
             purpose: {
                 setup: "Configuración",
                 teardown: "Desmontaje",

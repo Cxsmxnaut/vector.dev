@@ -68,7 +68,7 @@ import {
   useProjectSetupRun,
 } from './projectScriptRuns';
 import { ProjectScriptRow } from './ProjectScriptRow';
-import { ProjectSetupReview, type ProjectSetupScope } from './ProjectSetupReview';
+import { ProjectSetupReview } from './ProjectSetupReview';
 import { ProjectSetupReviewPage, useProjectSetupReviewDecision } from './ProjectSetupReviewPage';
 import { useRestoreFocusToTrigger, type FocusReturnTarget } from '@/keyboard/focusReturn';
 import { ProjectSetupAuthoredLine } from './ProjectSetupReturn';
@@ -143,12 +143,12 @@ export function ProjectScriptsBody({
   const phone = useDeviceType() === 'phone';
   // On a phone the held setup review is a page of its own (lab SETUPp); the choice made there survives Back.
   const [reviewPageOpen, setReviewPageOpen] = React.useState(false);
-  const [reviewScope, setReviewScope] = React.useState<ProjectSetupScope | null>(null);
   const reviewEntryTarget = React.useRef<FocusReturnTarget>(null);
   const reviewFocusPending = React.useRef(false);
   const restoreReviewEntryFocus = useRestoreFocusToTrigger(reviewEntryTarget);
   const setupRun = useProjectSetupRun(workspace, controller.accountId);
   const setupReview = useProjectSetupReviewDecision(workspace, controller, setupRun);
+  const { setScope: setReviewScope } = setupReview;
   React.useLayoutEffect(() => {
     if (reviewPageOpen || !reviewFocusPending.current) return;
     reviewFocusPending.current = false;
@@ -161,7 +161,7 @@ export function ProjectScriptsBody({
   }, []);
   React.useEffect(() => {
     if (!setupReview.reviewing) { setReviewPageOpen(false); setReviewScope(null); }
-  }, [setupReview.reviewing]);
+  }, [setupReview.reviewing, setReviewScope]);
   // Scripts are read on the checkout's machine: while it isn't answering, the last-known list stays and
   // the read waits with it (said once by the page above) instead of failing on its own.
   const reachability = useCheckoutReachability(workspace);
@@ -206,8 +206,6 @@ export function ProjectScriptsBody({
         testID={`${testID}.setup.reviewPage`}
         manifest={read.value.definition.document.manifest}
         review={setupReview}
-        scope={reviewScope}
-        onScopeChange={setReviewScope}
         onBack={closeReviewPage}
         onViewFile={() => { closeReviewPage(); setEditor({ key, seed: false, mode: 'raw' }); }}
       />
@@ -699,6 +697,7 @@ function SetupRow(
   }>,
 ) {
   const { theme } = useUnistyles();
+  const phone = useDeviceType() === 'phone';
   const steps = props.manifest.workspace?.setup?.length ?? 0;
   const review = useProjectSetupReviewDecision(props.workspace, props.controller, props.operation);
   const reviewMachine = review.machine;
@@ -839,6 +838,7 @@ function SetupRow(
             {attachment?.terminalId ? (
               <ProjectCommandOutputPane
                 operation={props.operation}
+                ownerStatesExit
                 title={t('projects.scripts.setup.title')}
                 {...(output.opensInTerminal ? { onOpenInTerminal: openOutput } : { onOpenDetail: openOutput })}
               />
@@ -859,7 +859,8 @@ function SetupRow(
             sharedRunAs={reviewMachine.sharedRunAs}
             pending={pending}
             reviewedEffect={review.reviewedEffect}
-            initialScope={review.initialScope}
+            scope={review.scope}
+            onScopeChange={review.setScope}
             onRun={review.run}
             onNotNow={() => {
               setOpen(false);

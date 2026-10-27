@@ -17507,6 +17507,7 @@ settingsSession: {
             title: "Saída",
             ranOn: "Executa em",
             openInTerminal: "Abrir no terminal",
+            earlierNotKept: "A saída anterior já não é mantida",
             purpose: {
                 setup: "Configuração",
                 teardown: "Desmontagem",

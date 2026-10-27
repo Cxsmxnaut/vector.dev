@@ -102,6 +102,36 @@ describe('Script row title line', () => {
   });
 });
 
+describe('Running script row anatomy', () => {
+  const workspace: WorkspaceAddressV1 = { serverId: 'home', machineId: 'machine', workspaceId: 'ws', rootPath: '/repo' };
+  const running: ActionOperationProjection = {
+    serverId: 'home', observation: 'available', isUnavailableProjection: false,
+    snapshot: { version: 1, operationId: 'test-run', revision: 2, actionId: 'projects.script.run', state: 'running',
+      scope: { accountId: 'account', machineId: 'machine' }, title: 'test', createdAt: 1_000, startedAt: 1_100, cancellation: 'supported',
+      progress: { kind: 'output', label: 'ok src/cart.test.tsx (14 tests)' } as never,
+      domainRef: { kind: 'projectCommand', purpose: 'script', serverId: 'home', machineId: 'machine',
+        workspaceRefId: 'ws', cwd: '/repo', terminalId: 'pty' } },
+  };
+  const row = () => <ProjectScriptRow testID="script" workspace={workspace} name="test" badge="package.json" command="yarn test"
+    portable operation={running} idleText="Not run" pending={false} failureCode={null} compact={false} onRun={() => {}} />;
+
+  it('lets a wide row open into its output with a caret and the latest output line under its status', async () => {
+    const screen = await renderScreen(row());
+    expect(screen.findByTestId('script.caret')).toBeTruthy();
+    expect(screen.findByTestId('script.tail')).toBeTruthy();
+    await screen.unmount();
+  });
+
+  it('keeps the phone row to its status and Run control: the row press opens the output, no caret or output line', async () => {
+    device.current = 'phone';
+    const screen = await renderScreen(row());
+    expect(screen.findByTestId('script.caret')).toBeFalsy();
+    expect(screen.findByTestId('script.tail')).toBeFalsy();
+    expect(screen.findByTestId('script.run')).toBeTruthy();
+    await screen.unmount();
+  });
+});
+
 describe('Script output before a terminal exists', () => {
   it('shows the observed queue/copy/setup stage and actual target instead of empty output', async () => {
     const workspace: WorkspaceAddressV1 = { serverId: 'source-home', machineId: 'source-machine', workspaceId: 'source-workspace', rootPath: '/source' };

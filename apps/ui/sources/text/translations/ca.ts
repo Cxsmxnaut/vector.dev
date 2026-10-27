@@ -16155,6 +16155,7 @@ La meva pregunta: `,
                 title: "Sortida",
                 ranOn: "S’executa a",
                 openInTerminal: "Obre al terminal",
+                earlierNotKept: "La sortida anterior ja no es conserva",
                 purpose: {
                     setup: "Configuració",
                     teardown: "Desmuntatge",

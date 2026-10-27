@@ -92,7 +92,7 @@ vi.mock('@/sync/ops/actions/defaultActionExecutor', () => ({
 // The device class is a platform adapter boundary; phone cases set it, every other case keeps the real one.
 vi.mock('@/utils/platform/responsive', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/utils/platform/responsive')>();
-  return { ...actual, useDeviceType: () => shared.device ?? actual.useDeviceType() };
+  return { ...actual, useDeviceType: () => { const real = actual.useDeviceType(); return shared.device ?? real; } };
 });
 
 vi.mock('@/components/ui/code/editor/CodeEditor', async () => {
@@ -713,7 +713,7 @@ describe('ProjectScriptsBody runs', () => {
       shared.calls.filter((call) => call.actionId === 'projects.script.run'),
     ).toHaveLength(1);
     // "Until it changes" (chosen; This time is the default) is the person's own grant for this Project's exact effect.
-    expect(shared.trustMutations).toEqual([
+    await vi.waitFor(() => expect(shared.trustMutations).toEqual([
       expect.objectContaining({
         project: { serverId: workspace.serverId, projectId: 'w1' },
         expectedRevision: 'absent',
@@ -722,7 +722,7 @@ describe('ProjectScriptsBody runs', () => {
           v: expect.objectContaining({ reviewedEffectDigest: 'a'.repeat(64) }),
         },
       }),
-    ]);
+    ]));
   });
 
   it.each(['ask', 'fail'] as const)(
@@ -1293,6 +1293,48 @@ describe('ProjectScriptsBody setup row', () => {
     expect(text).toContain('projects.scripts.setup.provenanceModified');
   });
 
+  it('states a committed reviewed file by its commit alone, without a commit-state suffix', async () => {
+    shared.inspection = { definition: presentDefinition(withSetup), detection, importCandidates: [] };
+    const screen = await render('page', 'scripts.setup');
+    const { error: _error, settledAt: _settledAt, ...held } = setupOperation('failed') as Record<string, unknown>;
+    await act(async () => {
+      actionOperationStore.mergeSnapshots({ serverId: workspace.serverId, snapshots: [{
+        ...held, state: 'accepted',
+        setupReview: { kind: 'pendingApproval', code: 'project_setup_consent_required', reviewedEffectDigest: 'a'.repeat(64),
+          reviewedEffect: { presentation: { bindings: [], provenance: {
+            file: '.happier/project.json', kind: 'repository', headCommit: 'a41c9e2f00', branch: 'v0.3', fileState: 'unknown',
+            committed: { commit: 'a41c9e2f00' } } } } },
+      } as never] });
+    });
+    await vi.waitFor(() => expect(screen.findByTestId('scripts.setup.review.provenance')).toBeTruthy());
+    const text = textOf(screen, 'scripts.setup.review.provenance');
+    expect(text).toContain('projects.scripts.setup.provenanceAtBranch');
+    expect(text).not.toContain('projects.scripts.setup.provenanceUnknown');
+  });
+
+  it('folds the Setup card back to its row once the held review is decided elsewhere', async () => {
+    shared.inspection = { definition: presentDefinition(withSetup), detection, importCandidates: [] };
+    const outputScopeId = `project:${encodeURIComponent(workspace.serverId)}:w1`;
+    const screen = await render('page', 'scripts.setup', { outputScopeId });
+    const expanded = () => screen.findByTestId('scripts.setup')?.props.accessibilityState?.expanded;
+    const { error: _error, settledAt: _settledAt, ...held } = setupOperation('failed') as Record<string, unknown>;
+    await act(async () => {
+      actionOperationStore.mergeSnapshots({ serverId: workspace.serverId, snapshots: [{
+        ...held, state: 'accepted',
+        setupReview: { kind: 'pendingApproval', code: 'project_setup_consent_required', reviewedEffectDigest: 'a'.repeat(64), reviewedEffect: {} },
+      } as never] });
+    });
+    await vi.waitFor(() => expect(screen.findByTestId('scripts.setup.review')).toBeTruthy());
+    expect(expanded()).toBe(true);
+    await act(async () => {
+      const running = setupOperation('running');
+      const { terminalId: _terminalId, ...domainRef } = running.domainRef;
+      actionOperationStore.mergeSnapshots({ serverId: workspace.serverId, snapshots: [{ ...running, domainRef, revision: 2 } as never] });
+    });
+    await vi.waitFor(() => expect(screen.findByTestId('scripts.setup.review')).toBeNull());
+    await vi.waitFor(() => expect(expanded()).toBe(false));
+  });
+
   it('keeps a failed setup’s output one press away, in the host’s bottom terminal', async () => {
     shared.inspection = { definition: presentDefinition(withSetup), detection, importCandidates: [] };
     const outputScopeId = `project:${encodeURIComponent(workspace.serverId)}:w1`;
@@ -1495,6 +1537,23 @@ describe('ProjectScriptsBody setup review on a phone', () => {
       actionOperationStore.mergeSnapshots({ serverId: workspace.serverId, snapshots: [{ ...hold(), revision: 3, setupReview: undefined, state: 'succeeded' } as never] });
     });
     await vi.waitFor(() => expect(screen.findByTestId('scripts.setup.reviewPage')).toBeNull());
+  });
+
+  it('keeps the scope picked on the phone page when the same review widens to the desktop card', async () => {
+    present();
+    let back: (() => void) | null = null;
+    const screen = await render('page', 'scripts.setup.reviewEntry', { registerPageBack: (next) => { back = next; } });
+    await act(async () => { await screen.pressByTestIdAsync('scripts.setup.reviewEntry'); });
+    await vi.waitFor(() => expect(screen.findByTestId('scripts.setup.reviewPage')).toBeTruthy());
+    await act(async () => { await screen.pressByTestIdAsync('scripts.setup.reviewPage.scope:untilChanged'); });
+    await act(async () => { back?.(); });
+    shared.device = null;
+    // The held review is touched again (a later revision), so the row re-reads the device class.
+    await act(async () => {
+      actionOperationStore.mergeSnapshots({ serverId: workspace.serverId, snapshots: [{ ...hold(), revision: 3 }] });
+    });
+    await vi.waitFor(() => expect(screen.findByTestId('scripts.setup.review')).toBeTruthy());
+    expect(screen.getTextContent()).toContain('projects.scripts.setup.consequenceUntilChanged');
   });
 
   it('keeps the inline review where no pushed page exists: a desktop page and a compact host', async () => {

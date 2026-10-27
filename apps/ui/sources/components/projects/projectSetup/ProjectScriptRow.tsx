@@ -161,7 +161,8 @@ export const ProjectScriptRow = React.memo(function ProjectScriptRow(
   // Desktop page rows open into their output; phone and compact rows open it directly (the host's
   // bottom terminal tab where it has one, otherwise the operation detail).
   const discloses = !phone && !props.compact;
-  const opens = discloses || Boolean(props.operation);
+  // The phone row's press is its disclosure: only the Run control sits right of the status (lab PAGEp).
+  const showsCaret = !phone && (discloses || Boolean(props.operation));
 
   const header = (headerProps?: Readonly<Record<string, unknown>>) => (
     <Item
@@ -189,7 +190,7 @@ export const ProjectScriptRow = React.memo(function ProjectScriptRow(
             tone={tone}
             testID={`${props.testID}.status`}
           />
-          {presentation.tail && !props.compact ? (
+          {presentation.tail && !props.compact && !phone ? (
             <Text
               testID={`${props.testID}.tail`}
               numberOfLines={1}
@@ -210,8 +211,9 @@ export const ProjectScriptRow = React.memo(function ProjectScriptRow(
           {presentation.live && presentation.startedAt ? (
             <RunClock startedAt={presentation.startedAt} />
           ) : null}
-          {opens ? (
+          {showsCaret ? (
             <Icon
+              testID={`${props.testID}.caret`}
               name="caret-right"
               size={14}
               color={theme.colors.text.tertiary}
@@ -282,6 +284,7 @@ export const ProjectScriptRow = React.memo(function ProjectScriptRow(
     <ProjectCommandOutputPane
       operation={props.operation}
       operationStopPending={stop.pending || stop.stopRequested}
+      ownerStatesExit
       title={props.name}
       {...(output.opensInTerminal ? { onOpenInTerminal: openDetail } : { onOpenDetail: openDetail })}
     />
