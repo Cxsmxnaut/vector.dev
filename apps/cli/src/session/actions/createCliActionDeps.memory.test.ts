@@ -19,6 +19,8 @@ import { ProjectAccountRowMutationRequestV1Schema, ProjectAccountOrganizationV1S
 import { withdrawActiveProjectAccountRowsSnapshot } from '@/workspaces/projectAccountRows';
 import { z } from 'zod/mini';
 import { ArtifactReadHeadersBatchInputV1Schema, ArtifactReadHeadersBatchResponseV1Schema } from '@happier-dev/protocol/artifacts/artifactAccessV1';
+import { withConfiguredDaemonTestHome } from '@/daemon/testkit/fakeDaemonLifecycle.testkit';
+import { seedTestServerProfile } from '@/testkit/serverProfiles';
 
 const { callMachineRpc, callExactMachineRpc, fetchSessionById, patchSessionMetadataEnvelopeTuple } = vi.hoisted(() => ({
   callMachineRpc: vi.fn(),
@@ -274,10 +276,11 @@ describe('createCliActionDeps memory bindings', () => {
     }
   });
 
-  it.each(['srv_memory_home', 'memory-profile'])('creates and attaches Bot memory addressed by %s with portable Home provenance', async requestedServerId => {
+  it.each(['srv_memory_home', 'memory-profile'])('creates and attaches Bot memory addressed by %s with portable Home provenance', async requestedServerId => withConfiguredDaemonTestHome({ prefix: 'memory-portable-home-' }, async () => {
     const serverId = 'memory-profile';
     const serverIdentityId = 'srv_memory_home';
     const serverHttpBaseUrl = 'https://memory-home.test';
+    await seedTestServerProfile({ id: serverId, homeId: serverIdentityId, serverUrl: serverHttpBaseUrl });
     const sessionId = 'cmemorysession000000000001';
     const token = `header.${Buffer.from(JSON.stringify({ sub: 'owner' })).toString('base64url')}.signature`;
     const credentials = { token, encryption: null,
@@ -349,7 +352,7 @@ describe('createCliActionDeps memory bindings', () => {
         work: expect.objectContaining({ promptStack: [expect.objectContaining({ id: 'session.memory',
           ref: { kind: 'doc', artifactId: artifacts[0]!.id, serverId: serverIdentityId } })] }),
       } });
-  });
+  }));
 
   it('rejects a foreign Memory Home before reading or allocating anything', async () => {
     const get = vi.spyOn(axios, 'get').mockRejectedValue(new Error('Unexpected foreign Home read'));

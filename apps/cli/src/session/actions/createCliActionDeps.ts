@@ -1010,8 +1010,8 @@ export function createCliActionDeps(params: Readonly<{
     identifier === projectHomeId || identifier === params.serverIdentityId ? params.serverIdentityId : undefined);
   const projectHomeAdmission = async (serverId?: string, context?: ActionExecutorContext) => {
     const { isServerProfileHomeIdentity } = await import("@/server/serverProfiles");
-    if ((serverId !== undefined && !isSameActionHomeId(serverId) && !await isServerProfileHomeIdentity(projectHomeId, serverId.trim()))
-      || (context?.serverId && !isSameActionHomeId(context.serverId) && !await isServerProfileHomeIdentity(projectHomeId, context.serverId))
+    if ((serverId !== undefined && !await isServerProfileHomeIdentity(projectHomeId, serverId.trim()))
+      || (context?.serverId && !await isServerProfileHomeIdentity(projectHomeId, context.serverId))
       || (params.serverId === undefined && configuration.activeServerId !== projectHomeId)) {
       return executionRunActionFailure('server_scope_mismatch');
     }
