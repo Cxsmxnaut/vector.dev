@@ -40,6 +40,19 @@ SDK/offline discoveries. Other hook events, including `SessionEnd`, continue to
 reach lifecycle handling but cannot replace the active Claude resume identity,
 transcript path, or owned-session lineage during local/remote handoff.
 
+In development source, `Session.getResumableSessionIdentity` supplies the ID and
+transcript path together to local, remote, and Unified Terminal startup, replay,
+and relaunches; the ID-only accessor delegates to it. A newly observed ID without a
+materialized transcript remains provisional, so zero-turn takeover can start a
+fresh Claude conversation in the same Happier session. Requested resumes, native
+resume/fork/compaction, and identities already proven by a transcript retain their
+context requirement if that transcript later becomes unavailable; remote resume
+then fails visibly instead of silently starting a replacement conversation.
+Clear/restore preserves that requirement. Metadata publication still requires
+the stricter complete matching transcript record. Connected-service reachability
+continues to prove an actual resume target; the spawn owner already skips that
+probe for fresh starts.
+
 Development-source transcript ingestion and UI normalization share
 `providers.claude.isClaudeInternalEventType` from `@happier-dev/agents` for
 non-conversation records, including Claude SDK `command_lifecycle` status events.
