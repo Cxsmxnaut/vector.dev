@@ -112,7 +112,10 @@ export class InvalidateSync {
         this._doSync();
     }
 
-    async invalidateAndAwait() {
+    async invalidateAndAwait(): Promise<void>;
+    async invalidateAndAwait(opts: { timeoutMs?: number }): Promise<SyncQueueWaitOutcome>;
+    async invalidateAndAwait(opts?: { timeoutMs?: number }): Promise<void | SyncQueueWaitOutcome> {
+        if (opts) return this._invalidateAndAwaitQueue(opts);
         if (this._stopped) {
             return;
         }
@@ -131,6 +134,29 @@ export class InvalidateSync {
             }
             this.invalidate();
         });
+    }
+
+    private async _invalidateAndAwaitQueue(opts: { timeoutMs?: number }): Promise<SyncQueueWaitOutcome> {
+        if (this._stopped) return SYNC_QUEUE_STOPPED;
+        let pending!: InvalidateSyncCyclePending;
+        const cycle = new Promise<InvalidateSyncCycleOutcome>((resolve) => {
+            pending = resolve;
+            if (this._invalidated && this._hasStartedCommandThisCycle) {
+                this._nextCyclePendings.push(pending);
+            } else {
+                this._cyclePendings.push(pending);
+            }
+        });
+        this.invalidate();
+        const queue = await this.awaitQueue(opts);
+        if (queue.status !== 'completed') {
+            this._cyclePendings = this._cyclePendings.filter((entry) => entry !== pending);
+            this._nextCyclePendings = this._nextCyclePendings.filter((entry) => entry !== pending);
+            return queue;
+        }
+        const outcome = await cycle;
+        if (!outcome.ok) throw outcome.error;
+        return queue;
     }
 
     async awaitQueue(opts?: { timeoutMs?: number }) {

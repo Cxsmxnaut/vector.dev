@@ -121,8 +121,11 @@ describe('sync resumeSync background interruption', () => {
                     { status: 200, headers: { 'Content-Type': 'application/json' } },
                 );
             }
-            if (url.includes('/v1/machines')) {
+            if (url.includes('/v1/machines') || url.includes('/v1/artifacts')) {
                 return new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+            }
+            if (url.includes('/v1/feed')) {
+                return new Response(JSON.stringify({ items: [], hasMore: false }), { status: 200, headers: { 'Content-Type': 'application/json' } });
             }
             return new Response(JSON.stringify({}), { status: 200, headers: { 'Content-Type': 'application/json' } });
         });
@@ -162,8 +165,12 @@ describe('sync resumeSync background interruption', () => {
 
         expect(fetchMock).toHaveBeenCalledTimes(0);
 
-        pauseController.resume();
+        // The interrupted resume must settle without HTTP work; the foreground transition owns catch-up.
         await promise;
+        expect(fetchMock).toHaveBeenCalledTimes(0);
+
+        pauseController.resume();
+        await (sync as any).resumeSync('app-foreground');
 
         expect(fetchMock.mock.calls.map((call) => String(call[0]))).toEqual(
             expect.arrayContaining([expect.stringContaining('/v2/sessions')]),

@@ -35,6 +35,7 @@ export type PlannedChangesApplyResult =
 export type SessionListInvalidationContext = Readonly<{
     requiredHydrationSessionIds: readonly string[];
     prioritizeSessionIds: readonly string[];
+    reconcileList: boolean;
 }>;
 
 export async function applyPlannedChangeActions(params: {
@@ -99,6 +100,7 @@ export async function applyPlannedChangeActions(params: {
     const sessionListInvalidationContext: SessionListInvalidationContext = {
         requiredHydrationSessionIds: changedSessionIds,
         prioritizeSessionIds: changedSessionIds,
+        reconcileList: planned.reconcileSessionList === true || changedSessionIds.length === 0,
     };
 
     let sessionsInvalidationFailed = false;

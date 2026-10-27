@@ -222,6 +222,43 @@ from this current-work projection.
 ## HTTP endpoints by area
 See `api.md` for the full HTTP endpoint catalog and auth flows.
 
+### Required session rows and resume (development)
+
+The development `GET /v2/sessions` reader accepts `requiredSessionIds` as a JSON
+array in the query. These access-checked rows join the ordinary initial-page
+families without changing its cursor. `requiredOnly=true` reads only that family,
+including visible archived rows, and returns no continuation cursor. The UI chunks
+the encoded GET request line against nginx's default 8 KiB boundary, including
+reader-support parameters and HTTP framing. This is a transport boundary, not an
+account-size or row-count limit.
+
+New UI readers verify every required ID actually returned. Older servers can
+ignore the additive query; omitted IDs use the existing exact-read compatibility
+path. A page omission is never proof of deletion. Exact reads retain the existing
+nondisclosing JSON `404 { error: 'Session not found' }` for both missing and
+inaccessible sessions. Unrecognized or unparseable 404 bodies, explicit permission,
+authentication and transport failures remain failures rather than deletion.
+When an overlapping organization refresh introduces required pins or explicit
+attention standings, the UI awaits their hydration through the required-only list
+operation, even if their IDs appeared in the ordinary page. Returned membership
+alone does not prove readable materialization; omitted rows retain exact fallback.
+
+A missing account changes cursor captures the current cursor before the existing
+snapshot repair and checkpoints it only after successful repair. Every repair
+requires materializing reads started after that capture: active refresh commands
+finish before a fresh queue cycle, and the sessions queue drains any older shared
+direct list read before fetching again. Existing wait budgets, stopped queues and
+terminal failures still prevent checkpointing an incomplete repair. Established
+cursors materialize each page's changed sessions through the same row reader
+before checkpointing. Share, pin and membership changes still reconcile the
+ordinary list; metadata/activity-only pages do not replace it. Targeted reads
+preserve list pagination, while the ordinary resume refresh still recovers missed
+activity ephemerals. Missing folder-assignment reads learn for their captured
+account/server activation even when the requesting render effect is replaced;
+scope changes discard stale results and newer cached assignments take precedence.
+
+These additions describe development source, not released availability.
+
 ### Session organization (development)
 
 `GET /v2/session-organization` returns the account-scoped organization snapshot.
