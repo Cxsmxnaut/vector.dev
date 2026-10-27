@@ -35,6 +35,7 @@ import type { ApiEphemeralActivityUpdate } from './api/types/apiTypes';
 import { Session, Machine, MetadataSchema, type Metadata } from './domains/state/storageTypes';
 import { InvalidateSync } from '@/utils/sessions/sync';
 import { PauseController } from '@/utils/timing/pauseController';
+import { SupersededOperationError } from '@/utils/timing/time';
 import {
     invalidateAllServerReachabilitySupervisors,
     setServerReachabilityNetworkAllowed,
@@ -4585,6 +4586,7 @@ class Sync {
           // first so a superseded read cannot launch fallback materialization.
           this.manualResumeGeneration += 1;
           const supersededResume = this.resumeInFlight;
+          this.resumeWaitController?.abort();
           abortServerFetches('manual-retry', { readOnly: true });
           let reconnectSocket = false;
           try {
@@ -4625,6 +4627,8 @@ class Sync {
       }
 
       private manualResumeGeneration = 0;
+      // Wakes only the resume's queue waiters; the generation guard still owns validity.
+      private resumeWaitController: AbortController | null = null;
 
       public resumeSync = (reason: 'app-foreground' | 'socket-reconnect' | 'manual' | 'server-reachable' | 'changes-catch-up'): Promise<void> => {
           return runWithInFlightDedupe(
@@ -4638,120 +4642,130 @@ class Sync {
                   const generation = this.manualResumeGeneration;
                   const isServerScopeCurrent = this.createServerScopeGuard();
                   const shouldContinue = () => generation === this.manualResumeGeneration && isServerScopeCurrent();
-                  if (
-                      (reason === 'socket-reconnect' || reason === 'server-reachable' || reason === 'changes-catch-up')
-                      && !this.isForeground
-                  ) {
-                      return;
-                  }
-                  if (this.pauseController.isPaused()) {
-                      return;
-                  }
-                  await this.pauseController.waitUntilResumed();
-                  if (!shouldContinue()) {
-                      return;
-                  }
-                  if (!this.credentials) {
-                      return;
-                  }
-
-                  const accountId = String(this.serverID ?? '').trim() || null;
-
-                  if (!accountId) {
+                  const waitController = new AbortController();
+                  this.resumeWaitController = waitController;
+                  const signal = waitController.signal;
+                  try {
+                      if (
+                          (reason === 'socket-reconnect' || reason === 'server-reachable' || reason === 'changes-catch-up')
+                          && !this.isForeground
+                      ) {
+                          return;
+                      }
+                      if (this.pauseController.isPaused()) {
+                          return;
+                      }
+                      await this.pauseController.waitUntilResumed();
                       if (!shouldContinue()) {
                           return;
                       }
-                      await this.snapshotRefreshOnResume({ mode: 'fallback', reason: 'missing-profile' });
-                      return;
-                  }
-
-                  if (reason !== 'changes-catch-up') {
-                      await this.rearmPendingOutboxForActiveScope();
-                      if (!shouldContinue()) {
+                      if (!this.credentials) {
                           return;
                       }
 
-                      await this.refreshSessionDraftRepositoryForSync({
-                          forceSnapshotHydration: reason === 'manual' || this.sessionDraftOfflineCatchUpPending,
+                      const accountId = String(this.serverID ?? '').trim() || null;
+
+                      if (!accountId) {
+                          if (!shouldContinue()) {
+                              return;
+                          }
+                          await this.snapshotRefreshOnResume({ mode: 'fallback', reason: 'missing-profile', shouldContinue, signal });
+                          return;
+                      }
+
+                      if (reason !== 'changes-catch-up') {
+                          await this.rearmPendingOutboxForActiveScope();
+                          if (!shouldContinue()) {
+                              return;
+                          }
+
+                          await this.refreshSessionDraftRepositoryForSync({
+                              forceSnapshotHydration: reason === 'manual' || this.sessionDraftOfflineCatchUpPending,
+                          });
+                          if (!shouldContinue()) {
+                              return;
+                          }
+                      }
+
+                      const { status, refreshedByCatchUp } = await this.resumeViaChanges({
+                          accountId,
+                          shouldContinue,
+                          signal,
+                          allowOfflineSnapshotRefresh: reason !== 'changes-catch-up',
                       });
+                      if (status === 'aborted') {
+                          return;
+                      }
+                      if (status === 'fallback') {
+                          if (!shouldContinue()) {
+                              return;
+                          }
+                          await this.snapshotRefreshOnResume({ mode: 'fallback', reason: 'changes-fallback', shouldContinue, signal });
+                          return;
+                      }
+
+                      if (reason === 'changes-catch-up') {
+                          return;
+                      }
+
                       if (!shouldContinue()) {
                           return;
                       }
-                  }
-
-                  const { status, refreshedByCatchUp } = await this.resumeViaChanges({
-                      accountId,
-                      shouldContinue,
-                      allowOfflineSnapshotRefresh: reason !== 'changes-catch-up',
-                  });
-                  if (status === 'aborted') {
-                      return;
-                  }
-                  if (status === 'fallback') {
+                      await this.catchUpLoadedDirectSessionsOnResume();
                       if (!shouldContinue()) {
                           return;
                       }
-                      await this.snapshotRefreshOnResume({ mode: 'fallback', reason: 'changes-fallback' });
-                      return;
-                  }
 
-                  if (reason === 'changes-catch-up') {
-                      return;
-                  }
+                      const invalidateBounded = async (syncUnit: InvalidateSync, timeoutMs: number): Promise<void> => {
+                          if (!shouldContinue()) {
+                              return;
+                          }
+                          syncUnit.invalidateCoalesced();
+                          await syncUnit.awaitQueue({ timeoutMs, signal });
+                      };
 
-                  if (!shouldContinue()) {
-                      return;
-                  }
-                  await this.catchUpLoadedDirectSessionsOnResume();
-                  if (!shouldContinue()) {
-                      return;
-                  }
-
-                  const invalidateBounded = async (syncUnit: InvalidateSync, timeoutMs: number): Promise<void> => {
-                      if (!shouldContinue()) {
-                          return;
+                      // Activity/presence updates are delivered via ephemerals and are not recovered for the
+                      // window in which the socket was down. Gate this on measured socket downtime rather than the
+                      // resume reason: a background→foreground cycle disconnects the socket intentionally, and an
+                      // intentional disconnect resets apiSocket's reconnect bookkeeping, so `socket-reconnect`
+                      // never fires for it. Gating on the reason left a resuming client with stale session.active
+                      // and machine-online state until the next keep-alive ephemeral (0–20s).
+                      //
+                      // Skip whatever the changes catch-up already refreshed in this same resume: it
+                      // runs the identical full refresh (session-organization + sessions/active +
+                      // /v2/sessions?includeAttention, /v1/machines) and its session refresh awaits
+                      // hydration, so repeating it here fired a second complete catch-up wave seconds
+                      // after the first.
+                      if (this.readSocketOfflineDurationMs() > 0) {
+                          const offlineRecoveryTasks: Array<() => Promise<void>> = [];
+                          if (!refreshedByCatchUp.sessions) {
+                              offlineRecoveryTasks.push(
+                                  () => invalidateBounded(this.sessionsSync, this.syncTuning.resumeQuickInvalidateTimeoutMs),
+                              );
+                          }
+                          if (!refreshedByCatchUp.machines) {
+                              offlineRecoveryTasks.push(
+                                  () => invalidateBounded(this.machinesSync, this.syncTuning.resumeQuickInvalidateTimeoutMs),
+                              );
+                          }
+                          if (offlineRecoveryTasks.length > 0) {
+                              await runTasksWithLimit(offlineRecoveryTasks, this.syncTuning.resumeConcurrencyLimit);
+                          }
                       }
-                      syncUnit.invalidateCoalesced();
-                      await syncUnit.awaitQueue({ timeoutMs });
-                  };
 
-                  // Activity/presence updates are delivered via ephemerals and are not recovered for the
-                  // window in which the socket was down. Gate this on measured socket downtime rather than the
-                  // resume reason: a background→foreground cycle disconnects the socket intentionally, and an
-                  // intentional disconnect resets apiSocket's reconnect bookkeeping, so `socket-reconnect`
-                  // never fires for it. Gating on the reason left a resuming client with stale session.active
-                  // and machine-online state until the next keep-alive ephemeral (0–20s).
-                  //
-                  // Skip whatever the changes catch-up already refreshed in this same resume: it
-                  // runs the identical full refresh (session-organization + sessions/active +
-                  // /v2/sessions?includeAttention, /v1/machines) and its session refresh awaits
-                  // hydration, so repeating it here fired a second complete catch-up wave seconds
-                  // after the first.
-                  if (this.readSocketOfflineDurationMs() > 0) {
-                      const offlineRecoveryTasks: Array<() => Promise<void>> = [];
-                      if (!refreshedByCatchUp.sessions) {
-                          offlineRecoveryTasks.push(
-                              () => invalidateBounded(this.sessionsSync, this.syncTuning.resumeQuickInvalidateTimeoutMs),
-                          );
-                      }
-                      if (!refreshedByCatchUp.machines) {
-                          offlineRecoveryTasks.push(
-                              () => invalidateBounded(this.machinesSync, this.syncTuning.resumeQuickInvalidateTimeoutMs),
-                          );
-                      }
-                      if (offlineRecoveryTasks.length > 0) {
-                          await runTasksWithLimit(offlineRecoveryTasks, this.syncTuning.resumeConcurrencyLimit);
-                      }
+                        await runTasksWithLimit(
+                            [
+                                () => invalidateBounded(this.purchasesSync, this.syncTuning.resumeQuickInvalidateTimeoutMs),
+                                () => invalidateBounded(this.pushTokenSync, this.syncTuning.resumeQuickInvalidateTimeoutMs),
+                                () => invalidateBounded(this.nativeUpdateSync, this.syncTuning.resumeQuickInvalidateTimeoutMs),
+                            ],
+                            this.syncTuning.resumeConcurrencyLimit
+                        );
+                  } catch (error) {
+                      if (!(error instanceof SupersededOperationError) || shouldContinue()) throw error;
+                  } finally {
+                      if (this.resumeWaitController === waitController) this.resumeWaitController = null;
                   }
-
-                    await runTasksWithLimit(
-                        [
-                            () => invalidateBounded(this.purchasesSync, this.syncTuning.resumeQuickInvalidateTimeoutMs),
-                            () => invalidateBounded(this.pushTokenSync, this.syncTuning.resumeQuickInvalidateTimeoutMs),
-                            () => invalidateBounded(this.nativeUpdateSync, this.syncTuning.resumeQuickInvalidateTimeoutMs),
-                        ],
-                        this.syncTuning.resumeConcurrencyLimit
-                    );
                 }
             );
         };
@@ -4831,18 +4845,30 @@ class Sync {
           }
         };
 
-      private snapshotRefreshOnResume = async (opts: { mode: 'fallback' | 'long-offline'; reason: string }): Promise<{ status: 'complete' | 'error' }> => {
-          if (this.pauseController.isPaused()) {
+      private snapshotRefreshOnResume = async (opts: {
+          mode: 'fallback' | 'long-offline';
+          reason: string;
+          shouldContinue?: () => boolean;
+          signal?: AbortSignal;
+      }): Promise<{ status: 'complete' | 'error' }> => {
+          const shouldContinue = opts.shouldContinue ?? this.createServerScopeGuard();
+          if (!shouldContinue() || this.pauseController.isPaused()) {
               return { status: 'error' };
           }
           await this.pauseController.waitUntilResumed();
-          if (!this.credentials || this.pauseController.isPaused()) {
+          if (!this.credentials || !shouldContinue() || this.pauseController.isPaused()) {
               return { status: 'error' };
           }
 
-          const invalidateBounded = (syncUnit: InvalidateSync, timeoutMs: number) => (
-              syncUnit.invalidateAndAwait({ timeoutMs })
-          );
+          const invalidateBounded = async (syncUnit: InvalidateSync, timeoutMs: number) => {
+              if (!shouldContinue()) return { status: 'stopped' } as const;
+              try {
+                  return await syncUnit.invalidateAndAwait({ timeoutMs, signal: opts.signal });
+              } catch (error) {
+                  if (error instanceof SupersededOperationError && !shouldContinue()) return { status: 'stopped' } as const;
+                  throw error;
+              }
+          };
 
           const concurrencyLimit = this.syncTuning.resumeConcurrencyLimit;
 
@@ -4854,9 +4880,10 @@ class Sync {
               ],
               concurrencyLimit
           );
-          if (core.some((outcome) => outcome.status !== 'completed')) return { status: 'error' };
+          if (!shouldContinue() || core.some((outcome) => outcome.status !== 'completed')) return { status: 'error' };
 
           await this.refreshSessionDraftRepositoryForSync({ forceSnapshotHydration: true });
+          if (!shouldContinue()) return { status: 'error' };
 
           // Catch up transcripts only for sessions that are already loaded locally AND are live
           // content consumers right now. The catch-up policy already no-ops for hidden
@@ -4880,12 +4907,12 @@ class Sync {
           const transcripts = await runTasksWithLimit(
               loadedSessionIds.map((sessionId) => async () => {
                   const outcome = await invalidateBounded(this.getOrCreateMessagesSync(sessionId), this.syncTuning.invalidateSyncAwaitTimeoutMs);
-                  if (outcome.status === 'completed') scmStatusSync.invalidate(sessionId);
+                  if (shouldContinue() && outcome.status === 'completed') scmStatusSync.invalidate(sessionId);
                   return outcome;
               }),
               this.syncTuning.messageCatchUpConcurrencyLimit
           );
-          if (transcripts.some((outcome) => outcome.status !== 'completed')) return { status: 'error' };
+          if (!shouldContinue() || transcripts.some((outcome) => outcome.status !== 'completed')) return { status: 'error' };
 
           // Refresh the rest with bounded concurrency.
           const remaining = await runTasksWithLimit(
@@ -4901,7 +4928,7 @@ class Sync {
               ],
               concurrencyLimit
           );
-          return { status: remaining.every((outcome) => outcome.status === 'completed') ? 'complete' : 'error' };
+          return { status: shouldContinue() && remaining.every((outcome) => outcome.status === 'completed') ? 'complete' : 'error' };
       };
 
     public refreshMachinesThrottled = async (params?: { staleMs?: number; force?: boolean }) => {
@@ -7625,11 +7652,16 @@ class Sync {
       private async resumeViaChanges(opts: {
           accountId: string;
           shouldContinue?: () => boolean;
+          signal?: AbortSignal;
           allowOfflineSnapshotRefresh?: boolean;
       }): Promise<ResumeViaChangesOutcome> {
           const CHANGES_PAGE_LIMIT = this.syncTuning.changesPageLimit;
           const afterCursor = this.changesCursor;
           const shouldContinue = opts.shouldContinue ?? (() => true);
+          const invalidateForResume = async (syncUnit: InvalidateSync): Promise<void> => {
+              if (!shouldContinue()) throw new SupersededOperationError();
+              await syncUnit.invalidateAndAwait({ signal: opts.signal });
+          };
           const cursorScope = this.getChangesCursorScope();
           let aborted = false;
           // Only a *completed* refresh counts: a failed one must still be retried by the resume tail.
@@ -7751,7 +7783,7 @@ class Sync {
                         aborted = true;
                         return { status: 'error' };
                     }
-                    const snapshot = await this.snapshotRefreshOnResume({ mode: 'long-offline', reason: 'snapshot-refresh' });
+                    const snapshot = await this.snapshotRefreshOnResume({ mode: 'long-offline', reason: 'snapshot-refresh', shouldContinue, signal: opts.signal });
                     if (!shouldContinue()) {
                         aborted = true;
                         return { status: 'error' };
@@ -7768,6 +7800,7 @@ class Sync {
                     }
                     return await applyPlannedChangeActions({
                         planned,
+                        shouldContinue,
                         credentials: this.credentials,
                         isSessionMessagesLoaded: (sessionId) => storage.getState().sessionMessages[sessionId]?.isLoaded === true,
                         shouldCatchUpSessionMessages: (sessionId) =>
@@ -7775,17 +7808,17 @@ class Sync {
                         getSessionMaterializedMaxSeq: (sessionId) => this.sessionMaterializedMaxSeqById[sessionId] ?? 0,
                         isSessionMessagesDeferred: (sessionId) => this.hasDeferredNewerMessages(sessionId),
                         invalidate: {
-                            settings: () => this.settingsSync.invalidateAndAwait(),
-                            profile: () => this.profileSync.invalidateAndAwait(),
+                            settings: () => invalidateForResume(this.settingsSync),
+                            profile: () => invalidateForResume(this.profileSync),
                             machines: async () => {
-                                await this.machinesSync.invalidateAndAwait();
+                                await invalidateForResume(this.machinesSync);
                                 refreshedByCatchUp.machines = true;
                             },
-                            artifacts: () => this.artifactsSync.invalidateAndAwait(),
-                            friends: () => this.friendsSync.invalidateAndAwait(),
-                            friendRequests: () => this.friendRequestsSync.invalidateAndAwait(),
-                            feed: () => this.feedSync.invalidateAndAwait(),
-                            automations: () => this.automationsSync.invalidateAndAwait(),
+                            artifacts: () => invalidateForResume(this.artifactsSync),
+                            friends: () => invalidateForResume(this.friendsSync),
+                            friendRequests: () => invalidateForResume(this.friendRequestsSync),
+                            feed: () => invalidateForResume(this.feedSync),
+                            automations: () => invalidateForResume(this.automationsSync),
                             pets: () => fetchAndApplyAccountPets({
                                 credentials: this.credentials,
                                 readScope: () => storage.getState().petsScope,
@@ -7815,6 +7848,7 @@ class Sync {
                                     const current = after.sessionListRenderables[id] ?? after.sessions[id] ?? null;
                                     return !previous || !current || (previous.archivedAt ?? null) !== (current.archivedAt ?? null);
                                 });
+                                if (!shouldContinue()) return;
                                 if (reconcileList || membershipChanged) {
                                     await this.fetchSessions({
                                         awaitSessionListHydration: true,
@@ -7825,11 +7859,11 @@ class Sync {
                                     refreshedByCatchUp.sessions = true;
                                 }
                             },
-                            todos: () => this.todosSync.invalidateAndAwait(),
+                            todos: () => invalidateForResume(this.todosSync),
                         },
                         invalidateMessagesForSession: async (sessionId) => {
                             await this.withSessionCatchUpNewer(sessionId, () =>
-                                this.getOrCreateMessagesSync(sessionId).invalidateAndAwait());
+                                invalidateForResume(this.getOrCreateMessagesSync(sessionId)));
                         },
                         repairSessionTranscriptRevision: (repair) => this.repairSessionTranscriptRevision(repair),
                         invalidateScmStatusForSession: (sessionId) => scmStatusSync.invalidate(sessionId),

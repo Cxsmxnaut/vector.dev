@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { InvalidateSync } from './sync';
 import { PauseController } from '@/utils/timing/pauseController';
 import { createDeferred } from '@/dev/testkit/hooks/createDeferred';
+import { SupersededOperationError } from '@/utils/timing/time';
 
 async function withFakeTimers(run: () => Promise<void>) {
     vi.useFakeTimers();
@@ -37,6 +38,29 @@ describe('InvalidateSync.awaitQueue', () => {
 });
 
 describe('InvalidateSync.invalidateAndAwait', () => {
+    it('cancels only the superseded waiter while the same sync cycle keeps converging', async () => {
+        const command = createDeferred<void>();
+        const sync = new InvalidateSync(() => command.promise);
+        const controller = new AbortController();
+        let cancellation: unknown;
+        const waiting = sync.invalidateAndAwait({ signal: controller.signal }).catch((error: unknown) => { cancellation = error; });
+        try {
+            controller.abort();
+            await vi.waitFor(() => expect(cancellation).toBeInstanceOf(SupersededOperationError));
+
+            let completed = false;
+            const queue = sync.awaitQueue().then(() => { completed = true; });
+            await Promise.resolve();
+            expect(completed).toBe(false);
+            command.resolve(undefined);
+            await queue;
+            expect(completed).toBe(true);
+        } finally {
+            command.resolve(undefined);
+            await waiting;
+        }
+    });
+
     it.each(['success', 'old failure', 'fresh failure'] as const)('bounded refresh observes the next cycle outcome after %s', async (scenario) => {
         const firstRun = createDeferred<void>();
         const freshRun = createDeferred<void>();

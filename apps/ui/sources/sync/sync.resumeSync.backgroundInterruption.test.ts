@@ -1,6 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { PauseController } from '@/utils/timing/pauseController';
+import { createDeferred } from '@/dev/testkit/hooks/createDeferred';
+import type { SyncTuning } from '@/sync/runtime/syncTuning';
 
 const appStateAddListener = vi.hoisted(() => vi.fn(() => ({ remove: vi.fn() })));
 vi.mock('react-native', async () => {
@@ -93,7 +95,7 @@ function emptySessionOrganizationSnapshotResponse(): Response {
     );
 }
 
-function stubAccountHttp() {
+function stubAccountHttp(override?: (url: string) => Response | Promise<Response> | undefined) {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
         const url: string =
             typeof input === 'string'
@@ -103,6 +105,9 @@ function stubAccountHttp() {
                   : 'url' in input
                     ? String(input.url)
                     : input.toString();
+
+        const response = override?.(url);
+        if (response) return await response;
 
         if (url.includes('/v2/session-organization')) {
             return emptySessionOrganizationSnapshotResponse();
@@ -119,6 +124,11 @@ function stubAccountHttp() {
         if (url.includes('/v1/feed')) {
             return new Response(JSON.stringify({ items: [], hasMore: false }), { status: 200, headers: { 'Content-Type': 'application/json' } });
         }
+        if (url.includes('/v1/account/profile')) return Response.json({ id: 'test-account' });
+        if (url.includes('/v1/account/encryption')) return Response.json({ mode: 'e2ee', updatedAt: 0 });
+        if (url.includes('/v2/account/settings')) return Response.json({ content: null, version: 0 });
+        if (url.includes('/v1/kv')) return Response.json({ items: [] });
+        if (url.includes('/v2/automations')) return Response.json([]);
         return new Response(JSON.stringify({}), { status: 200, headers: { 'Content-Type': 'application/json' } });
     });
     vi.stubGlobal('fetch', fetchMock);
@@ -147,12 +157,131 @@ async function loadSignedInSyncAfterSocketOutage() {
 }
 
 describe('sync resumeSync background interruption', () => {
-    beforeEach(() => {
+    beforeEach(async () => {
         vi.resetModules();
         appStateAddListener.mockClear();
         fetchChangesBarrier.reset();
         vi.unstubAllGlobals();
+        const { fetchChanges, fetchCurrentChangesCursor } = await import('./api/session/apiChanges');
+        vi.mocked(fetchChanges).mockReset().mockImplementation(async () => {
+            await fetchChangesBarrier.promise;
+            return { status: 'ok', changes: [], nextCursor: '0' };
+        });
+        vi.mocked(fetchCurrentChangesCursor).mockReset().mockResolvedValue({ status: 'ok', cursor: '0' });
     });
+
+    afterEach(async () => {
+        const { sync } = await import('./sync');
+        (sync as unknown as { disconnectServer: () => void }).disconnectServer();
+        vi.useRealTimers();
+        vi.unstubAllGlobals();
+    });
+
+    it('starts Retry before an apply invalidation parked in backoff completes and preserves the unapplied cursor', async () => {
+        let changesReads = 0;
+        let artifactReads = 0;
+        const manualChanges = createDeferred<Response>();
+        const fetchMock = stubAccountHttp((url) => {
+            if (url.includes('/v2/changes')) {
+                changesReads += 1;
+                if (changesReads > 1) return manualChanges.promise;
+                return Response.json({ changes: [
+                    { cursor: 8, kind: 'artifact', entityId: 'a1', changedAt: 8, hint: null },
+                    { cursor: 9, kind: 'session', entityId: 's1', changedAt: 9, hint: null },
+                ], nextCursor: 9 });
+            }
+            if (url.includes('/v1/artifacts')) {
+                artifactReads += 1;
+                return new Response('', { status: 503 });
+            }
+        });
+        const sync = await loadSignedInSyncAfterSocketOutage();
+        const { fetchChanges } = await import('./api/session/apiChanges');
+        const actualChanges = await vi.importActual<typeof import('./api/session/apiChanges')>('./api/session/apiChanges');
+        vi.mocked(fetchChanges).mockImplementation(actualChanges.fetchChanges);
+        const internals = sync as unknown as {
+            changesCursor: string;
+            resumeInFlight: Promise<void> | null;
+            artifactsSync: { stop: () => void };
+            syncTuning: SyncTuning;
+        };
+        internals.changesCursor = '7';
+        internals.syncTuning = { ...internals.syncTuning, resumeConcurrencyLimit: 1 };
+        vi.useFakeTimers();
+        const superseded = sync.resumeSync('socket-reconnect');
+        try {
+            await vi.waitFor(() => expect(artifactReads).toBe(1));
+            // Finish the failed attempt's microtasks without advancing its backoff timer.
+            await vi.advanceTimersByTimeAsync(0);
+            sync.retryNow();
+            await vi.advanceTimersByTimeAsync(0);
+            expect(changesReads).toBe(2);
+            expect(artifactReads).toBe(1);
+            expect(internals.changesCursor).toBe('7');
+            // The session action was queued behind artifacts in the retired apply.
+            // The new manual run is still reading changes, so it cannot own a list read yet.
+            expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/v2/sessions'))).toBe(false);
+
+            manualChanges.resolve(Response.json({ changes: [], nextCursor: 7 }));
+            await vi.waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/v2/sessions'))).toBe(true));
+            await superseded;
+            expect(internals.changesCursor).toBe('7');
+        } finally {
+            internals.artifactsSync.stop();
+            manualChanges.resolve(Response.json({ changes: [], nextCursor: 7 }));
+            await vi.advanceTimersByTimeAsync(0);
+            await internals.resumeInFlight;
+        }
+    }, 60_000);
+
+    it('starts Retry during snapshot repair without waiting for the old core phase or checkpointing its base', async () => {
+        let changesReads = 0;
+        let machineReads = 0;
+        const manualChanges = createDeferred<Response>();
+        const fetchMock = stubAccountHttp((url) => {
+            if (url.includes('/v2/cursor')) return Response.json({ cursor: 9, changesFloor: 0 });
+            if (url.includes('/v2/changes')) {
+                changesReads += 1;
+                return manualChanges.promise;
+            }
+            if (url.includes('/v1/machines')) {
+                machineReads += 1;
+                return new Response('', { status: 503 });
+            }
+        });
+        const sync = await loadSignedInSyncAfterSocketOutage();
+        const { fetchChanges, fetchCurrentChangesCursor } = await import('./api/session/apiChanges');
+        const actualChanges = await vi.importActual<typeof import('./api/session/apiChanges')>('./api/session/apiChanges');
+        vi.mocked(fetchChanges).mockImplementation(actualChanges.fetchChanges);
+        vi.mocked(fetchCurrentChangesCursor).mockImplementation(actualChanges.fetchCurrentChangesCursor);
+        const internals = sync as unknown as {
+            changesCursor: string | null;
+            resumeInFlight: Promise<void> | null;
+            machinesSync: { stop: () => void };
+        };
+        internals.changesCursor = null;
+        vi.useFakeTimers();
+        const superseded = sync.resumeSync('socket-reconnect');
+        try {
+            await vi.waitFor(() => expect(machineReads).toBe(1));
+            await vi.advanceTimersByTimeAsync(0);
+            // The manual run has an incremental basis, allowing its start to be observed
+            // independently of the old snapshot's still-retrying machines unit.
+            internals.changesCursor = '7';
+            const readsBeforeRetry = fetchMock.mock.calls.length;
+            sync.retryNow();
+            await vi.advanceTimersByTimeAsync(0);
+            expect(changesReads).toBe(1);
+            await superseded;
+            expect(internals.changesCursor).toBe('7');
+            expect(fetchMock.mock.calls.slice(readsBeforeRetry).some(([url]) => String(url).includes('/v1/artifacts'))).toBe(false);
+        } finally {
+            internals.machinesSync.stop();
+            manualChanges.resolve(Response.json({ changes: [], nextCursor: 7 }));
+            await vi.advanceTimersByTimeAsync(0);
+            await internals.resumeInFlight;
+        }
+    }, 60_000);
 
     it('does not continue issuing HTTP sync requests after app is backgrounded mid-resume', async () => {
         const fetchMock = stubAccountHttp();
