@@ -106,7 +106,22 @@ export function buildSessionRowMoreMenuItems(params: SessionRowMoreMenuBuildPara
     const primaryItems: DropdownMenuItem[] = [];
     const remainingItems: DropdownMenuItem[] = [];
     let moveToFolderItem: DropdownMenuItem | null = null;
-    for (const actionId of listVisibleSessionActionIds({ target: params.target, surface: 'rowMenu' })) {
+    let appearanceItem: DropdownMenuItem | null = null;
+    for (const actionId of listVisibleSessionActionIds({
+        target: params.target,
+        surface: 'rowMenu',
+        sessionAppearancesSupported: params.appearance != null,
+    })) {
+        if (actionId === SESSION_ACTION_SET_APPEARANCE_COLOR_ID) {
+            if (!params.appearance) continue;
+            appearanceItem = buildSessionAppearanceColorMenuItem({
+                ...params.appearance,
+                menuId: SESSION_ACTION_SET_APPEARANCE_COLOR_ID,
+                iconColor: params.iconColor,
+                base: createSessionActionDropdownItem({ actionId, iconColor: params.iconColor }),
+            });
+            continue;
+        }
         if (actionId === SESSION_ACTION_MOVE_TO_FOLDER_ID) {
             if (params.canMoveToFolder === false) continue;
             moveToFolderItem = {
@@ -134,13 +149,6 @@ export function buildSessionRowMoreMenuItems(params: SessionRowMoreMenuBuildPara
                 : 2;
         return priority(left.id) - priority(right.id);
     });
-
-    const appearanceItem = params.appearance ? buildSessionAppearanceColorMenuItem({
-        ...params.appearance,
-        menuId: SESSION_ACTION_SET_APPEARANCE_COLOR_ID,
-        iconColor: params.iconColor,
-        base: createSessionActionDropdownItem({ actionId: SESSION_ACTION_SET_APPEARANCE_COLOR_ID, iconColor: params.iconColor }),
-    }) : null;
 
     return [
         ...primaryItems,
