@@ -194,7 +194,7 @@ export function createSessionFollowOccurrenceDispatcher(input: Readonly<{
       await runWithServerHttpBaseUrl(input.serverHttpBaseUrl, () => sendSessionMessage({ credentials: input.credentials,
         idOrPrefix: route.destinationSessionId, wait: false,
         localId: deriveSessionFollowInputLocalIdV1({ destinationSessionId: route.destinationSessionId, original: delivery.original }),
-        timeoutMs: resolveSessionMessageAdmissionTimeoutMs(), message: `Followed Run ${occurrence.event.kind}: ${JSON.stringify(source)}. Read this Run's current source.`,
+        timeoutMs: resolveSessionMessageAdmissionTimeoutMs(), message: `Followed Run ${occurrence.event.kind}: ${JSON.stringify(source)}. Use the delivered context. Inspect the source only through an independently authorized read; following grants no access.`,
         inputAdmission: { provenance: admission.provenance,
           request: SessionInputRequestV1Schema.parse({ ...admission.request, followDeliveryV1: delivery }) },
         followRelations: SessionFollowRelationWitnessesV1Schema.parse([relation]), informationDelivery: 'session_follow', executionAuthority: 'account_automation',
@@ -483,7 +483,7 @@ export function createSessionFollowOccurrenceDispatcher(input: Readonly<{
           const result = await runWithServerHttpBaseUrl(input.serverHttpBaseUrl, async () => await sendSessionMessage({
             credentials: input.credentials, idOrPrefix: destinationSessionId, wait: false,
             localId: deriveSessionFollowInputLocalIdV1({ destinationSessionId, original: delivery.original }),
-            timeoutMs: resolveSessionMessageAdmissionTimeoutMs(), message: 'Followed source changed. Read the original source context.',
+            timeoutMs: resolveSessionMessageAdmissionTimeoutMs(), message: 'Followed source changed. Use the delivered context. Inspect the source only through an independently authorized read; following grants no access.',
             inputAdmission: { provenance: admission.provenance, request: SessionInputRequestV1Schema.parse({ ...admission.request, followDeliveryV1: delivery }) },
             ...(candidate.witnesses.length ? { followSources: candidate.witnesses } : {}),
             ...(candidate.relations.length ? { followRelations: candidate.relations } : {}),
