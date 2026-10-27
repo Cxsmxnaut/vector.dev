@@ -7206,7 +7206,6 @@
     "sources/utils/sessions/sync.test.ts",
     "sources/utils/sessions/terminalSessionDetails.test.ts",
     "sources/utils/strings/countTextLinesUpTo.test.ts",
-    "sources/utils/strings/toSnakeCase.test.ts",
     "sources/utils/system/bugReportActionTrail.test.ts",
     "sources/utils/system/bugReportLogBuffer.browserErrors.test.ts",
     "sources/utils/system/bugReportLogBuffer.missingConsoleMethods.test.ts",
