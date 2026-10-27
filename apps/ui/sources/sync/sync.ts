@@ -4606,10 +4606,13 @@ class Sync {
           } catch {
               // ignore
           }
-          // Unwind the existing finally/dedupe owners before acquiring them for a fresh run.
+          // Unwind the existing finally/dedupe owners before acquiring them for a fresh run. Settle
+          // in the same hop as other waiters queued on the superseded run (reconnect catch-up), so
+          // the manual resume claims the dedupe slot instead of joining an incremental catch-up.
+          const startManualResume = () => this.resumeSync('manual');
           const resume = supersededResume
-              ? supersededResume.catch(() => {}).then(() => this.resumeSync('manual'))
-              : this.resumeSync('manual');
+              ? supersededResume.then(startManualResume, startManualResume)
+              : startManualResume();
           fireAndForget(resume, { tag: 'Sync.resumeSync.manual' });
           if (reconnectSocket) {
               try {

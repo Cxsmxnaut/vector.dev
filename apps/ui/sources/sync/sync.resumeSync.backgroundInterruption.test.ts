@@ -93,6 +93,59 @@ function emptySessionOrganizationSnapshotResponse(): Response {
     );
 }
 
+function stubAccountHttp() {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+        const url: string =
+            typeof input === 'string'
+                ? input
+                : input instanceof Request
+                  ? input.url
+                  : 'url' in input
+                    ? String(input.url)
+                    : input.toString();
+
+        if (url.includes('/v2/session-organization')) {
+            return emptySessionOrganizationSnapshotResponse();
+        }
+        if (url.includes('/v2/sessions')) {
+            return new Response(
+                JSON.stringify({ sessions: [], nextCursor: null, hasNext: false }),
+                { status: 200, headers: { 'Content-Type': 'application/json' } },
+            );
+        }
+        if (url.includes('/v1/machines') || url.includes('/v1/artifacts')) {
+            return new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
+        if (url.includes('/v1/feed')) {
+            return new Response(JSON.stringify({ items: [], hasMore: false }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
+        return new Response(JSON.stringify({}), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    return fetchMock;
+}
+
+async function loadSignedInSyncAfterSocketOutage() {
+    const { storage } = await import('./domains/state/storage');
+    const { upsertAndActivateServer } = await import('@/sync/domains/server/serverRuntime');
+    const { sync } = await import('./sync');
+
+    upsertAndActivateServer({ serverUrl: 'http://localhost:53288', scope: 'tab' });
+
+    storage.setState((state) => ({ ...state, profile: { ...(state.profile ?? {}), id: 'test-account' } as any }), true);
+    (sync as any).credentials = { token: 'hdr.eyJzdWIiOiJ0ZXN0In0.sig', secret: 'secret' };
+    (sync as any).serverID = 'test-account';
+    (sync as any).encryption = {
+        decryptEncryptionKey: async () => null,
+        initializeSessions: async () => {},
+        initializeMachines: async () => {},
+        getSessionEncryption: () => null,
+    };
+    (sync as any).isForeground = true;
+    (sync as any).lastSocketDisconnectedAtMs = Date.now() - 1000;
+    return sync;
+}
+
 describe('sync resumeSync background interruption', () => {
     beforeEach(() => {
         vi.resetModules();
@@ -102,52 +155,8 @@ describe('sync resumeSync background interruption', () => {
     });
 
     it('does not continue issuing HTTP sync requests after app is backgrounded mid-resume', async () => {
-        const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-            const url: string =
-                typeof input === 'string'
-                    ? input
-                    : input instanceof Request
-                      ? input.url
-                      : 'url' in input
-                        ? String(input.url)
-                        : input.toString();
-
-            if (url.includes('/v2/session-organization')) {
-                return emptySessionOrganizationSnapshotResponse();
-            }
-            if (url.includes('/v2/sessions')) {
-                return new Response(
-                    JSON.stringify({ sessions: [], nextCursor: null, hasNext: false }),
-                    { status: 200, headers: { 'Content-Type': 'application/json' } },
-                );
-            }
-            if (url.includes('/v1/machines') || url.includes('/v1/artifacts')) {
-                return new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } });
-            }
-            if (url.includes('/v1/feed')) {
-                return new Response(JSON.stringify({ items: [], hasMore: false }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-            }
-            return new Response(JSON.stringify({}), { status: 200, headers: { 'Content-Type': 'application/json' } });
-        });
-        vi.stubGlobal('fetch', fetchMock);
-
-        const { storage } = await import('./domains/state/storage');
-        const { upsertAndActivateServer } = await import('@/sync/domains/server/serverRuntime');
-        const { sync } = await import('./sync');
-
-        upsertAndActivateServer({ serverUrl: 'http://localhost:53288', scope: 'tab' });
-
-        storage.setState((state) => ({ ...state, profile: { ...(state.profile ?? {}), id: 'test-account' } as any }), true);
-        (sync as any).credentials = { token: 'hdr.eyJzdWIiOiJ0ZXN0In0.sig', secret: 'secret' };
-        (sync as any).serverID = 'test-account';
-        (sync as any).encryption = {
-            decryptEncryptionKey: async () => null,
-            initializeSessions: async () => {},
-            initializeMachines: async () => {},
-            getSessionEncryption: () => null,
-        };
-        (sync as any).isForeground = true;
-        (sync as any).lastSocketDisconnectedAtMs = Date.now() - 1000;
+        const fetchMock = stubAccountHttp();
+        const sync = await loadSignedInSyncAfterSocketOutage();
 
         const pauseController = (sync as unknown as { pauseController: PauseController }).pauseController;
         expect(pauseController.isPaused()).toBe(false);
@@ -175,6 +184,28 @@ describe('sync resumeSync background interruption', () => {
         expect(fetchMock.mock.calls.map((call) => String(call[0]))).toEqual(
             expect.arrayContaining([expect.stringContaining('/v2/sessions')]),
         );
+    }, 60_000);
+
+    it('runs the manual resume after Retry even when a socket reconnect queues catch-up behind the superseded run', async () => {
+        const fetchMock = stubAccountHttp();
+        const sync = await loadSignedInSyncAfterSocketOutage();
+        (sync as any).changesCursor = '7';
+        const { fetchChanges } = await import('./api/session/apiChanges');
+
+        const superseded = (sync as any).resumeSync('socket-reconnect') as Promise<void>;
+        await vi.waitFor(() => expect(fetchChanges).toHaveBeenCalledTimes(1));
+
+        sync.retryNow();
+        // The reconnected socket asks for catch-up while the superseded resume is still unwinding.
+        (sync as any).requestChangesCatchUp();
+        const callsBeforeReplacement = fetchMock.mock.calls.length;
+        fetchChangesBarrier.resolve();
+        await superseded;
+        await vi.waitFor(() => expect((sync as any).resumeInFlight).toBeNull(), { timeout: 30_000 });
+
+        // Only the manual resume repairs the outage window; an incremental catch-up returns before it.
+        const replacementUrls = fetchMock.mock.calls.slice(callsBeforeReplacement).map((call) => String(call[0]));
+        expect(replacementUrls).toEqual(expect.arrayContaining([expect.stringContaining('/v2/sessions')]));
     }, 60_000);
 
     it('does not checkpoint an in-flight changes cursor after the server scope is reset', async () => {
