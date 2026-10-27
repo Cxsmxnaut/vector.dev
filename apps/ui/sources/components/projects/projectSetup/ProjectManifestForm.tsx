@@ -63,14 +63,20 @@ export type ProjectManifestFormProps = Readonly<{
   commands: ProjectDefinitionInspection['commands'];
   tools: ProjectDefinitionInspection['tools'];
   machineName: string;
+  /** Phone: the section pushed in place (null lists the sections); the editor owns it so its Back can close it. */
+  section: ProjectManifestFormSection | null;
+  onSectionChange: (section: ProjectManifestFormSection | null) => void;
+  /** Phone: whether a pushed section draws its own way back (false when the Project bar's Back closes it). */
+  sectionBack: boolean;
 }>;
 
 /**
- * The Form view of the project file (plan 20 §2/§8, lab `s-scripts` EDIT): Environment, Setup,
+ * The Form view of the project file (plan 20 §2/§8, lab `s-scripts` EDIT): Tools, Setup,
  * Scripts, Services and what was found in the repository. Every control is one structured edit of the
  * model's single draft; nothing here writes the file, runs a command or copies a native body.
  */
-type FormSection = 'environment' | 'setup' | 'scripts' | 'services' | 'found';
+export type ProjectManifestFormSection = 'toolchain' | 'setup' | 'scripts' | 'services' | 'found';
+type FormSection = ProjectManifestFormSection;
 
 export function ProjectManifestForm(props: ProjectManifestFormProps) {
   const previews: Previews = {
@@ -79,7 +85,7 @@ export function ProjectManifestForm(props: ProjectManifestFormProps) {
   };
   // Phone (lab EDITp): the Form lists its sections and each one pushes in place; Back keeps the draft.
   const phone = useDeviceType() === 'phone';
-  const [section, setSection] = React.useState<FormSection | null>(null);
+  const { section, onSectionChange: setSection } = props;
   const sections: Readonly<Record<FormSection, React.ReactNode>> = {
     environment: <EnvironmentSection {...props} />,
     setup: <SetupSection model={props.model} manifest={props.manifest} detection={props.detection} previews={previews} />,
@@ -89,7 +95,7 @@ export function ProjectManifestForm(props: ProjectManifestFormProps) {
   };
   if (!phone) {
     return (
-      <View style={styles.form}>
+      <View>
         {sections.environment}
         {sections.setup}
         {sections.scripts}
@@ -100,16 +106,18 @@ export function ProjectManifestForm(props: ProjectManifestFormProps) {
   }
   if (section) {
     return (
-      <View style={styles.form}>
-        <ItemGroup>
-          <Item
-            testID={`${ID}.sectionBack`}
-            icon={<Icon name="caret-left" size={18} />}
-            title={t('projects.scripts.editor.title')}
-            showChevron={false}
-            onPress={() => setSection(null)}
-          />
-        </ItemGroup>
+      <View>
+        {props.sectionBack ? (
+          <ItemGroup>
+            <Item
+              testID={`${ID}.sectionBack`}
+              icon={<Icon name="caret-left" size={18} />}
+              title={t('projects.scripts.editor.title')}
+              showChevron={false}
+              onPress={() => setSection(null)}
+            />
+          </ItemGroup>
+        ) : null}
         {sections[section]}
       </View>
     );
@@ -133,7 +141,7 @@ function PhoneFormSections(props: ProjectManifestFormProps & Readonly<{ onOpen: 
       : null,
   ].filter(Boolean).join(' · ');
   return (
-    <View style={styles.form}>
+    <View>
       <ItemGroup title={t('projects.scripts.editor.environment')}>
         <Item testID={`${ID}.section:environment`} title={t('projects.scripts.editor.toolsFrom')}
           subtitle={[environment.title, environment.subtitle].filter(Boolean).join(' · ')} onPress={() => props.onOpen('environment')} />
@@ -153,6 +161,8 @@ function PhoneFormSections(props: ProjectManifestFormProps & Readonly<{ onOpen: 
       <ItemGroup title={t('projects.scripts.editor.setup')}>
         <Item testID={`${ID}.section:setup`} title={t('projects.scripts.setup.steps', { count: setup.length })}
           subtitle={setup.map((source) => describeProjectCommandSource(source).target).join(' · ') || undefined}
+          // A summary of the steps (lab EDITp): one line; the section shows each command whole.
+          subtitleLines={1}
           onPress={() => props.onOpen('setup')} />
       </ItemGroup>
       <ItemGroup title={t('projects.scripts.editor.scripts')}>
@@ -391,6 +401,9 @@ function SetupSection(
   }>,
 ) {
   const { model } = props;
+  // Lab EDIT: the step's command is a chip on the row's right, cut short when long; a phone has no room
+  // beside the label, so the command reads beneath it instead (EDITp).
+  const phone = useDeviceType() === 'phone';
   const setup = props.manifest.workspace?.setup ?? [];
   const choices = props.detection.entries
     .filter((entry) => entry.usage === 'setup')
@@ -408,22 +421,21 @@ function SetupSection(
       title={t('projects.scripts.editor.setup')}
       description={t('projects.scripts.editor.setupBody')}
     >
-      {setup.map((source, index) => (
+      {setup.map((source, index) => {
+        const command = describeProjectCommandSource(
+          source,
+          findProjectInvocation(props.previews, source),
+        ).command ?? describeProjectCommandSource(source).reference;
+        return (
         <EditableRow
           key={keys[index]}
           testID={`${ID}.step:${index}`}
           title={t('projects.scripts.setup.step', { n: index + 1 })}
-          density="compact"
-          rightElement={
-            <CodeChip
-              text={
-                describeProjectCommandSource(
-                  source,
-                  findProjectInvocation(props.previews, source),
-                ).command ?? describeProjectCommandSource(source).reference
-              }
-            />
-          }
+          density={phone ? undefined : 'compact'}
+          subtitle={phone ? command : undefined}
+          monoSubtitle={phone}
+          accessoryKind="fact"
+          rightElement={phone ? undefined : <CodeChip text={command} truncate />}
           position={index}
           count={setup.length}
           onMove={(to) => {
@@ -451,7 +463,8 @@ function SetupSection(
             }
           />
         </EditableRow>
-      ))}
+        );
+      })}
       <AddCommand
         testID={`${ID}.addStep`}
         label={t('projects.scripts.editor.addStep')}
@@ -783,6 +796,12 @@ function EditableRow(
     icon?: React.ReactNode;
     density?: 'compact';
     rightElement?: React.ReactNode;
+    /**
+     * `control` (default): a control of its own beside the label, moved beneath it when the row is narrow.
+     * `fact`: something read, not pressed (a step's command chip); it stays beside the label, part of the
+     * row's press, and is cut short when long.
+     */
+    accessoryKind?: 'control' | 'fact';
     position: number;
     count: number;
     onMove: (to: number) => void;
@@ -807,10 +826,10 @@ function EditableRow(
           icon={props.icon}
           density={props.density}
           showChevron={false}
-          accessoryLayout="adaptive"
-          rightElementOutsidePressable
+          accessoryLayout={props.accessoryKind === 'fact' ? 'inline' : 'adaptive'}
+          rightElementOutsidePressable={props.accessoryKind !== 'fact'}
           rightElement={
-            <View style={styles.inline}>
+            <View style={[styles.inline, styles.trailing]}>
               {props.rightElement}
               <Icon
                 name={expanded ? 'caret-up' : 'caret-down'}
@@ -1104,7 +1123,7 @@ function ServiceMark() {
 }
 
 /** A command or size in the shared neutral chip (lab code chips). */
-function CodeChip(props: Readonly<{ text: string; sans?: boolean }>) {
+function CodeChip(props: Readonly<{ text: string; sans?: boolean; truncate?: boolean }>) {
   return (
     <StatusPill
       variant="neutral"
@@ -1112,13 +1131,15 @@ function CodeChip(props: Readonly<{ text: string; sans?: boolean }>) {
       label={props.text}
       labelVariant="phrase"
       labelStyle={props.sans ? undefined : styles.mono}
+      {...(props.truncate ? { labelNumberOfLines: 1 } : {})}
     />
   );
 }
 
 const styles = StyleSheet.create(() => ({
-  form: { gap: 8 },
   inline: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  // The row's trailing slot: its chip gives way (ellipsis) so the disclosure caret keeps the trailing edge.
+  trailing: { flexShrink: 1, minWidth: 0, justifyContent: 'flex-end' },
   addFields: { gap: 8 },
   rowActions: {
     flexDirection: 'row',

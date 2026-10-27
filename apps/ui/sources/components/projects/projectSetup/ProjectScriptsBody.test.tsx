@@ -1188,6 +1188,19 @@ describe('ProjectScriptsBody project file editor', () => {
     expect(saved.scripts.missing).toBeUndefined();
   });
 
+  it('sets the JSON view in the page column, in a page of its own that the code fills below the header', async () => {
+    shared.inspection = { definition: presentDefinition(declared), detection, importCandidates: [] };
+    const screen = await render('page', 'scripts.edit');
+    await act(async () => { await screen.pressByTestIdAsync('scripts.edit'); });
+    await act(async () => { await screen.pressByTestIdAsync('project-manifest-editor.mode:raw'); });
+    await vi.waitFor(() => expect(screen.findByTestId('project-manifest-editor.raw')).toBeTruthy());
+    const ancestors: Array<Record<string, unknown>> = [];
+    for (let node = screen.findByTestId('project-manifest-editor.raw')?.parent; node; node = node.parent) ancestors.push(node.props);
+    // The editor's own page list fills the pane (the code scrolls itself), and the code sits in the page column.
+    expect(ancestors.some((props) => props.testID === 'project-manifest-editor.scroll' && props.fill === true)).toBe(true);
+    expect(ancestors.some((props) => props.testID === 'project-manifest-editor.rawColumn')).toBe(true);
+  });
+
   it.each(['{ "version": 1, ', '{"version":2}'])('opens an invalid project file in JSON, keeps its bytes and turns Form and Save off (%s)', async (bytes) => {
     shared.inspection = {
       definition: {
@@ -1427,6 +1440,42 @@ describe('ProjectScriptsBody on a phone', () => {
     await act(async () => { await screen.pressByTestIdAsync('project-manifest-editor.discard'); });
     expect(screen.findByTestId('project-manifest-editor.save')?.props.disabled).toBe(true);
     expect(shared.calls.filter(call => call.actionId === 'projects.manifest.update')).toHaveLength(1);
+  });
+
+  it('hands its Back to the Project bar: one Back closes a pushed section, the next closes the editor', async () => {
+    shared.device = 'phone';
+    shared.inspection = { definition: presentDefinition(declared), detection, importCandidates: [] };
+    let back: (() => void) | null = null;
+    const screen = await render('page', 'scripts.edit', { registerPageBack: (next) => { back = next; } });
+    expect(back).toBeNull();
+    await act(async () => { await screen.pressByTestIdAsync('scripts.edit'); });
+    await vi.waitFor(() => expect(screen.findByTestId('project-manifest-editor.section:scripts:test')).toBeTruthy());
+    expect(screen.findByTestId('project-manifest-editor.back')).toBeNull();
+    expect(typeof back).toBe('function');
+    await act(async () => { await screen.pressByTestIdAsync('project-manifest-editor.section:scripts:test'); });
+    await vi.waitFor(() => expect(screen.findByTestId('project-manifest-editor.script:test')).toBeTruthy());
+    expect(screen.findByTestId('project-manifest-editor.sectionBack')).toBeNull();
+    await act(async () => { back?.(); });
+    await vi.waitFor(() => expect(screen.findByTestId('project-manifest-editor.section:scripts:test')).toBeTruthy());
+    await act(async () => { back?.(); });
+    await vi.waitFor(() => expect(screen.findByTestId('scripts.edit')).toBeTruthy());
+    expect(back).toBeNull();
+  });
+
+  it('leaves the phone editor in one Back after Setup switches to JSON', async () => {
+    shared.device = 'phone';
+    shared.inspection = { definition: presentDefinition({ ...declared, workspace: { setup: [{ kind: 'command', command: 'echo setup' }] } }), detection, importCandidates: [] };
+    let back: (() => void) | null = null;
+    const screen = await render('page', 'scripts.edit', { registerPageBack: (next) => { back = next; } });
+    await screen.pressByTestIdAsync('scripts.edit');
+    await vi.waitFor(() => expect(screen.findByTestId('project-manifest-editor.section:setup')).toBeTruthy());
+    await screen.pressByTestIdAsync('project-manifest-editor.section:setup');
+    await screen.pressByTestIdAsync('project-manifest-editor.mode:raw');
+    expect(screen.findAllByType('CodeEditor' as never)).toHaveLength(1);
+    await act(async () => { back?.(); });
+    expect(screen.findByTestId('project-manifest-editor')).toBeNull();
+    expect(screen.findByTestId('scripts.edit')).toBeTruthy();
+    expect(back).toBeNull();
   });
 
   it('summarizes the tools each environment found and their availability under the phone Environment row', async () => {

@@ -186,7 +186,7 @@ export function ProjectScriptsBody({
   ) : null);
 
   let content: React.ReactNode;
-  let ownsPhoneScroll = false;
+  let ownsScroll = false;
   if (waiting && !(read && read.key === key && 'value' in read)) {
     content = waiting;
   } else if (!read || read.key !== key) {
@@ -200,7 +200,7 @@ export function ProjectScriptsBody({
   } else if (!('value' in read)) {
     content = inspectionFailure;
   } else if (page && phone && reviewPageOpen && setupReview.reviewing && read.value.definition.document?.status === 'valid') {
-    ownsPhoneScroll = true;
+    ownsScroll = true;
     content = (
       <ProjectSetupReviewPage
         testID={`${testID}.setup.reviewPage`}
@@ -222,7 +222,8 @@ export function ProjectScriptsBody({
       />
     );
   } else if (page && editor?.key === key && accountId && controller.client) {
-    ownsPhoneScroll = phone;
+    // The editor is a page of its own on every layout: the JSON view fills it below its header.
+    ownsScroll = true;
     content = (
       <ProjectManifestEditor
         key={`${key}:${accountId}`}
@@ -280,7 +281,7 @@ export function ProjectScriptsBody({
         </View>
       </ProjectCommandOutputHost>
     );
-  if (ownsPhoneScroll) return (
+  if (ownsScroll) return (
     <ProjectCommandOutputHost scopeId={outputScopeId}>
       <View testID={testID} style={styles.phoneEditor}>
         {approval}

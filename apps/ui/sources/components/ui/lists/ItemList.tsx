@@ -36,6 +36,11 @@ export interface ItemListProps extends ScrollViewProps {
     onWheel?: (event: unknown) => void;
     /** Use the shared native keyboard owner for forms with focusable fields. */
     keyboardAware?: boolean;
+    /**
+     * The page's last block fills what the viewport leaves below the blocks above it (a code surface that
+     * scrolls itself); the page still scrolls when its blocks are taller than the viewport.
+     */
+    fill?: boolean;
 }
 
 const stylesheet = StyleSheet.create((theme) => ({
@@ -56,6 +61,9 @@ const stylesheet = StyleSheet.create((theme) => ({
     // A card modal's body has no padding of its own and its sections add none (`ItemGroup`, contained),
     // so a grouped list owns the card's gutter: the header's text edge, which a sheet and a bare button
     // row (which bleeds by its row inset into that gutter) both sit on.
+    fill: {
+        flexGrow: 1,
+    },
     containedGroupedGutter: {
         paddingHorizontal: HAPPIER_PAGE_METRICS.sheetInsetPx,
     },
@@ -95,6 +103,7 @@ export const ItemList = React.memo(React.forwardRef<ScrollView, ItemListProps>((
         pageNoticeActive = false,
         onWheel,
         keyboardAware = false,
+        fill = false,
         innerViewRef,
         ...scrollViewProps
     } = props;
@@ -151,6 +160,7 @@ export const ItemList = React.memo(React.forwardRef<ScrollView, ItemListProps>((
             styles.contentContainer,
             presentation === 'page' ? { paddingBottom: 0 } : null,
             contained && presentation === 'grouped' ? styles.containedGroupedGutter : null,
+            fill ? styles.fill : null,
             containerStyle,
             bottomChromeHeight > 0 ? { paddingBottom: (presentation === 'page' ? 0 : BASE_CONTENT_PADDING_BOTTOM) + bottomChromeHeight } : null,
         ],
@@ -178,7 +188,7 @@ export const ItemList = React.memo(React.forwardRef<ScrollView, ItemListProps>((
             : (rawOnWheel ? ({ onWheel: rawOnWheel } as any) : {})),
     };
     const listContent = presentation === 'page' ? (
-        <PageFrame column={pageColumn} content="sections" testID="page-frame">
+        <PageFrame column={pageColumn} content="sections" testID="page-frame" style={fill ? styles.fill : undefined}>
             <RoundButtonSizeScope size="normal">{children}</RoundButtonSizeScope>
         </PageFrame>
     ) : children;

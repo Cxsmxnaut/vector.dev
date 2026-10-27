@@ -280,6 +280,11 @@ export interface ItemProps {
      */
     accessoryLayout?: 'inline' | 'stacked' | 'adaptive';
     /**
+     * Whether this row's leading glyph makes its page section reserve the leading column for every row
+     * (default). An add row's plus keeps to its own column: the rows it adds to keep their own edge.
+     */
+    reservesSectionLeadingColumn?: boolean;
+    /**
      * How much of the row an inline accessory may take. `half` (default) holds it to half the row so a
      * long value never squeezes the label. `row` is for trailing facts and marks that must never be cut
      * (a picker row's free space, CLI glyphs, star and selected check): the accessory takes what it needs
@@ -736,6 +741,7 @@ export const Item = React.memo<ItemProps>((props) => {
         rightElementYields = false,
         accessoryLayout = 'inline',
         accessoryMaxWidth = 'half',
+        reservesSectionLeadingColumn = true,
         fieldAccessory = false,
         fieldAccessorySiblingPx,
         showDivider = true,
@@ -1036,7 +1042,7 @@ export const Item = React.memo<ItemProps>((props) => {
     const detailTrailingPx = theme.space.s8 + (rightElement != null || showAccessory ? 8 : 0)
         + (showAccessory ? ITEM_CHEVRON_SIZE[resolvedIconDensity] + theme.space.s4 : 0);
     // A page section reserves the leading column for all its rows when any row has an icon or mark.
-    const reservesLeadingColumn = useSectionLeadingColumn(isPageRow && (icon != null || leftElement != null));
+    const reservesLeadingColumn = useSectionLeadingColumn(isPageRow && reservesSectionLeadingColumn && (icon != null || leftElement != null));
     const { beneath: detailBeneath, inlineMaxWidthPx: detailInlineMaxWidthPx } = resolveHappierPageRowDetailLayout({
         rowWidthPx: measuresDetail ? rowWidthPx : null,
         detailWidthPx,
