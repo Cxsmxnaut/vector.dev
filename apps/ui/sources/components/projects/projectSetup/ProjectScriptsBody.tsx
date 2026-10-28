@@ -87,8 +87,12 @@ export type ProjectScriptsBodyProps = Readonly<{
   workspace: WorkspaceAddressV1;
   /** Exact Project/native selectors, when the caller has a controller-qualified handoff. */
   initialManagedConfiguration?: ManagedMachineConfigurationContinuation;
-  /** The Scripts page leads with its header and editor; the rail and widget keep the compact list. */
-  presentation?: 'page' | 'widget';
+  /**
+   * The Scripts page leads with its header and editor; the rail and the Overview widget keep the
+   * compact list. The rail keeps each script's source file beside its name; the Overview widget sits
+   * in a narrow aside where that pill would take the title line, so it shows name and status only.
+   */
+  presentation?: 'page' | 'rail' | 'widget';
   /** Services found here are reviewed on the Services page, never appended to the finite list. */
   onOpenServices?: () => void;
   /** The host's pane scope whose bottom terminal shows script output; absent where the host has none. */
@@ -140,6 +144,7 @@ export function ProjectScriptsBody({
   // Workers settings open in place, like the editor: Scripts › Workers and Run on › Worker settings….
   const [workersKey, setWorkersKey] = React.useState<string | null>(null);
   const page = presentation === 'page';
+  const showSource = presentation !== 'widget';
   const phone = useDeviceType() === 'phone';
   // On a phone the held setup review is a page of its own (lab SETUPp); the choice made there survives Back.
   const [reviewPageOpen, setReviewPageOpen] = React.useState(false);
@@ -251,6 +256,7 @@ export function ProjectScriptsBody({
         inspection={read.value}
         controller={controller}
         page={page}
+        showSource={showSource}
         testID={testID}
         onEdit={page ? openEditor : null}
         onOpenWorkers={page ? () => setWorkersKey(key) : null}
@@ -326,6 +332,8 @@ export function ProjectScriptsContent(
     inspection: ProjectDefinitionInspection;
     controller: ScriptsController;
     page: boolean;
+    /** Whether each script row names its source file (default); the narrow Overview widget leaves it out. */
+    showSource?: boolean;
     testID: string;
     onEdit: ((seed: boolean, mode?: 'form' | 'raw') => void) | null;
     /** Opens this checkout's Workers settings; null where the host has no room for the page. */
@@ -425,6 +433,7 @@ function DeclaredScripts(
     inspection: ProjectDefinitionInspection;
     controller: ScriptsController;
     page: boolean;
+    showSource?: boolean;
     testID: string;
     onEdit: ((seed: boolean, mode?: 'form' | 'raw') => void) | null;
     onOpenWorkers?: (() => void) | null;
@@ -535,6 +544,7 @@ function DeclaredScripts(
             invocation={findProjectInvocation(props.inspection, declaration.source)}
             controller={props.controller}
             compact={!props.page}
+            showSource={props.showSource !== false}
             preference={preference}
             memoryDemand={resolveProjectMemoryDemandV1(declaration.memoryDemand, props.manifest.workspace?.memoryDemand)}
             initialManagedConfiguration={props.initialManagedConfiguration}
@@ -624,6 +634,7 @@ function DeclaredScriptRow(
     invocation: ReturnType<typeof findProjectInvocation>;
     controller: ScriptsController;
     compact: boolean;
+    showSource: boolean;
     idleText: string;
     showDivider: boolean;
     preference: WorkspaceWorkerPreferenceV1 | null;
@@ -649,7 +660,7 @@ function DeclaredScriptRow(
       testID={props.testID}
       workspace={props.workspace}
       name={props.name}
-      badge={source.badge}
+      badge={props.showSource ? source.badge : null}
       command={source.command ?? (source.target === props.name ? null : source.target)}
       portable={props.declaration.execution === 'portable'}
       operation={operation}

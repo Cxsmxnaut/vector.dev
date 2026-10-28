@@ -233,7 +233,7 @@ function operation(
 }
 
 async function render(
-  presentation: 'page' | 'widget',
+  presentation: 'page' | 'rail' | 'widget',
   ready: string,
   host: Readonly<{
     outputScopeId?: string;
@@ -422,6 +422,21 @@ describe('ProjectScriptsBody setup affordance', () => {
     // A widget has no hero above it: the empty card is its one line.
     const widget = await render('widget', 'scripts.empty');
     expect(widget.getTextContent()).toContain('projects.widgets.scriptsEmpty');
+  });
+
+  it('names each script\'s source file on the page and rail, but not in the narrow Overview widget', async () => {
+    shared.inspection = {
+      definition: presentDefinition(declared),
+      detection,
+      importCandidates: [],
+    };
+    const page = await render('page', 'scripts.script:test');
+    expect(page.getTextContent()).toContain('package.json');
+    const rail = await render('rail', 'scripts.script:test');
+    expect(rail.getTextContent()).toContain('package.json');
+    const widget = await render('widget', 'scripts.script:test');
+    expect(widget.getTextContent()).not.toContain('package.json');
+    expect(widget.getTextContent()).toContain('test');
   });
 
   it('keeps setup quiet once a project file declares the scripts', async () => {
