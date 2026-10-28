@@ -359,6 +359,19 @@ export function useSessionCockpitComposerBottomChromeHeight(): number {
     return useSessionCockpitBottomChromeHeight() + React.useContext(SessionCockpitFloatingBottomChromeHeightContext);
 }
 
+/**
+ * How far the shell's floating bottom chrome covers a scrolling page: the tab bar plus the docked
+ * floating band above it (the phone Voice Island). Both float over content and reserve nothing
+ * themselves, so a page clears them here. A subtree whose screen already rebased the bar to zero
+ * (the session screen lifts its own composer by the band) clears nothing, so the band is never
+ * reserved twice.
+ */
+export function useSessionCockpitPageBottomClearance(): number {
+    const bar = useSessionCockpitBottomChromeHeight();
+    const floating = React.useContext(SessionCockpitFloatingBottomChromeHeightContext);
+    return bar > 0 ? bar + floating : 0;
+}
+
 /** The shell withdraws its measured floating band on suppression, container change or unmount. */
 export function useReportSessionCockpitFloatingBottomChromeHeight(enabled: boolean): (height: number) => void {
     const report = React.useContext(SessionCockpitFloatingBottomChromeReporterContext);
