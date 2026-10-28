@@ -68,7 +68,8 @@ export function isVoiceMachineErrorKind(value: unknown): value is VoiceMachineEr
 export function resolveVoiceMachineErrorKind(reason: string, preferredKind?: VoiceMachineErrorKind): VoiceMachineErrorKind {
     if (reason === 'agent_signed_out') return 'authentication_required';
     if (reason === 'held_by_person') return 'session_unavailable';
-    if (reason === 'provider_setup_required' || reason === 'realtime_byo_not_configured' || reason === 'realtime_agent_update_required') return 'provider_setup_required';
+    if (reason === 'provider_setup_required' || reason === 'realtime_byo_not_configured' || reason === 'realtime_agent_update_required'
+        || reason === 'VOICE_AGENT_TEAM_MODEL_UNSUPPORTED') return 'provider_setup_required';
     if (readVoiceProviderCredentialRemediationCode({ code: reason })) return 'provider_auth_invalid';
     if (reason === 'VOICE_AGENT_TARGET_MACHINE_UNOBSERVED') return 'service_temporarily_unavailable';
     if (reason === 'VOICE_AGENT_TARGET_MACHINE_OFFLINE'
