@@ -701,29 +701,6 @@ export async function withChatListHarnessWebScrollerDom<T>(
     }
 }
 
-export async function withRenderedChatListHarnessWebScroller<T>(
-    scrollerElement: unknown,
-    element: React.ReactElement,
-    run: (screen: ChatListHarness) => Promise<T>,
-    options: Readonly<{
-        dom?: ChatListHarnessDomInstallerOptions;
-        render?: RenderWithAppProvidersOptions;
-    }> = {},
-): Promise<T> {
-    return withChatListHarnessWebScrollerDom(
-        scrollerElement,
-        async () => {
-            const screen = await renderChatList(element, options.render ?? {});
-            try {
-                return await run(screen);
-            } finally {
-                await screen.unmount();
-            }
-        },
-        options.dom ?? {},
-    );
-}
-
 export async function renderChatListHarnessSession(
     options: Parameters<typeof renderScreen>[1] = {},
 ): Promise<ChatListHarness> {
