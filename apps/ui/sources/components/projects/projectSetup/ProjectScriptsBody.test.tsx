@@ -548,6 +548,27 @@ describe('ProjectScriptsBody setup affordance', () => {
     expect(widget.getTextContent()).toContain('test');
   });
 
+  it('reads like its sibling widgets in the Overview: each script is a name and how it went, with no Run control', async () => {
+    shared.inspection = {
+      definition: presentDefinition(declared),
+      detection,
+      importCandidates: [],
+    };
+    // The rail keeps its runnable rows.
+    const rail = await render('rail', 'scripts.script:test');
+    expect(rail.findByTestId('scripts.script:test.run')).toBeTruthy();
+    await rail.unmount();
+    const widget = await render('widget', 'scripts.script:test');
+    expect(widget.findByTestId('scripts.script:test.run')).toBeNull();
+    expect(widget.getTextContent()).toContain('projects.scripts.run.notRun');
+    // How it went, said once on the row's one fact line.
+    await act(async () => {
+      actionOperationStore.mergeSnapshots({ serverId: workspace.serverId, snapshots: [operation('failed', 2) as never] });
+    });
+    await vi.waitFor(() => expect(widget.getTextContent()).not.toContain('projects.scripts.run.notRun'));
+    expect(widget.findByTestId('scripts.script:test.run')).toBeNull();
+  });
+
   it('keeps setup quiet once a project file declares the scripts', async () => {
     shared.inspection = {
       definition: presentDefinition(declared),
@@ -1412,6 +1433,17 @@ describe('ProjectScriptsBody setup row', () => {
     expect(shared.calls.find((call) => call.actionId === 'projects.prepare')?.input).toMatchObject({ workspace, phase: 'setup' });
   });
 
+  it('says the Setup row waits for the person once its review is open, in the needs-you tone', async () => {
+    shared.inspection = { definition: presentDefinition(withSetup), detection, importCandidates: [] };
+    const screen = await render('widget', 'scripts.setup');
+    expect(textOf(screen, 'scripts.setup')).not.toContain('projects.scripts.setup.pending');
+    await act(async () => { await screen.pressByTestIdAsync('scripts.setup'); });
+    await vi.waitFor(() => expect(screen.findByTestId('scripts.setup.review')).toBeTruthy());
+    expect(textOf(screen, 'scripts.setup')).toContain('projects.scripts.setup.pending');
+    const row = screen.findAllByTestId('scripts.setup').find((node) => node.props.pressableStyle !== undefined);
+    expect(row?.props.pressableStyle).toMatchObject({ backgroundColor: expect.any(String) });
+  });
+
   it('names where the reviewed file came from without claiming it is committed', async () => {
     shared.inspection = { definition: presentDefinition(withSetup), detection, importCandidates: [] };
     const screen = await render('page', 'scripts.setup');
@@ -1516,7 +1548,8 @@ describe('ProjectScriptsBody output', () => {
     // The row owns the running state (elapsed time, latest output line); the terminal opens only when the person asks.
     shared.inspection = { definition: presentDefinition(declared), detection, importCandidates: [] };
     shared.responses['projects.script.run'] = { operation: withTerminal() };
-    const screen = await render('widget', 'scripts.script:test.run', { outputScopeId: outputScopeId(), bottomPresentation });
+    const screen = await render('rail', 'scripts.script:test.run', { outputScopeId: outputScopeId(), bottomPresentation });
+
     await act(async () => { await screen.pressByTestIdAsync('scripts.script:test.run'); });
     await vi.waitFor(() => expect(shared.calls.some((call) => call.actionId === 'projects.script.run')).toBe(true));
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)); });

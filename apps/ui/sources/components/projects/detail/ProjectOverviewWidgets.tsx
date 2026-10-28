@@ -112,6 +112,8 @@ export function ProjectOverviewDocument(props: Readonly<{
     const shared = { port: props.port, context: props.context, geometry: 'column' as const, title: props.projectName,
         surfaceName: props.projectName, disclosure, organize };
     const dashboard = (area: 'main' | 'aside') => projectOverviewAreaDashboard(layout, area);
+    // An empty dashboard says so once, in the main area; the side area keeps only its Add line.
+    const { emptyTitle: _saidInMain, ...asideDashboard } = dashboard('aside');
     // One quiet line, only on a shared dashboard: its admitted name and this viewer's access.
     const dashboardFacts = layout.state.status === 'ready' && layout.state.isShared ? layout.state.dashboard ?? null : null;
     const dashboardOwner = useProjectDashboardOwner(layout.state.status === 'ready' ? layout.state.surface.serverId : '',
@@ -144,7 +146,8 @@ export function ProjectOverviewDocument(props: Readonly<{
         </> : null}
         aside={projections.ready && !quietAside ? <WidgetArea {...shared} layout={projections.aside} area="aside" {...(stacked ? { display: 'widgets' as const } : {})}
             columnLayout={{ columns: arrangement === 'pairs' ? 2 : 1, gap: PROJECT_OVERVIEW_AREA_GAP_PX }}
-            dashboard={dashboard('aside')} testID="project-overview-aside" /> : null}
+            dashboard={asideDashboard} testID="project-overview-aside" /> : null}
+
         phone={phone && projections.ready ? <>
             <WidgetArea {...shared} layout={projections.phone} display="widgets" dashboard={dashboard('main')} testID="project-overview-merged" />
             {trailingAdd}

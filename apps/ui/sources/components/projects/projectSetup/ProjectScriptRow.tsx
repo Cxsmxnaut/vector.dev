@@ -7,7 +7,9 @@ import type { ProjectMemoryDemandV1 } from '@happier-dev/protocol/workspaces/pro
 import type { WorkspaceAddressV1 } from '@happier-dev/protocol/workspaces/workspaceRefV1';
 
 import { IconButton } from '@/components/ui/buttons/IconButton';
-import { Icon } from '@/components/ui/icons/Icon';
+import { Icon, ICON_SIZE } from '@/components/ui/icons/Icon';
+import { WidgetGlanceRow } from '@/components/widgets/glance/WidgetGlanceRow';
+
 import { ExpandableItem } from '@/components/ui/lists/ExpandableItem';
 import { Item } from '@/components/ui/lists/Item';
 import { StatusPill } from '@/components/ui/status/StatusPill';
@@ -60,6 +62,11 @@ export type ProjectScriptRowProps = Readonly<{
   /** The selected native environment's name: its pending review and preparation say so. */
   environmentName?: string | null;
   compact: boolean;
+  /**
+   * The Overview widget's row: drawn with the shared widget glance row like its sibling widgets (run
+   * mark, name, how it last went on one line). It has no Run control; a row with a run opens its output.
+   */
+  glance?: boolean;
   showDivider?: boolean;
   /** Where this checkout sends portable runs by default (its worker preference), for the Run on check. */
   defaultChoice?: ProjectExecutionChoiceV1 | null;
@@ -163,13 +170,28 @@ export const ProjectScriptRow = React.memo(function ProjectScriptRow(
   const discloses = !phone && !props.compact;
   // The phone row's press is its disclosure: only the Run control sits right of the status (lab PAGEp).
   const showsCaret = !phone && (discloses || Boolean(props.operation));
+  const glyph = props.failureCode ? 'failed' : waitsForSetup ? 'idle' : presentation.glyph;
+
+  if (props.glance) {
+    return (
+      <WidgetGlanceRow
+        testID={props.testID}
+        mark={<RunGlyph glyph={glyph} size={ICON_SIZE.sm} />}
+        title={props.name}
+        fact={statusText || null}
+        factTone={tone}
+        trailing={presentation.live && presentation.startedAt ? <RunClock startedAt={presentation.startedAt} /> : null}
+        onPress={props.operation ? openDetail : null}
+      />
+    );
+  }
 
   const header = (headerProps?: Readonly<Record<string, unknown>>) => (
     <Item
       {...headerProps}
       testID={props.testID}
       icon={
-        <RunGlyph glyph={props.failureCode ? 'failed' : waitsForSetup ? 'idle' : presentation.glyph} />
+        <RunGlyph glyph={glyph} />
       }
       title={props.name}
       titleAccessory={

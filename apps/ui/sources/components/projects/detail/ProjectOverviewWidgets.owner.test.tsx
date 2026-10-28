@@ -23,6 +23,8 @@ const artifacts = createArtifactStoreBoundary({ ownerAccountId: () => ownerAccou
 const owner = UserProfileSchema.parse({ id: ownerAccountId, name: 'Dashboard author', firstName: 'Dashboard', lastName: 'author',
     username: 'dashboard-author', avatar: null, bio: null, status: 'none', publicKey: null });
 let ownerRead: Promise<void> | null = null;
+/** The Home's admitted access for the viewer: read-only by default, edit for a dashboard shared to edit. */
+let viewerAccess: 'view' | 'edit' = 'view';
 const ownerRequests: string[] = [];
 const runtime = installSessionPaneRuntimeTestHarness({ request: async (url, init) => {
     const path = new URL(String(url)).pathname;
@@ -35,7 +37,7 @@ const runtime = installSessionPaneRuntimeTestHarness({ request: async (url, init
     if (stored && (init?.method ?? 'GET') === 'GET') {
         const row = artifacts.read(decodeURIComponent(stored[1]!));
         // Home HTTP admission: this Account views the other Account's acknowledged document.
-        return row ? Response.json({ ...row, access: 'view' }) : Response.json({}, { status: 404 });
+        return row ? Response.json({ ...row, access: viewerAccess }) : Response.json({}, { status: 404 });
     }
     return artifacts.handle(path, init);
 } });
@@ -44,7 +46,7 @@ const { ProjectDashboardIdentityLine } = await import('../overview/ProjectDashbo
 const { storage } = await import('@/sync/domains/state/storageStore');
 const { useProjectDashboardOwner } = await import('../overview/useProjectDashboardOwner');
 const { createArtifactWithHeaderViaApi } = await import('@/sync/engine/artifacts/syncArtifacts');
-beforeEach(() => { artifacts.clear(); ownerRead = null; ownerRequests.length = 0; storage.setState({ users: {}, friends: {} }); });
+beforeEach(() => { artifacts.clear(); ownerRead = null; viewerAccess = 'view'; ownerRequests.length = 0; storage.setState({ users: {}, friends: {} }); });
 
 it('keeps cached owner identity stable across unrelated people updates and never reads another Home’s cache', async () => {
     storage.getState().applyFriends([owner]);
@@ -127,5 +129,17 @@ it('draws no empty side area for a read-only viewer of a shared dashboard, and s
         await vi.waitFor(() => expect(screen.findByTestId('project-overview-main.empty')).not.toBeNull());
         expect(screen.findByTestId('project-overview.aside')).toBeNull();
         expect(screen.findByTestId('project-overview-aside.empty')).toBeNull();
+    } finally { await screen.unmount(); }
+});
+
+it('says an empty dashboard is empty once, in the main area, while an editor keeps both areas to add to', async () => {
+    viewerAccess = 'edit';
+    const screen = await renderViewedEmptyDashboard();
+    try {
+        await vi.waitFor(() => expect(screen.findByTestId('project-overview-main.empty')).not.toBeNull());
+        await vi.waitFor(() => expect(screen.findAllByTestId('project-overview-main.add').length).toBeGreaterThan(0));
+
+        expect(screen.findByTestId('project-overview-aside.empty')).toBeNull();
+        expect(screen.getTextContent().split('projects.widgets.emptyArea')).toHaveLength(2);
     } finally { await screen.unmount(); }
 });

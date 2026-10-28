@@ -141,7 +141,9 @@ export type WidgetAreaProps = Readonly<{
      * A dashboard area (lab `p-overview`): no area header; the widgets, then one dashed "Add widget" line
      * that opens the same Add surface; an area emptied by Remove keeps its place and says so quietly.
      */
-    dashboard?: Readonly<{ addLabel: string; emptyTitle: string; /** The gallery says where the widget goes ("Add to Release · side area"). */ addTitle?: string;
+    dashboard?: Readonly<{ addLabel: string;
+        /** The quiet line an emptied area says; absent where a sibling area already says it (one message per state). */
+        emptyTitle?: string; /** The gallery says where the widget goes ("Add to Release · side area"). */ addTitle?: string;
         /**
          * An area that is one section of a page (a plugin page's widget area) holds its settled empty
          * line's place while it loads, rather than a card that may never come: the page around it does
@@ -337,7 +339,10 @@ function WidgetAreaWithLayout(props: WidgetAreaProps & Readonly<{ port: WidgetAr
             ) : state.status === 'unavailable' ? (
                 readFailureNotice
             ) : ready && ready.placements.length === 0 && props.dashboard ? (
-                <Text testID={`${props.testID}.empty`} style={styles.dashboardEmpty}>{props.dashboard.emptyTitle}</Text>
+                props.dashboard.emptyTitle
+                    ? <Text testID={`${props.testID}.empty`} style={styles.dashboardEmpty}>{props.dashboard.emptyTitle}</Text>
+                    : null
+
             ) : ready && ready.placements.length === 0 ? (
                 <SurfaceStateCard
                     testID={`${props.testID}.empty`}
