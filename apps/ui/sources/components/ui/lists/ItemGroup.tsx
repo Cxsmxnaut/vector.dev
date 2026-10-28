@@ -65,9 +65,10 @@ export interface ItemGroupProps {
     title?: string | React.ReactNode;
     /**
      * What this section is about, read before its rows. Page presentation renders it under the
-     * section title; grouped presentation (menus, pickers, sheets) renders it as the footer.
+     * section title; grouped presentation (menus, pickers, sheets) renders it as the footer. Rich
+     * content (a localized sentence around an `InlineCode`) is set in the same description text.
      */
-    description?: string;
+    description?: React.ReactNode;
     /** A compact section-level action (e.g. "Check now", "Add"), aligned with the section title. */
     action?: React.ReactNode;
     /** The shared header's fit-aware inline default, or its narrow-page adaptive layout. */
