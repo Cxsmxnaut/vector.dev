@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import { Platform } from 'react-native';
 import type { LocalNeuralExecution } from '@happier-dev/protocol';
 
@@ -10,6 +10,7 @@ import {
     writeLocalDirectVoiceSettings,
 } from '@/sync/domains/settings/voiceSettings';
 import type { VoiceRoleReadiness } from '@/voice/registry/readiness';
+import * as voiceSettings from '@/sync/domains/settings/voiceSettings';
 import { getLocalSttProviderSpec } from '@/voice/settings/panels/localStt/providers/registry';
 import { getLocalTtsProviderSpec } from '@/voice/settings/panels/localTts/providers/registry';
 
@@ -62,6 +63,9 @@ describe('local Voice pipeline', () => {
 
     it('puts the supplied Think prerequisite and recovery on its step while retaining speech facts', () => {
         const voice = { ...voiceSettingsDefaults, providerId: 'local_conversation' };
+        // Multiple readiness consumers share an already-normalized Voice setting.
+        const normalize = vi.spyOn(voiceSettings, 'voiceSettingsParse');
+        onTestFinished(() => normalize.mockRestore());
         const think: VoiceRoleReadiness = {
             ...blocked, role: 'conversation_stt', code: 'server_feature_disabled',
             status: 'unavailable', reasonKey: 'voice.readiness.server_feature_disabled', recoveryAction: 'switch_provider',
@@ -73,6 +77,7 @@ describe('local Voice pipeline', () => {
         });
         expect(result?.pipeline.steps.map(step => step.readiness)).toEqual([hear, think, null]);
         expect(result?.cardReadiness).toEqual(think);
+        expect(normalize).not.toHaveBeenCalled();
     });
 
     it('does not fill explicitly withheld speech facts from aggregate readiness', () => {

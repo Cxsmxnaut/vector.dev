@@ -58,6 +58,7 @@ import { resolveVoiceServiceTitle } from '@/voice/registry/voiceProviderPresenta
 import { useVoiceExecutionMachinePresentation } from '@/voice/credentials/useExecutionMachinePresentation';
 import { VoicePipelineView } from '@/voice/settings/pipeline/VoicePipelineView';
 import { buildVoiceConversationsPipeline } from '@/voice/settings/pipeline/voicePipelineSteps';
+import { presentVoicePipeline } from '@/voice/settings/pipeline/presentVoicePipeline';
 import { SegmentedChoiceItem } from '@/components/ui/lists/SegmentedChoiceItem';
 import {
   resolveAccountVoiceCredentialSourceSelection,
@@ -234,6 +235,7 @@ function createVoiceProviderReadinessCheckKey(input: Readonly<{
   providerId: string | null;
   modeId: string | null;
   executionMachineId: string | null;
+  executionMachineOnline: boolean;
   daemonStateVersion: number;
   connectedServices: unknown;
   /** Local voice's Hear/Speak engines: a different engine is a different setup to check. */
@@ -246,6 +248,7 @@ function createVoiceProviderReadinessCheckKey(input: Readonly<{
     providerId: input.providerId,
     modeId: input.modeId,
     executionMachineId: input.executionMachineId,
+    executionMachineOnline: input.executionMachineOnline,
     daemonStateVersion: input.daemonStateVersion,
     connectedServices: input.connectedServices,
     speechEngines: input.speechEngines,
@@ -683,11 +686,15 @@ export function useVoiceConversationsReadinessModel(props: {
     providerId: selectedProviderRow?.providerId ?? selectedUnavailableProvider?.providerId ?? null,
     modeId: selectedProviderRow?.modeId ?? selectedUnavailableProvider?.modeId ?? null,
     executionMachineId: executionMachineSelectedId,
+    executionMachineOnline: executionMachineTarget.isOnline,
     daemonStateVersion: executionMachineTarget.daemonStateVersion,
     connectedServices: selectedPassiveConnectedServicesBinding,
     speechEngines: selectedProviderRow?.providerId === 'local_conversation' ? selectedSpeechProviderIds : null,
     accountScope: activeAccountScopeLifetime?.scope ?? null,
-    credentialAuthority: {
+    // A provider-declared passive probe consumes its Connected Service binding
+    // above. Saved Secret/purpose catalogs govern Local raw-credential checks,
+    // and their own refresh lifecycle must not restart an unrelated probe.
+    credentialAuthority: selectedPassiveSetup ? null : {
       voiceCredentialBindings: accountSettings.voiceSettingsV1.credentialBindings,
       purposes,
       savedSecretCatalog: {
@@ -1038,6 +1045,30 @@ export function useVoiceConversationsReadinessModel(props: {
   }
   const resolveServiceTitle = (serviceRows: readonly typeof visibleRows[number][]): string =>
     resolveVoiceServiceTitle(serviceRows[0]!.entry, tLoose, localizePluginText);
+  const effectiveSelectedProviderReadiness = showCheckedReadiness ? checkedProviderReadiness : selectedProviderReadiness;
+  const selectedLocalSpeechReadiness = checkedReadiness?.rawCredentialAuthorizationByContribution
+    && !checkedReadinessIsCurrent ? null : localConversationReadinessFacts.speechReadiness;
+  const selectedServiceTitle = selectedProviderRow
+    ? resolveVoiceServiceTitle(selectedProviderRow.entry, tLoose, localizePluginText)
+    : selectedUnavailableProvider ? tLoose(selectedUnavailableProvider.titleKey) : null;
+  // The selected Service, its card and the passive hub consume the same pipeline facts and
+  // presenter. Configuration-only row readiness cannot establish that every role is ready.
+  const selectedPipeline = buildVoiceConversationsPipeline({
+    voice, serviceTitle: selectedServiceTitle, readiness: effectiveSelectedProviderReadiness,
+    localSpeechReadiness: selectedLocalSpeechReadiness,
+    localThinkReadiness: localConversationReadinessFacts.thinkReadiness,
+    machine: { machineId: executionMachineSelectedId, machineLabel: null },
+  });
+  const selectedPipelinePresentation = selectedPipeline
+    ? presentVoicePipeline(selectedPipeline.pipeline, translateVoiceReadiness, selectedPipeline.cardReadiness,
+        selectedServiceTitle ?? undefined)
+    : null;
+  const selectedServiceStatus: VoiceServiceTile['status'] = selectedPipelinePresentation ? {
+    tone: selectedPipelinePresentation.tone,
+    text: selectedPipelinePresentation.statusWord,
+    detail: selectedPipelinePresentation.card?.message
+      ?? selectedPipelinePresentation.steps.find(step => step.readiness)?.readiness?.message,
+  } : null;
   const serviceTiles: VoiceServiceTile[] = [
     ...(selectedUnavailableProvider ? [{
       id: selectedUnavailableProvider.providerId,
@@ -1061,7 +1092,7 @@ export function useVoiceConversationsReadinessModel(props: {
           : serviceRows.length > 1 || !shown.subtitleKey ? undefined : tLoose(shown.subtitleKey),
         mark: identity ? <VoiceServiceMark identity={identity} /> : undefined,
         badge: badgeKey ? tLoose(badgeKey) : undefined,
-        status: ready
+        status: shown.selected ? selectedServiceStatus : ready
           ? { tone: 'ready', text: shown.detail ?? t('settingsVoice.pages.conversations.serviceReady') }
           : {
               tone: 'needs_you',
@@ -1090,7 +1121,7 @@ export function useVoiceConversationsReadinessModel(props: {
 
   return {
     serviceTiles, isOff, select, selectService, voice, visibleRows, selectedServiceBillingRows,
-    selectedProviderReadiness: showCheckedReadiness ? checkedProviderReadiness : selectedProviderReadiness,
+    selectedProviderReadiness: effectiveSelectedProviderReadiness,
     isCheckingPassiveSetup, checkProviderReadiness, showCheckedReadiness, checkedReadinessRecoveryHandler,
     checkedProviderResult, checkedReadinessRecoveryAction, checkedReadinessRevision, checkedReadiness,
     selectedExternalRow, selectedExternalDeclaration, selectedExternalCredentials, selectedExternalContribution,
@@ -1101,10 +1132,7 @@ export function useVoiceConversationsReadinessModel(props: {
     selectedProviderRow, selectedUnavailableProvider, localAdapterSettings, selectedSpeechProviderIds,
     selectedReadinessCheckKey,
     selectedLocalThinkReadiness: localConversationReadinessFacts.thinkReadiness,
-    selectedLocalSpeechReadiness: checkedReadiness?.rawCredentialAuthorizationByContribution
-      && !checkedReadinessIsCurrent
-      ? null
-      : localConversationReadinessFacts.speechReadiness,
+    selectedLocalSpeechReadiness,
   };
 }
 

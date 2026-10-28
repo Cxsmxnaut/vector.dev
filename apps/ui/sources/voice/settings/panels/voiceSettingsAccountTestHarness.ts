@@ -57,7 +57,11 @@ export async function createVoiceSettingsAccountTestHarness(settings: Settings,
         replaceSettings,
         replaceVoice(next: VoiceSettings) {
             const current = storage.getState().settings;
-            replaceSettings(settingsParse({ ...current, ...normalizeVoiceSettingsLocalDelta({ voice: next }, current) }));
+            // A server-side fixture edit advances its revision just like a real
+            // Settings write. An older in-flight bootstrap read cannot erase it.
+            replaceSettings(settingsParse({ ...current, ...normalizeVoiceSettingsLocalDelta({ voice: next }, current) }), {
+                version: (storage.getState().settingsVersion ?? 0) + 1,
+            });
         },
     };
 }
