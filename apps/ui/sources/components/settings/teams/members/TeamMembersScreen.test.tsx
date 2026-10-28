@@ -151,7 +151,9 @@ describe('TeamMembersScreen', () => {
         const screen = await renderMembers(serverId, false, floatingTabBarHeight);
         await waitForTestId(screen, 'team-members-load-more');
 
-        const contentContainerStyle = virtualizedBoundary.props?.contentContainerStyle as { paddingBottom: number };
+        // The page scroller adds the end room; a style array is what the list receives.
+        const { StyleSheet } = await import('react-native');
+        const contentContainerStyle = StyleSheet.flatten(virtualizedBoundary.props?.contentContainerStyle as Record<string, unknown>) as { paddingBottom?: number };
         expect(contentContainerStyle.paddingBottom).toBeGreaterThanOrEqual(floatingTabBarHeight);
     });
 
