@@ -16,7 +16,7 @@ vi.mock('node:child_process', () => ({
     execFileSync: execFileSyncMock,
 }));
 
-import { compileBunBinary, execOrThrow, resolveBunCommand, resolvePnpmCommand } from './commands.js';
+import { compileBunBinary, execOrThrow, resolveBunCommand, resolveBunCompilerCommand, resolvePnpmCommand } from './commands.js';
 import { compilePrismaMigrateBinary } from './compilePrismaMigrateBinary.js';
 import { SERVER_BINARY_TARGETS } from './targets.js';
 import { buildServerRuntimeSupportPayload } from './buildServerBinaryArtifactPayload.js';
@@ -35,6 +35,35 @@ describe('resolvePnpmCommand', () => {
 });
 
 describe('repository compiler admission', () => {
+    it('compiles Prisma with the pinned home Bun when PATH is stale', async () => {
+        const repoRoot = mkdtempSync(join(tmpdir(), 'cli-common-prisma-bun-selection-'));
+        try {
+            const provision = join(repoRoot, 'apps', 'stack', 'scripts', 'provision');
+            const home = join(repoRoot, 'home');
+            const bin = join(home, '.bun', 'bin');
+            const compiler = join(bin, process.platform === 'win32' ? 'bun.exe' : 'bun');
+            mkdirSync(provision, { recursive: true });
+            mkdirSync(bin, { recursive: true });
+            writeFileSync(join(provision, '.bun-version'), '1.4.4\n');
+            writeFileSync(compiler, '', { mode: 0o755 });
+            execFileSyncMock.mockImplementation((command: string) => command === compiler ? '1.4.4\n' : '1.3.5\n');
+            const outfile = join(repoRoot, 'runtime', 'prisma-migrate');
+
+            await compilePrismaMigrateBinary({
+                repoRoot, target: SERVER_BINARY_TARGETS[0]!, outfile,
+                env: { HOME: home, USERPROFILE: home }, commandProbe: () => true,
+                runCommand: async (command) => {
+                    expect(command).toBe(compiler);
+                    writeFileSync(outfile, 'compiled');
+                },
+            });
+            expect(existsSync(outfile)).toBe(true);
+        } finally {
+            rmSync(repoRoot, { recursive: true, force: true });
+            execFileSyncMock.mockReset();
+        }
+    });
+
     it('enforces this checkout pin when the caller omits repoRoot', async () => {
         execFileSyncMock.mockReturnValue('0.0.0\n');
         try {
@@ -123,6 +152,98 @@ describe('repository compiler admission', () => {
             rmSync(repoRoot, { recursive: true, force: true });
             execFileSyncMock.mockReset();
         }
+    });
+});
+
+describe.each(['linux', 'win32'] as const)('resolveBunCompilerCommand (%s)', (platform) => {
+    let repoRoot: string;
+    let homeBun: string;
+    let installBun: string;
+    let processEnv: NodeJS.ProcessEnv;
+
+    beforeEach(() => {
+        repoRoot = mkdtempSync(join(tmpdir(), 'cli-common-bun-selection-'));
+        const provision = join(repoRoot, 'apps', 'stack', 'scripts', 'provision');
+        mkdirSync(provision, { recursive: true });
+        writeFileSync(join(provision, '.bun-version'), '1.4.4\n');
+        const home = join(repoRoot, 'home');
+        const install = join(repoRoot, 'custom-install');
+        const executable = platform === 'win32' ? 'bun.exe' : 'bun';
+        homeBun = join(home, '.bun', 'bin', executable);
+        installBun = join(install, 'bin', executable);
+        for (const candidate of [homeBun, installBun]) {
+            mkdirSync(join(candidate, '..'), { recursive: true });
+            writeFileSync(candidate, '', { mode: 0o755 });
+        }
+        processEnv = { HOME: home, USERPROFILE: home, BUN_INSTALL: install };
+    });
+
+    afterEach(() => {
+        rmSync(repoRoot, { recursive: true, force: true });
+        execFileSyncMock.mockReset();
+    });
+
+    it('prefers the pinned home compiler over stale PATH and a matching BUN_INSTALL', () => {
+        execFileSyncMock.mockImplementation((command: string) => command === 'bun' ? '1.3.5\n' : '1.4.4\n');
+
+        expect(resolveBunCompilerCommand({
+            repoRoot, platform, processEnv, commandProbe: () => true,
+        })).toBe(homeBun);
+        // Stop probing as soon as the required compiler is found.
+        expect(execFileSyncMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('keeps a pinned PATH compiler without launching fallback probes', () => {
+        execFileSyncMock.mockReturnValue('1.4.4\n');
+
+        expect(resolveBunCompilerCommand({
+            repoRoot, platform, processEnv, commandProbe: () => true,
+        })).toBe('bun');
+        expect(execFileSyncMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('continues to BUN_INSTALL when PATH and home are both stale', () => {
+        execFileSyncMock.mockImplementation((command: string) => command === installBun ? '1.4.4\n' : '1.3.5\n');
+
+        expect(resolveBunCompilerCommand({
+            repoRoot, platform, processEnv, commandProbe: () => true,
+        })).toBe(installBun);
+    });
+
+    it('also checks candidates when a builder passes its discovered PATH command', () => {
+        execFileSyncMock.mockImplementation((command: string) => command === homeBun ? '1.4.4\n' : '1.3.5\n');
+
+        expect(resolveBunCompilerCommand({
+            repoRoot, platform, processEnv, bunCommand: 'bun', commandProbe: () => true,
+        })).toBe(homeBun);
+    });
+
+    it('rejects a mismatched explicit environment override despite a pinned home compiler', () => {
+        execFileSyncMock.mockImplementation((command: string) => command === homeBun ? '1.4.4\n' : '1.3.5\n');
+
+        expect(() => resolveBunCompilerCommand({
+            repoRoot, platform, processEnv: { ...processEnv, HAPPIER_BUN_PATH: installBun },
+            commandProbe: () => true,
+        })).toThrow(/requires Bun 1\.4\.4/);
+        expect(execFileSyncMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('preserves mismatch rejection when no candidate matches', () => {
+        execFileSyncMock.mockReturnValue('1.3.5\n');
+
+        expect(() => resolveBunCompilerCommand({
+            repoRoot, platform, processEnv, commandProbe: () => true,
+        })).toThrow(/requires Bun 1\.4\.4; selected bun reports 1\.3\.5/);
+    });
+
+    it('refuses an exact running compiler even when an environment override matches', () => {
+        execFileSyncMock.mockImplementation((command: string) => command === homeBun ? '1.4.4\n' : '1.3.5\n');
+
+        expect(() => resolveBunCompilerCommand({
+            repoRoot, platform, bunCommand: installBun,
+            processEnv: { ...processEnv, HAPPIER_BUN_PATH: homeBun }, commandProbe: () => true,
+        })).toThrow(/requires Bun 1\.4\.4/);
+        expect(execFileSyncMock).toHaveBeenCalledTimes(1);
     });
 });
 
