@@ -85,7 +85,11 @@ export type HappierPageSectionHeaderProps = Readonly<{
   testID?: string;
 }>;
 
-function DefaultSectionText(props: Readonly<{ role: 'sectionTitle' | 'sectionDescription'; text: string }>) {
+/**
+ * A section title or description in the page-text step and its ink. The children may be rich: a
+ * localized sentence around an inline code chip is set in the same description text.
+ */
+export function HappierPageSectionText(props: Readonly<{ role: 'sectionTitle' | 'sectionDescription'; children: ReactNode }>) {
   const theme = useOptionalHappierUiTheme();
   const typography = useOptionalHappierUiTypography();
   const title = props.role === 'sectionTitle';
@@ -99,13 +103,13 @@ function DefaultSectionText(props: Readonly<{ role: 'sectionTitle' | 'sectionDes
         color === undefined ? null : { color },
       ]}
     >
-      {props.text}
+      {props.children}
     </HappierText>
   );
 }
 
 const renderDefaultSectionText: HappierPageSectionTextRender = (input) => (
-  <DefaultSectionText role={input.role} text={input.text} />
+  <HappierPageSectionText role={input.role}>{input.text}</HappierPageSectionText>
 );
 
 function renderSectionText(
