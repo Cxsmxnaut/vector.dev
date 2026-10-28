@@ -51,6 +51,8 @@ import { resolvePublishedMachineEncryptionContext } from '@/api/machine/machineD
 import { ApiMachineClient } from '@/api/apiMachine';
 import { writeCredentialsTokenOnlyForServerId } from '@/persistence';
 import { seedTestServerProfile } from '@/testkit/serverProfiles';
+import { createGitScmBackendRuntimeRegistration } from '../../../../../../packages/plugins/scm-git/src/backend';
+import { createRegisteredScmBackendAdapter } from '@/scm/pluginBackends/registeredScmBackendAdapter';
 
 const socketIo = vi.hoisted(() => vi.fn());
 vi.mock('socket.io-client', () => ({ io: socketIo }));
@@ -81,6 +83,56 @@ describe('Project Open RPC', () => {
     await seedTestServerProfile({ id: 'srv_test_home', homeId: 'srv_test_home', serverUrl: 'https://home.example' });
   });
   afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); socketIo.mockReset(); withdrawActiveProjectAccountRowsSnapshot(); });
+
+  it('refuses a deleted worktree branch or missing base ref before creating files or accepting rows', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'happier-open-missing-ref-'));
+    const source = join(root, 'source');
+    const git = promisify(execFile);
+    const token = `header.${Buffer.from(JSON.stringify({ sub: 'account' })).toString('base64url')}.signature`;
+    const registration = createGitScmBackendRuntimeRegistration();
+    if (!registration.runtime) throw new Error('Git runtime unavailable');
+    const backend = createRegisteredScmBackendAdapter({ definition: { id: 'git', kind: 'git' },
+      qualifiedId: 'happier.scm.git/git', executableDefinition: registration.runtime, registration });
+    const context: RpcHandlerContext = { signal: new AbortController().signal, callerAuthority: 'present_user',
+      machineAdmission: { actorAccountId: 'account', custodianAccountId: 'account', machineId: 'machine',
+        installationId: 'installation', role: 'manage', encryptionMode: 'plain' }, verifyMachineAdmissionCurrent: async () => true };
+    vi.spyOn(axios, 'get').mockImplementation(plainMachineRead);
+    const writes: unknown[] = [];
+    vi.spyOn(axios, 'post').mockImplementation(async (url, body) => {
+      if (url.endsWith('/list')) return { status: 200, data: { status: 'listed', coverage: 'complete', rows: [] } };
+      writes.push(body);
+      throw new Error('Missing ref must not accept a row');
+    });
+    const handler = register(RPC_METHODS.PROJECTS_OPEN, { serverId: 'srv_test_home', machineId: 'machine',
+      serverHttpBaseUrl: 'https://home.example', accountId: 'account', registry: createScmBackendRegistry([backend]),
+      readCredentials: async () => ({ token, encryption: null }) });
+    try {
+      await mkdir(source);
+      await git('git', ['init', '-b', 'main'], { cwd: source });
+      await git('git', ['-c', 'user.name=Open test', '-c', 'user.email=open@example.invalid', 'commit', '--allow-empty', '-m', 'initial'], { cwd: source });
+      await git('git', ['branch', 'gone'], { cwd: source });
+      await git('git', ['branch', '-D', 'gone'], { cwd: source });
+      for (const branchMode of ['existing', 'new'] as const) {
+        const target = join(root, branchMode, 'checkout');
+        const result = await handler({ serverId: 'srv_test_home', machineId: 'machine', source: { kind: 'folder', path: source },
+          ref: 'gone', materialization: { kind: 'worktree', targetPath: target,
+            checkout: { kind: 'git_worktree', displayName: 'gone', baseRef: 'gone', branchMode } } }, context);
+        expect(OpenProjectResultV1Schema.parse(result)).toEqual({ kind: 'refused', code: 'ref_unavailable' });
+        await expect(access(join(root, branchMode))).rejects.toMatchObject({ code: 'ENOENT' });
+      }
+      // A later add failure can already have created the parent directory.
+      // Only the explicit pre-effect ref refusal may bypass unknown settlement.
+      const uncertainTarget = join(root, 'uncertain', 'checkout');
+      expect(await handler({ serverId: 'srv_test_home', machineId: 'machine', source: { kind: 'folder', path: source },
+        ref: 'main', materialization: { kind: 'worktree', targetPath: uncertainTarget,
+          checkout: { kind: 'git_worktree', displayName: 'main', baseRef: 'main', branchMode: 'new' } } }, context))
+        .toEqual({ kind: 'outcomeUnknown' });
+      await access(join(root, 'uncertain'));
+      expect(writes).toEqual([]);
+      expect((await git('git', ['branch', '--show-current'], { cwd: source })).stdout.trim()).toBe('main');
+      expect((await git('git', ['worktree', 'list', '--porcelain'], { cwd: source })).stdout.match(/^worktree /gm)).toHaveLength(1);
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
 
   it.each(['opened', 'refused', 'outcomeUnknown'] as const)('retains the original Open settlement in Action Operations (%s)', async settlement => {
     const root = await mkdtemp(join(tmpdir(), 'happier-open-operation-'));
