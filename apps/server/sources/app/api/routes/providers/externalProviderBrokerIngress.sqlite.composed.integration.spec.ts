@@ -32,6 +32,7 @@ import { updateTeamCredentialResourceInTx } from "@/app/teams/credentials/resour
 import { mapProviderBrokerApplicationFailure } from './externalProviderBrokerDispatcher';
 import { writeProviderBrokerApplicationFailure } from '../../../../../../cli/src/providers/broker/providerBrokerApplicationServer';
 import { PROVIDER_BROKER_APPLICATION_ERROR_CODE_HEADER } from '@happier-dev/protocol/providers/brokerRouteGrantV1';
+import { enableApiCompression } from '@/app/api/utils/enableApiCompression';
 
 /**
  * A Home that can actually serve this API also has the route-grant signing
@@ -1218,6 +1219,58 @@ describe("external Provider broker ingress network vertical (SQLite)", () => {
         expect(dispatchSignal?.aborted).toBe(true);
         expect(raw.listenerCount("aborted")).toBe(0);
         expect(replyRaw.listenerCount("close")).toBe(0);
+    }, 180_000);
+
+    it("keeps negotiated JSON broker responses incremental and cancels their transport on disconnect", async () => {
+        const fixture = await createDirectBrokerIngressFixture("compressed-json-streaming");
+        const first = '{"rows":[' + ' '.repeat(2048);
+        let aborted = () => {};
+        const cancelled = new Promise<void>((resolve) => { aborted = resolve; });
+        const dispatch: ExternalProviderBrokerDispatch = async ({ signal }) => ({
+            ok: true,
+            statusCode: 200,
+            headers: { 'content-type': 'application/json' },
+            // Only the remote broker transport is substituted. The response
+            // deliberately stays open until the real client disconnects.
+            body: (async function* () {
+                signal.addEventListener('abort', aborted, { once: true });
+                try {
+                    yield Buffer.from(first);
+                    await cancelled;
+                } finally {
+                    signal.removeEventListener('abort', aborted);
+                }
+            })(),
+        });
+        const app = Fastify();
+        const controller = new AbortController();
+        try {
+            await enableApiCompression(app);
+            for (const route of fixture.register({ dispatch })) app.route(route as unknown as RouteOptions);
+            const address = await app.listen({ port: 0, host: '127.0.0.1' });
+            const response = await fetch(`${address}/api/provider-broker/v1/chat/completions`, {
+                method: 'POST',
+                headers: { authorization: `Bearer ${fixture.token}`, 'content-type': 'application/json', 'accept-encoding': 'gzip' },
+                body: JSON.stringify({ model: 'gpt-test', stream: true }),
+                signal: controller.signal,
+            });
+            expect(response.status).toBe(200);
+            expect(response.headers.get('content-encoding')).toBeNull();
+            const reader = response.body!.getReader();
+            const decoder = new TextDecoder();
+            let received = '';
+            while (received.length < first.length) {
+                const chunk = await reader.read();
+                expect(chunk.done).toBe(false);
+                received += decoder.decode(chunk.value, { stream: true });
+            }
+            expect(received).toBe(first);
+            controller.abort();
+            await cancelled;
+        } finally {
+            controller.abort();
+            await app.close();
+        }
     }, 180_000);
 
     it("does not publish a late broker response after the external caller aborts", async () => {

@@ -44,6 +44,7 @@ import { sessionPendingRoutes } from "./routes/session/pendingRoutes";
 import { bugReportDiagnosticsRoutes } from "./routes/diagnostics/bugReportDiagnosticsRoutes";
 import { automationRoutes } from "./routes/automations/automationRoutes";
 import { resolveApiRateLimitPluginOptions, resolveApiTrustProxy } from "./utils/apiRateLimitPolicy";
+import { enableApiCompression } from "./utils/enableApiCompression";
 import { liveActivityTargetsRoutes } from "./routes/activity/liveActivityTargetsRoutes";
 import { liveActivityRemoteUpdateRoutes } from "./routes/activity/liveActivityRemoteUpdateRoutes";
 import { liveActivityHostedRelayRoutes } from "./routes/activity/liveActivityHostedRelayRoutes";
@@ -300,6 +301,7 @@ export async function startApi(params: Readonly<{
         ...(typeof trustProxy !== "undefined" ? { trustProxy } : null),
     });
     enableContentTypeParsers(app);
+    await enableApiCompression(app);
     app.register(import('@fastify/cors'), createApiCorsOptions(process.env));
     app.register(import('@fastify/rate-limit'), resolveApiRateLimitPluginOptions(process.env));
 

@@ -21,6 +21,7 @@ import type { SessionAccessProjectionRow } from '@/app/session/access/sessionAcc
 import { LocalServicePreviewNativeDirectAccessV1Schema, LocalServicePreviewServerAccessV1Schema } from '@happier-dev/protocol/local/services/preview/nativeDirect';
 import type { Fastify } from '@/app/api/types';
 import { enableServeUi } from '@/app/api/utils/enableServeUi';
+import { enableApiCompression } from '@/app/api/utils/enableApiCompression';
 import { FEATURE_ENV_KEYS } from '@/app/features/catalog/featureEnvSchema';
 import { peerMediationGrantSigningEnv } from '@/testkit/env';
 import { encodePlainMachineStoredContent, MACHINE_PLAIN_DATA_KEY_MARKER } from '@happier-dev/protocol/machines/machineStoredContent';
@@ -669,7 +670,10 @@ describe('local service preview routes', () => {
         }
     });
 
-    it('releases the relay tunnel when the browser cancels an open private SSE response', async () => {
+    it.each([
+        { contentType: 'text/event-stream', first: 'data: first\n\n' },
+        { contentType: 'application/json', first: '{"rows":[' },
+    ])('streams private $contentType bytes and releases the relay tunnel on browser cancellation', async ({ contentType, first }) => {
         const env = { ...peerMediationGrantSigningEnv(), HANDY_MASTER_SECRET: 'test-master-secret',
             HAPPIER_PUBLIC_SERVER_URL: 'https://app.happier.test',
             HAPPIER_FEATURE_LOCAL_SERVICES_PREVIEW__ENABLED: 'true',
@@ -686,12 +690,13 @@ describe('local service preview routes', () => {
         const openTunnel: OpenLocalServicePreviewTunnel = async () => ({
             tunnelId: 'tunnel', substreamId: 'sse', write() {}, endWrite() {},
             async *read() {
-                yield new TextEncoder().encode('HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n\r\ndata: first\n\n');
+                yield new TextEncoder().encode(`HTTP/1.1 200 OK\r\nContent-Type: ${contentType}\r\n\r\n${first}`);
                 await released;
             },
             abort: release, close: release,
         });
         const app = fastify({ logger: false });
+        await enableApiCompression(app);
         app.decorate('authenticate', async () => {});
         registerLocalServiceRoutes(app as unknown as Fastify, { env, runtimes, openTunnel });
         let socket: ReturnType<typeof connect> | undefined;
@@ -700,11 +705,15 @@ describe('local service preview routes', () => {
             const cookie = String(exchange.headers['set-cookie']).split(';')[0]!;
             const listener = new URL(await app.listen({ port: 0, host: '127.0.0.1' }));
             socket = connect(Number(listener.port), '127.0.0.1');
+            let received = '';
             const firstBytes = new Promise<void>(resolve => socket!.on('data', chunk => {
-                if (chunk.toString().includes('data: first')) resolve();
+                received += chunk.toString();
+                if (received.includes(first)) resolve();
             }));
-            socket.on('connect', () => socket!.write(`GET /sse HTTP/1.1\r\nHost: ${url.host}\r\nCookie: ${cookie}\r\nAccept: text/event-stream\r\n\r\n`));
+            socket.on('connect', () => socket!.write(`GET /sse HTTP/1.1\r\nHost: ${url.host}\r\nCookie: ${cookie}\r\nAccept: text/event-stream\r\nAccept-Encoding: gzip, br\r\n\r\n`));
             await firstBytes;
+            expect(received.toLowerCase()).not.toContain('\r\ncontent-encoding:');
+            expect(received.toLowerCase()).toContain('\r\ntransfer-encoding: chunked');
             socket.destroy();
             await released;
         } finally {
@@ -746,6 +755,7 @@ describe('local service preview routes', () => {
         try {
             for (const [key, value] of Object.entries(env)) vi.stubEnv(key, value);
             vi.stubEnv('HAPPIER_DB_PROVIDER', 'postgres');
+            await enableApiCompression(app);
             startSocket(app as unknown as Fastify);
             registerLocalServiceRoutes(app as unknown as Fastify, { runtimes, openTunnel: slowTunnel });
             const exchange = await app.inject({ method: 'GET', url: url.pathname + url.search, headers: { host: url.host } });
