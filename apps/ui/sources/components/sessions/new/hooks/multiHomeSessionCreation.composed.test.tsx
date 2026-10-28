@@ -348,7 +348,8 @@ describe('multi-Home Session creation composition', () => {
             if (url.endsWith('/v1/machines/read-batch') && init?.method === 'POST') {
                 const token = new Headers(init.headers).get('authorization')?.replace(/^Bearer /, '') ?? '';
                 return createMachineReadBatchResponseFixture(init.body,
-                    id => id === 'machine-b' ? createPlainMachineRowFixture({ id, accountId: parseToken(token) }) : null);
+                    id => id === 'machine-b' ? createPlainMachineRowFixture({ id, accountId: parseToken(token),
+                        machine: machineHttpSnapshots.get(new URL(url).origin)?.find(machine => machine.id === id) }) : null);
             }
             if (url.endsWith('/v1/machines/machine-b')) {
                 return Response.json({
@@ -458,6 +459,7 @@ describe('multi-Home Session creation composition', () => {
         targetServerId?: string;
         draftId?: string;
         mountTemporaryController?: boolean;
+        authoringOriginAtBirth?: boolean;
     }>) {
         const { createMachineFixture } = await import('@/dev/testkit/fixtures/machineFixtures');
         const { storage } = await import('@/sync/domains/state/storageStore');
@@ -468,6 +470,9 @@ describe('multi-Home Session creation composition', () => {
             const machines = [
                 createMachineFixture({
                     id: 'machine-b',
+                    ...(params.authoringOriginAtBirth ? { operationProtocolCapabilities: {
+                        sessionSpawnAuthoringOrigin: { protocolVersions: [1] },
+                    }, operationProtocolCapabilitiesRevision: 1 } : {}),
                     activeAt: Date.now(),
                     metadata: {
                         host: 'home-b-machine',
@@ -2304,10 +2309,13 @@ describe('multi-Home Session creation composition', () => {
     });
 
     it.each([
-        { edit: 'replace', launchHome: 'origin' },
-        { edit: 'clear-then-type', launchHome: 'origin' },
-        { edit: 'replace', launchHome: 'other' },
-    ] as const)('explicit Send retains the seeded Project setup origin after $edit prompt editing and $launchHome launch Home selections', async ({ edit, launchHome }) => {
+        { edit: 'replace', launchHome: 'origin', birth: false, retireSource: false },
+        { edit: 'clear-then-type', launchHome: 'origin', birth: false, retireSource: false },
+        { edit: 'replace', launchHome: 'other', birth: false, retireSource: false },
+        { edit: 'replace', launchHome: 'origin', birth: true, retireSource: false },
+        { edit: 'replace', launchHome: 'other', birth: true, retireSource: false },
+        { edit: 'replace', launchHome: 'other', birth: true, retireSource: true },
+    ] as const)('explicit Send retains the seeded Project setup origin after $edit prompt editing and $launchHome launch Home selections (birth=$birth, retireSource=$retireSource)', async ({ edit, launchHome, birth, retireSource }) => {
         ({ homeA, homeAScopeId, homeAToken } = await arrangeFocusedHomeA());
         await arrangeHomeB();
         const launchServerId = launchHome === 'origin' ? homeAScopeId : homeBScopeId;
@@ -2319,6 +2327,8 @@ describe('multi-Home Session creation composition', () => {
         const { resetSessionDraftRepositoryForTests } = await import('@/sync/ops/sessionDrafts/sessionDraftRepository');
         const { createSessionAccessFixture } = await import('@/dev/testkit/fixtures/sessionFixtures');
         const { SessionCurrentProjectionRecordV1Schema, SessionSpawnNewInputV2Schema } = await import('@happier-dev/protocol');
+        const { projectSessionDisplayV1, sealSessionSharedDisplayEnvelopeV1, sealSessionOwnerDisplayEnvelopeV1 } =
+            await import('@happier-dev/protocol');
         const { ConnectedAccountCatalogRowReadResponseV1Schema, emptyConnectedAccountCatalogRecordV1 } =
             await import('@happier-dev/protocol/connect/connectedAccountConfigurationRowsV1');
         const { getConnectedAccountCatalogValue } = await import('@/sync/store/settings/connectedAccountCatalogSnapshot');
@@ -2329,27 +2339,44 @@ describe('multi-Home Session creation composition', () => {
         const origin = { kind: 'project', accountId: scope.accountId, page: 'scripts', comparisonId: 'original-comparison',
             layoutId: 'release-dashboard', surface: 'tabs', companion: 'files', resource: { kind: 'file', path: 'src/original.ts' },
             workspace: { serverId: homeAScopeId, workspaceId: 'original-workspace', machineId: 'original-machine', rootPath: '/original/project' } } as const;
-        const draft = { input: 'Review the original changes', selectedMachineId: 'original-machine', selectedPath: '/original/project',
-            targetServerId: homeAScopeId, selectedProfileId: null, selectedSecretId: null, agentType: 'claude',
-            permissionMode: 'default', acpSessionModeId: null, updatedAt: 1,
-            executionTarget: { kind: 'machine', target: { serverId: homeAScopeId, machineId: 'original-machine' } } } as const;
-        const { seedNewSessionDraftV1 } = await import('@/components/sessions/new/newSessionDraftSeed');
-        seedNewSessionDraftV1({ scope, createDraftId: () => draftId, configurationDraft: draft,
-            seed: { origin, prompt: { text: draft.input, mode: 'replace' } } });
-        resetSessionDraftRepositoryForTests();
+        const setupPrompt = 'Review the original changes';
+        const { seedAndOpenNewSession } = await import('@/components/sessions/new/newSessionSeedComposer');
+        const { admitProjectAuthoringOrigin } = await import('@/components/projects/detail/projectRouteState');
+        const { createProjectAccountRowsFixture } = await import('@/dev/testkit/fixtures/projectAccountRows');
+        const { storage } = await import('@/sync/domains/state/storageStore');
+        const { captureActiveServerAccountScopeLifetime } = await import('@/sync/domains/scope/activeServerAccountScope');
+        storage.getState().activateProfileScope(scope);
+        storage.getState().activateProjectAccountRowsScope(scope);
+        storage.getState().applyProjectAccountRowsForScope(scope, createProjectAccountRowsFixture(scope, { workspaceRefs: [{
+            id: origin.workspace.workspaceId, serverId: homeAScopeId, machineId: origin.workspace.machineId,
+            rootPath: origin.workspace.rootPath, createdAtMs: 1,
+        }] }));
+        const lifetime = captureActiveServerAccountScopeLifetime();
+        expect(seedAndOpenNewSession({ scope, createDraftId: () => draftId, isCurrent: () => lifetime?.isCurrent() === true,
+            admitOrigin: origin => admitProjectAuthoringOrigin(origin, scope),
+            seed: { origin, sessionName: 'Set up the checkout', prompt: setupPrompt,
+                placement: { kind: 'exactTarget', serverId: homeAScopeId,
+                    machineId: 'original-machine', directory: '/original/project' } },
+            navigateToNewSession: () => { routeBoundary.params = { draftId }; },
+        })).toMatchObject({ kind: 'opened', draftId });
+        // Real setup opens the still-mounted repository; keep that warm path
+        // alongside the existing serialized reopen cases.
+        const reopenRepository = edit === 'clear-then-type' || launchHome === 'other';
+        if (reopenRepository) resetSessionDraftRepositoryForTests();
         const reopened = readNewSessionDraftFromRepository({ scope, draftId });
         if (!reopened) throw new Error('Expected the persisted authoring draft');
         writeNewSessionDraftToRepository({ scope, draftId, draft: { ...reopened, targetServerId: launchServerId,
             selectedMachineId: 'machine-b', selectedPath: '/edited/project',
             executionTarget: { kind: 'machine', target: { serverId: launchServerId, machineId: 'machine-b' } } } });
-        resetSessionDraftRepositoryForTests();
+        if (reopenRepository) resetSessionDraftRepositoryForTests();
         routeBoundary.params = {};
         const metadata = { path: '/edited/project', host: 'home-b-machine', machineId: 'machine-b', flavor: 'codex',
             work: { memoryEnabled: false, viewPreferences: { showToolCalls: true } } };
         const admitted = createSessionOwnerMetadataV1({ metadata });
         if (!admitted.ok) throw new Error('Expected admitted created Session metadata');
+        const sessionId = `created-origin-send-${edit}-${launchHome}-${birth}-${retireSource}`;
         let record = SessionCurrentProjectionRecordV1Schema.parse({
-            id: 'created-origin-send', createdAt: 1, updatedAt: 1, seq: 0, active: false, activeAt: 0,
+            id: sessionId, createdAt: 1, updatedAt: 1, seq: 0, active: false, activeAt: 0,
             encryptionMode: 'plain', dataEncryptionKey: null, metadataLayoutVersion: 1, metadataVersion: 1,
             metadata: JSON.stringify(projectSessionSharedMetadataV1({ metadata })),
             ownerMetadata: createPlainSessionOwnerMetadataEnvelopeV1(admitted.ownerMetadata),
@@ -2358,7 +2385,15 @@ describe('multi-Home Session creation composition', () => {
             responsibleAccountId: null, responsibleAccount: null,
         });
         const writes: Array<{ url: string; patch: ReturnType<typeof SessionMetadataTuplePatchV1Schema.parse> }> = [];
+        const originWrites: typeof writes = [];
+        const relationships: unknown[] = [];
         sessionHttpBoundary = (url, init) => {
+            if (new URL(url).pathname === '/v1/account/project-rows/authoring-session') {
+                expect(new URL(url).origin).toBe(new URL(homeA.serverUrl).origin);
+                expect(record.ownerMetadata).toMatchObject({ t: 'plain', v: { work: { authoringOriginV1: origin } } });
+                relationships.push(JSON.parse(String(init?.body)));
+                return Response.json({ status: 'absent' });
+            }
             if (new URL(url).pathname === '/v1/account/entity-rows/connected-accounts/purposes') {
                 expect(new URL(url).origin).toBe(new URL(launchProfile.serverUrl).origin);
                 expect(new Headers(init?.headers).get('authorization')).toBe(`Bearer ${launchToken}`);
@@ -2367,13 +2402,18 @@ describe('multi-Home Session creation composition', () => {
                     content: { t: 'plain', v: emptyConnectedAccountCatalogRecordV1('purposes') },
                 }));
             }
-            if (new URL(url).pathname !== '/v2/sessions/created-origin-send') return null;
+            if (new URL(url).pathname !== `/v2/sessions/${sessionId}`) return null;
             expect(new URL(url).origin).toBe(new URL(launchProfile.serverUrl).origin);
             expect(new Headers(init?.headers).get('authorization')).toBe(`Bearer ${launchToken}`);
             if (init?.method === 'PATCH') {
                 const patch = SessionMetadataTuplePatchV1Schema.parse(JSON.parse(String(init.body)));
                 if (patch.mode !== 'owner') throw new Error('Expected the owner-private tuple writer');
                 writes.push({ url, patch });
+                const previousOrigin = record.ownerMetadata?.t === 'plain' ? record.ownerMetadata.v.work?.authoringOriginV1 : undefined;
+                const nextOrigin = patch.ownerMetadata.t === 'plain' ? patch.ownerMetadata.v.work?.authoringOriginV1 : undefined;
+                // Runtime/model publications also PATCH this tuple. Count the
+                // observed origin transition, not those independent mutations.
+                if (JSON.stringify(previousOrigin) !== JSON.stringify(nextOrigin)) originWrites.push({ url, patch });
                 record = SessionCurrentProjectionRecordV1Schema.parse({ ...record,
                     metadata: patch.sharedMetadata.ciphertext, ownerMetadata: patch.ownerMetadata,
                     metadataVersion: record.metadataVersion + 1, agentState: patch.agentState.ciphertext,
@@ -2384,7 +2424,8 @@ describe('multi-Home Session creation composition', () => {
             return Response.json({ session: record });
         };
         socketBoundary.emits.mockClear();
-        const createHook = await renderProductionCreateCaller({ activeServerId: homeAScopeId, targetServerId: launchServerId, draftId });
+        const createHook = await renderProductionCreateCaller({ activeServerId: homeAScopeId, targetServerId: launchServerId, draftId,
+            authoringOriginAtBirth: birth });
         try {
             // Send inherits the selected launch Account's defaults.
             // Let the real scoped reader admit its HTTP row before pressing the production action.
@@ -2414,7 +2455,8 @@ describe('multi-Home Session creation composition', () => {
             const poolId = '00000000-0000-4000-8000-000000001013';
             // Pool selection resolves to an exact Machine and hands these route
             // operands to New Session. Exercise that production route consumer.
-            routeBoundary.params = { machineId: 'machine-b', spawnServerId: launchServerId, machinePoolId: poolId };
+            routeBoundary.params = { ...routeBoundary.params,
+                machineId: 'machine-b', spawnServerId: launchServerId, machinePoolId: poolId };
             await createHook.rerender();
             const { resolveNewSessionDraftAutoPersistDelayMs } = await import('./useNewSessionDraftAutoPersist');
             // Exercise the real delayed authoring write as well as the immediate
@@ -2437,6 +2479,23 @@ describe('multi-Home Session creation composition', () => {
             socketBoundary.result = { type: 'success', disposition: 'created', sessionId: record.id,
                 executionTarget: { serverId: launchServerId, machineId: 'machine-b' },
                 organizationPlacement: { folderId: null, tagIds: [] }, initialInput: { status: 'accepted', localId: 'origin-first-turn' } };
+            if (birth) {
+                const born = createSessionOwnerMetadataV1({ metadata: { ...metadata,
+                    work: { ...metadata.work, authoringOriginV1: origin } } });
+                if (!born.ok) throw new Error('Expected admitted daemon birth owner fixture');
+                record = SessionCurrentProjectionRecordV1Schema.parse({ ...record,
+                    ownerMetadata: createPlainSessionOwnerMetadataEnvelopeV1(born.ownerMetadata), metadataVersion: 13 });
+                const display = projectSessionDisplayV1({ sharedMetadata: projectSessionSharedMetadataV1({ metadata }),
+                    ownerMetadata: born.ownerMetadata });
+                if (!display.owner) throw new Error('Expected daemon birth owner display');
+                const shared = await sealSessionSharedDisplayEnvelopeV1({ sessionMode: 'plain', display: display.shared });
+                const owner = sealSessionOwnerDisplayEnvelopeV1({ accountMode: 'plain', display: display.owner });
+                if (!shared.ok || !owner.ok) throw new Error('Expected daemon birth display envelopes');
+                record = SessionCurrentProjectionRecordV1Schema.parse({ ...record, displayProjectionV1: {
+                    v: 1, sourceMetadataVersion: record.metadataVersion, metadataLayoutVersion: 1,
+                    shared: shared.envelope, owner: owner.envelope,
+                } });
+            }
             socketBoundary.emits.mockClear();
             await act(async () => { await readProductionCreateAction(createHook.getCurrent())(); });
             const spawn = socketBoundary.emits.mock.calls.find(([request]) => request.payload?.method === 'machine-b:session.spawnNew');
@@ -2448,12 +2507,17 @@ describe('multi-Home Session creation composition', () => {
                 executionTarget: { serverId: launchServerId, machineId: 'machine-b' },
                 directory: { kind: 'path', path: '/edited/project' },
                 initialInput: { text: editedPrompt },
+                ...(birth ? { authoringOrigin: origin } : {}),
             });
+            if (!birth) expect(spawn?.[0]?.payload?.params).not.toHaveProperty('authoringOrigin');
             expect(record.ownerMetadata).toMatchObject({ t: 'plain', v: { work: {
                 memoryEnabled: false, viewPreferences: { showToolCalls: true }, authoringOriginV1: origin,
             } } });
-            expect(writes.some(({ patch }) => patch.mode === 'owner' && patch.ownerMetadata.t === 'plain'
+            if (birth) expect(originWrites).toHaveLength(0);
+            else expect(writes.some(({ patch }) => patch.mode === 'owner' && patch.ownerMetadata.t === 'plain'
                 && patch.ownerMetadata.v.work?.authoringOriginV1?.comparisonId === origin.comparisonId)).toBe(true);
+            expect(relationships).toEqual([{ key: { kind: 'workspace-ref', serverId: homeAScopeId, id: origin.workspace.workspaceId },
+                session: { serverId: launchServerId, sessionId: record.id } }]);
             expect(record.metadata).not.toContain('original-comparison');
             expect(record.metadata).not.toContain('/original/project');
             expect(record.metadata).not.toContain('release-dashboard');
@@ -2467,7 +2531,81 @@ describe('multi-Home Session creation composition', () => {
             expect(Object.fromEntries(new URL(destination.href, 'https://happier.test').searchParams)).toMatchObject({
                 serverId: homeAScopeId, layoutId: 'release-dashboard', right: 'files', mobileSurface: 'tabs', initialFile: 'src/original.ts',
             });
-            expect(routeBoundary.replace).toHaveBeenCalled();
+            expect(routeBoundary.replace, JSON.stringify({ alerts: modalBoundary.alert.mock.calls,
+                errors: observabilityBoundary.capture.mock.calls.map(([error]) => error instanceof Error ? error.stack : error),
+                draft: readNewSessionDraftFromRepository({ scope, draftId }), route: routeBoundary.params,
+                settingsScope: storage.getState().settingsScope,
+            })).toHaveBeenCalled();
+            if (edit === 'replace') {
+                await createHook.unmount();
+                const recoveredDraftId = crypto.randomUUID();
+                const recoveredAttemptId = crypto.randomUUID();
+                writeNewSessionDraftToRepository({ scope, draftId: recoveredDraftId,
+                    draft: { ...reopened, targetServerId: launchServerId,
+                        executionTarget: { kind: 'machine', target: { serverId: launchServerId, machineId: 'machine-b' } },
+                        launchUserAttemptId: recoveredAttemptId } });
+                const { captureNewSessionDraftLaunchCurrentness } = await import('../modules/newSessionDraftLifecycle');
+                captureNewSessionDraftLaunchCurrentness({ scope, draftId: recoveredDraftId, launchUserAttemptId: recoveredAttemptId });
+                const { acquireSpawnAttemptCustody, markSpawnAttemptSubmitted } = await import('@/sync/domains/session/spawn/spawnAttemptNonceStore');
+                const recoveredAttempt = { scope: { serverId: launchServerId, accountId: launchAccountId },
+                    machineId: 'machine-b', targetFingerprint: `recovered:${recoveredAttemptId}`,
+                    userAttemptId: recoveredAttemptId, seedNonce: `nonce:${recoveredAttemptId}` };
+                await acquireSpawnAttemptCustody({ ...recoveredAttempt,
+                    authoringOriginPersistence: birth ? 'daemon-birth' : 'legacy-checkpoint' });
+                await markSpawnAttemptSubmitted({ ...recoveredAttempt, nonce: recoveredAttempt.seedNonce });
+                if (!birth) record = SessionCurrentProjectionRecordV1Schema.parse({ ...record,
+                    ownerMetadata: createPlainSessionOwnerMetadataEnvelopeV1(admitted.ownerMetadata),
+                    metadataVersion: record.metadataVersion + 1 });
+                const { actionOperationStore } = await import('@/sync/domains/actionOperations/actionOperationStore');
+                const { ActionOperationSnapshotV1Schema } = await import('@happier-dev/protocol/actions/operations/v1');
+                const { projectSessionSpawnNewActionResultV1, SessionSpawnNewResultV1Schema } =
+                    await import('@happier-dev/protocol/sessions/creation/sessionSpawnNewResultV1');
+                actionOperationStore.mergeSnapshots({ serverId: launchServerId, snapshots: [ActionOperationSnapshotV1Schema.parse({
+                    version: 1, operationId: `operation:${recoveredAttemptId}`, revision: 2,
+                    actionId: 'session.spawn_new', state: 'succeeded', scope: { accountId: launchAccountId, machineId: 'machine-b' },
+                    title: 'Create session', requestId: recoveredAttemptId, createdAt: 1, startedAt: 1, settledAt: 2,
+                    cancellation: 'supported', result: projectSessionSpawnNewActionResultV1(SessionSpawnNewResultV1Schema.parse(socketBoundary.result)),
+                })] });
+                const { useNewSessionActionOperationReconciliation } = await import('./screenModel/useNewSessionActionOperationReconciliation');
+                const disableDraftPersistence = vi.fn();
+                const resetLaunchRequestId = vi.fn();
+                const router = { replace: routeBoundary.replace };
+                const originWritesBeforeRecovery = originWrites.length;
+                const spawnCount = sessionSpawnCalls().length;
+                if (retireSource) {
+                    const boundaryBeforeRetirement = sessionHttpBoundary;
+                    let armed = true;
+                    sessionHttpBoundary = async (url, init) => {
+                        if (armed && new URL(url).pathname === `/v2/sessions/${record.id}` && (!init?.method || init.method === 'GET')) {
+                            armed = false;
+                            await TokenStorage.setCredentialsForServerUrl(homeA.serverUrl, { serverId: homeAScopeId }, {
+                                token: tokenFor('replacement-source-account'),
+                            });
+                        }
+                        return await boundaryBeforeRetirement?.(url, init) ?? null;
+                    };
+                }
+                const recovery = await renderHook(() => useNewSessionActionOperationReconciliation({
+                    draftId: recoveredDraftId, requestId: recoveredAttemptId, draftScope: scope,
+                    localCreationInFlight: false, disableDraftPersistence, resetLaunchRequestId, router,
+                }));
+                try {
+                    if (retireSource) {
+                        await vi.waitFor(() => expect(observabilityBoundary.capture.mock.calls.some(([error]) =>
+                            typeof error === 'object' && error !== null && 'phase' in error && error.phase === 'authoring_origin')).toBe(true));
+                        expect(relationships).toHaveLength(1);
+                        expect(originWrites).toHaveLength(originWritesBeforeRecovery);
+                        expect(disableDraftPersistence).not.toHaveBeenCalled();
+                        expect(readNewSessionDraftFromRepository({ scope, draftId: recoveredDraftId })).not.toBeNull();
+                        return;
+                    }
+                    await vi.waitFor(() => expect(relationships).toHaveLength(2));
+                    await vi.waitFor(() => expect(disableDraftPersistence).toHaveBeenCalledOnce());
+                    expect(originWrites.length - originWritesBeforeRecovery).toBe(birth ? 0 : 1);
+                    expect(sessionSpawnCalls()).toHaveLength(spawnCount);
+                    expect(record.ownerMetadata).toMatchObject({ t: 'plain', v: { work: { authoringOriginV1: origin } } });
+                } finally { await recovery.unmount(); }
+            }
         } finally {
             await createHook.unmount();
         }

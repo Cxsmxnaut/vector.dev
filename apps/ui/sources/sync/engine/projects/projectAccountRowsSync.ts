@@ -3,7 +3,7 @@ import {
     buildProjectAccountRowPhysicalKeyV1, type ProjectAccountRowListResponseV1,
     type ProjectAccountRowMutationRequestV1, type ProjectAccountRowMutationResponseV1,
     type ProjectAccountRowPayloadV1, type ProjectAccountRowV1, type ProjectAccountRowKeyV1,
-    type ProjectAccountOrganizationV1,
+    type ProjectAccountOrganizationV1, type ProjectAccountAuthoringSessionV1,
 } from '@happier-dev/protocol/projects/projectAccountRowsV1';
 import { assertProjectAccountSnapshotTransition, parseProjectAccountSnapshotV1 } from '@happier-dev/protocol/projects/projectAccountSnapshotV1';
 import type { ProjectAccountRowCipherV1 } from '@happier-dev/protocol/projects/projectAccountRowCipherV1';
@@ -41,6 +41,7 @@ export function createProjectAccountRowsSync(options: Readonly<{
         const relationships: ProjectAccountRowsSnapshot['relationships'][number][] = [];
         const organizations: ProjectAccountRowsSnapshot['organizations'][number][] = [];
         const revisionsByPhysicalKey: Record<string, number> = {};
+        const authoringSessionsByPhysicalKey: Record<string, ProjectAccountAuthoringSessionV1> = {};
         for (const { row, payload } of rows) {
             const identity = buildProjectAccountRowPhysicalKeyV1(row.key);
             if (identity in revisionsByPhysicalKey) throw failure('project_account_duplicate_row');
@@ -50,6 +51,7 @@ export function createProjectAccountRowsSync(options: Readonly<{
                 continue;
             }
             if (payload.key.kind === 'workspace-ref' && 'id' in payload.value) {
+                if (row.authoringSession) authoringSessionsByPhysicalKey[identity] = row.authoringSession;
                 const recent = readRecency?.(payload.value);
                 workspaceRefs.push(recent === undefined ? payload.value : { ...payload.value, lastOpenedAtMs: recent });
             } else if (payload.key.kind === 'relationship-graph' && 'relationships' in payload.value) relationships.push(...payload.value.relationships);
@@ -70,7 +72,12 @@ export function createProjectAccountRowsSync(options: Readonly<{
             if (seen.has(key)) throw failure('project_account_duplicate_row');
             seen.add(key);
             const prior = merged.get(key);
-            if (!prior || item.row.revision >= prior.row.revision) merged.set(key, item);
+            if (!prior || item.row.revision >= prior.row.revision) {
+                // Legacy-shaped structural acknowledgements omit this server-owned leaf.
+                // The relation changes only through its record operation, or checkout deletion.
+                const authoringSession = item.row.content !== null ? item.row.authoringSession ?? prior?.row.authoringSession : undefined;
+                merged.set(key, authoringSession ? { ...item, row: { ...item.row, authoringSession } } : item);
+            }
         }
         const next = [...merged.values()];
         const snapshot = project(next); // Open and validate the whole census before disclosing any row.

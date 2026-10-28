@@ -3905,6 +3905,7 @@ export class ApiMachineClient {
         return {
             ...negotiatedCapabilities,
             sessionSpawnPlacementOrigin: { protocolVersions: [1] },
+            sessionSpawnAuthoringOrigin: { protocolVersions: [1] },
         };
     }
 

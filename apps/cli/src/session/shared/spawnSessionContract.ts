@@ -92,6 +92,8 @@ export function deserializeNativeForkSourceV1(value: string): NativeForkSource {
  * depends on the high-level handler graph merely to describe a spawn request or response.
  */
 export interface SpawnSessionOptions extends SessionCreateOriginFieldsV1 {
+  /** Birth-only private provenance; never an existing Session mutation. */
+  authoringOrigin?: import('@happier-dev/protocol/plugins/ui').PluginUiNewSessionSeedOriginV1;
   /** Authored Session ceiling, committed before the native runner opens. */
   workspaceWrites?: 'allow' | 'deny';
   /** Original cold-start operation, retained only until native Session open. Never serialized. */

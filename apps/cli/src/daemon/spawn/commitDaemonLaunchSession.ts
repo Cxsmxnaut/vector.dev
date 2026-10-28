@@ -198,6 +198,7 @@ export function withoutFreshSessionCreationFields(options: SpawnSessionOptions):
     initialAccess: _initialAccess,
     initialTriggers: _initialTriggers,
     initialTitle: _initialTitle,
+    authoringOrigin: _authoringOrigin,
     identity: _initialIdentity,
     memoryEnabled: _initialMemoryEnabled,
     promptStack: _initialPromptStack,

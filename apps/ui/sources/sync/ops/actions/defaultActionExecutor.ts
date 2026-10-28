@@ -2633,6 +2633,11 @@ function finishSessionArchiveInvocation(invocation: SessionArchiveInvocation | u
       const serverId = resolveServerProfileScopeIdForIdentifier(input.executionTarget.serverId);
       const machine = storage.getState().machineListByServerId[serverId]
         ?.find((candidate) => candidate.id === input.executionTarget.machineId);
+      if (input.authoringOrigin && !supportsMachineOperationProtocolCapabilityV1(
+        machine?.operationProtocolCapabilities, 'sessionSpawnAuthoringOrigin',
+      )) return { type: 'error' as const, code: 'update_required' as const, retryable: false as const,
+        details: { kind: 'update_required' as const, operation: 'session.spawn_new' as const,
+          component: 'daemon' as const, reason: 'session_spawn_authoring_origin_update_required' as const } };
       if (
         input.secretReferenceOverlay
         && !supportsMachineSessionSpawnProtocolVersionV1(

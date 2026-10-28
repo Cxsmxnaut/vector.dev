@@ -247,7 +247,7 @@ describe('ApiMachineClient operation protocol capability publication', () => {
     expect(publish).toHaveBeenLastCalledWith(expect.anything(), {});
   });
 
-  it('includes placement-origin admission only when the server advertises cumulative V4 support', async () => {
+  it('includes placement and private authoring-origin admission only when the server advertises cumulative V4 support', async () => {
     const createClient = (currentProtocolVersion: number) => new ApiMachineClient(
       'token',
       createMachine(),
@@ -279,8 +279,10 @@ describe('ApiMachineClient operation protocol capability publication', () => {
     (preV4Client as unknown as { sessionSpawnV1OutcomeRequired: boolean }).sessionSpawnV1OutcomeRequired = true;
     (v4Client as unknown as { sessionSpawnV1OutcomeRequired: boolean }).sessionSpawnV1OutcomeRequired = true;
     expect(await readProjection(preV4Client)).not.toHaveProperty('sessionSpawnPlacementOrigin');
+    expect(await readProjection(preV4Client)).not.toHaveProperty('sessionSpawnAuthoringOrigin');
     expect(await readProjection(v4Client)).toMatchObject({
       sessionSpawnPlacementOrigin: { protocolVersions: [1] },
+      sessionSpawnAuthoringOrigin: { protocolVersions: [1] },
     });
   });
 

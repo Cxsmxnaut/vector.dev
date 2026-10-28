@@ -308,6 +308,7 @@ export async function acquireSpawnAttemptCustody(params: Readonly<{
             // Attachment preparation and text admission compose one Message;
             // both phases use its sole creation-derived retry identity.
             attachmentMessageLocalId: firstTurnLocalId,
+            ...(params.authoringOriginPersistence ? { authoringOriginPersistence: params.authoringOriginPersistence } : {}),
         };
         writeAttempts(params.scope, { ...attempts, [id]: record });
         return { status: 'acquired', record, reused: false };
