@@ -3,6 +3,7 @@ import { isRecord } from '@happier-dev/plugin-sdk';
 import type { RenderContext } from '@happier-dev/plugin-sdk/ui';
 import {
   Button,
+  InlineCode,
   Collection,
   type ComposerDecorationSetV1,
   type ComposerHandle,
@@ -339,7 +340,10 @@ function ExternalAuthoringSemanticSurface(props: Pick<RenderContext, 'launchInpu
         onSubmit={(input) => setReviewFormReceipt(JSON.stringify(input))}
       />
       {reviewFormReceipt === null ? null : <Status tone="info" label={`External review form submitted: ${reviewFormReceipt}`} />}
-      <ItemGroup title="External review scope">
+      <ItemGroup
+        title="External review scope"
+        description={<>Reviews run through <InlineCode>happier review</InlineCode> on the selected computer.</>}
+      >
         <ItemAddRow title="Add review scope" onPress={() => setReviewScope('all')} testID="external-add-review-scope" />
         <Item
           title="External review filter"
