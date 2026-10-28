@@ -403,7 +403,7 @@ describe('VoiceExecutionTransport (streaming)', () => {
     await controller.sendTurn(VOICE_AGENT_GLOBAL_SESSION_ID, 'hello');
 
     expect(requestedPaths).toContain('/v1/sessions/s1/messages');
-    expect(requestedPaths).toContain('/v1/sessions/voice-hidden-s1/messages');
+    expect(requestedPaths).not.toContain('/v1/sessions/voice-hidden-s1/messages');
   });
 
   it('refreshes stale bound target state before starting global local voice', async () => {

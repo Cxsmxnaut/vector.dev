@@ -16,6 +16,33 @@ await prepareStandaloneVoicePolicyHarness();
 await import('@/voice/adapters/localConversation/localConversationAdapter');
 
 describe('real Local Voice Agent activation', () => {
+    it('does not load hidden carrier history before starting targetless Voice', async () => {
+        const daemon = await createRetainedVoiceAgentRpcBoundary();
+        const fixture = await createStandaloneVoicePolicyHarness({
+            mode: 'off',
+            existingSession: createSessionFixture({ id: 'hidden-voice', active: true, metadata: {
+                path: '/voice', host: 'voice.test', flavor: 'claude',
+                ...buildSystemSessionMetadataV1({ key: 'voice_conversation', hidden: true }),
+                agentRuntimeCapabilitiesV1: { localControl: { supported: true } },
+            } }),
+            dispatch: daemon.dispatch,
+        });
+        let activation: Awaited<ReturnType<typeof fixture.activateLocalAgent>> | undefined;
+        try {
+            fixture.messageRequests.length = 0;
+            activation = await fixture.activateLocalAgent();
+            expect(activation.controller.isAgentActive(VOICE_AGENT_GLOBAL_SESSION_ID)).toBe(true);
+            expect(activation.binding.targetSessionAddress).toBeNull();
+            expect(daemon.readRetainedRun()?.status).toBe('running');
+            // Targetless context has no transcript consumer; retained history
+            // is replayed by the daemon rather than hydrated on this client.
+            expect(fixture.messageRequests.filter(path => path.includes('/hidden-voice/'))).toHaveLength(0);
+        } finally {
+            await activation?.dispose();
+            await fixture.dispose();
+        }
+    });
+
     it.each(['handle', 'metadata', 'running', 'unobservable'] as const)('reconciles a refused Stop only against authoritative terminal state (%s)', async (source) => {
         const daemon = await createRetainedVoiceAgentRpcBoundary();
         let refuseStop = false;

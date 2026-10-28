@@ -234,9 +234,9 @@ export async function initializeVoiceAgentHandle({
     );
 
     const hydratedSessions = new Set<string>();
-    const ensureSessionTranscriptReady = async (
+    const ensureSessionContextReady = async (
         target: SessionAddress | string | null,
-        options?: Readonly<{ forceRefresh?: boolean }>,
+        options?: Readonly<{ forceRefresh?: boolean; hydrateMessages?: boolean }>,
     ): Promise<void> => {
         const normalizedSessionId = normalizeNonEmptyString(
             typeof target === 'string' ? target : target?.sessionId,
@@ -258,7 +258,8 @@ export async function initializeVoiceAgentHandle({
                 ...(serverId ? { serverId } : {}),
             }),
         ).catch(() => {});
-        if (!serverId || areServerProfileIdentifiersEquivalent(serverId, getActiveServerSnapshot().serverId)) {
+        if (options?.hydrateMessages !== false
+            && (!serverId || areServerProfileIdentifiersEquivalent(serverId, getActiveServerSnapshot().serverId))) {
             await Promise.resolve(sync.refreshSessionMessages(normalizedSessionId)).catch(() => {});
         }
     };
@@ -321,7 +322,7 @@ export async function initializeVoiceAgentHandle({
         boundTargetSessionId ?? (isGlobalVoiceAgent ? null : sessionId),
     );
     if (daemonTargetSessionId) {
-        await ensureSessionTranscriptReady(
+        await ensureSessionContextReady(
             boundTargetSessionAddress?.sessionId === daemonTargetSessionId
                 ? boundTargetSessionAddress
                 : daemonTargetSessionId,
@@ -341,9 +342,12 @@ export async function initializeVoiceAgentHandle({
             signal,
         );
     } else if (boundTargetSessionId) {
-        await ensureSessionTranscriptReady(boundTargetSessionId);
+        await ensureSessionContextReady(boundTargetSessionId);
     }
-    await ensureSessionTranscriptReady(boundConversationSessionId, { forceRefresh: true });
+    // The carrier supplies owner metadata, not client-authored context. Its
+    // retained conversation is replayed by the daemon through resolveReplaySeedRequest.
+    // Only a real coding target above needs client transcript hydration.
+    await ensureSessionContextReady(boundConversationSessionId, { forceRefresh: true, hydrateMessages: false });
 
     const {
         bootstrapInitialContext,
@@ -383,7 +387,7 @@ export async function initializeVoiceAgentHandle({
     }
 
     if (backend === 'daemon') {
-        await ensureSessionTranscriptReady(daemonConversationSessionId, { forceRefresh: true });
+        await ensureSessionContextReady(daemonConversationSessionId, { forceRefresh: true, hydrateMessages: false });
     }
 
     const replayCfg = agentCfg?.replay ?? null;
