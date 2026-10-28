@@ -64,7 +64,7 @@ import type { WidgetBindingValueLabels } from '@/components/widgets/surface/useW
 import { useWidgetInstanceDescriptors } from '@/components/widgets/surface/useWidgetInstanceDescriptor';
 import { WidgetSurface } from '@/components/widgets/surface/WidgetSurface';
 import { runAcknowledgedWidgetSetupCommand, widgetProvidedContext, type WidgetSurfaceContext } from '@/components/widgets/surface/widgetSurfaceSetup';
-import { isBuiltinWidgetSwitchedOff, readWidgetDescriptor, type WidgetCandidate } from '@/components/widgets/widgetCatalog';
+import { isBuiltinWidgetSwitchedOff, readWidgetDescriptor, resolveWidgetInstanceTitle, type WidgetCandidate } from '@/components/widgets/widgetCatalog';
 import { useAtmosphereMoments } from '@/components/atmosphere/atmosphereMoments';
 import { t } from '@/text';
 import { useIsNearViewport, type NearViewportSpan } from '@/components/widgets/nearViewport';
@@ -487,7 +487,7 @@ function WidgetAreaPlacements(props: PlacementsProps): React.ReactElement {
     }), [items, byId, columnOf]);
     const childTitle = React.useCallback((instanceId: string) => {
         const entry = byId.get(instanceId);
-        return entry?.placement.instance.displayName ?? entry?.descriptor?.title ?? instanceId;
+        return resolveWidgetInstanceTitle(entry?.placement.instance, entry?.descriptor);
     }, [byId]);
     const renderWidget = (instanceId: string, index: number, count: number, column: (typeof columns)[number], parent?: WidgetAreaGroupChild) => {
         const entry = byId.get(instanceId)!;
@@ -753,7 +753,7 @@ const WidgetAreaItem = React.memo(function WidgetAreaItem(props: PlacementsProps
     const bindingLabel = followsPage ? null : followedLabel;
     // Nor do those pages call their own built-ins "Built in": the source slot is for a plugin's name.
     // A plugin whose name is also the widget's title is not said twice ("qaf1 footprints  qaf1 footprints").
-    const shownTitle = (instance.displayName ?? candidate?.title)?.trim().toLocaleLowerCase();
+    const shownTitle = resolveWidgetInstanceTitle(instance, candidate).trim().toLocaleLowerCase();
     const sourceName = namesOwnScope && instance.definition.kind === 'builtin' ? undefined
         : candidate?.pluginName && candidate.pluginName.trim().toLocaleLowerCase() === shownTitle ? undefined : candidate?.pluginName;
     const followed = readWidgetGroupFollowedValue(instance, groupContext, groupLabels);
@@ -777,8 +777,10 @@ const WidgetAreaItem = React.memo(function WidgetAreaItem(props: PlacementsProps
         instance, candidate, scope: surface, context: itemContext, audience: props.isShared ? 'shared' : 'personal',
         ...(props.canEdit ? { setInputs: saveInputs } : {}), testID,
     });
-    const definition = useWidgetDefinitionFlows({ instance, scope: surface, providedContext: widgetProvidedContext(itemContext), anchorRef: edit.anchorRef, editInputs: edit.editInputs, testID });
-    const title = instance.displayName ?? candidate?.title ?? t('sessionBoard.item.pluginUnavailable.title');
+    const definition = useWidgetDefinitionFlows({ instance, scope: surface,
+        admittedViewer: props.admittedViewer ?? undefined, isCurrent: props.isCurrent,
+        providedContext: widgetProvidedContext(itemContext), anchorRef: edit.anchorRef, editInputs: edit.editInputs, testID });
+    const title = resolveWidgetInstanceTitle(instance, candidate);
     useCurrentUiContextLocalCommands(props.current && focused && collapsible && !switchedOff ? [{
         key: `${stableJsonStringify(surface)}:${instance.id}:disclosure`,
         title: `${t(collapsed ? 'projects.widgets.expand' : 'projects.widgets.collapse')}: ${title}`,

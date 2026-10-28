@@ -55,7 +55,7 @@ import { useDiscussionParticipantProfiles } from '@/components/discussions/useDi
 import { formatAccountDisplayName } from '@/sync/domains/account/formatAccountDisplayName';
 import { areServerProfileIdentifiersEquivalent } from '@/sync/domains/server/serverProfiles';
 import { useAppShellPluginUiProjection } from '@/components/appShell/plugins/AppShellPluginUiProjection';
-import { readWidgetInstanceName } from '@/components/widgets/frame/widgetFrameTitle';
+import { resolveWidgetInstanceTitle } from '@/components/widgets/widgetCatalog';
 import { resolveBoardWidgetProvenance } from '@/components/widgets/boardWidgetProvenance';
 import type { SessionPluginRuntimeState } from '@/components/sessions/plugins/useSessionPluginRuntime';
 import type { SessionBoardHostActionBinding } from './sessionBoardHostActions';
@@ -365,7 +365,8 @@ export function SessionWidgetHost(props: SessionWidgetHostProps): React.ReactEle
     const widgetDescriptor = useWidgetInstanceDescriptor(boardSurface.scope, widgetInstance, installedDescriptor);
     // A widget card is named by the shared widget-name owner (its own name, else its definition's title) so an
     // installed surface never shows its local id; the stored title is the fallback for every other source.
-    const title = (widgetInstance ? readWidgetInstanceName(widgetInstance, widgetDescriptor) : null) ?? resolveSessionBoardItemTitle(state);
+    const title = widgetInstance ? resolveWidgetInstanceTitle(widgetInstance, widgetDescriptor, { fallbackTitle: resolveSessionBoardItemTitle(state) })
+        : resolveSessionBoardItemTitle(state);
     // The title this card shows is the one name the Board uses for it: the carried ghost and every drop place that
     // describes it read it from here.
     const onDisplayTitle = React.useRef(props.onDisplayTitle);

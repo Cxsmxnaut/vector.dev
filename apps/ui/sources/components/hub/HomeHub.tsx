@@ -14,7 +14,7 @@ import { PAGE_ROW_TOUCH_MIN_HEIGHT_PX } from '@/components/ui/lists/pageRowMetri
 import { useWidgetFrameStyle } from '@/components/widgets/frame/useWidgetFrameStyle';
 import { SurfaceStateCard } from '@/components/ui/surfaces/SurfaceStateCard';
 import { createNearViewportTracker, type NearViewportTracker } from '@/components/widgets/nearViewport';
-import type { WidgetCandidate } from '@/components/widgets/widgetCatalog';
+import { resolveWidgetInstanceTitle, type WidgetCandidate } from '@/components/widgets/widgetCatalog';
 import { useWidgetFrameRename } from '@/components/widgets/frame/useWidgetFrameRename';
 import { useWidgetInputsEditor } from '@/components/widgets/surface/useWidgetInputsEditor';
 import { useWidgetDefinitionFlows } from '@/components/widgets/definitions/useWidgetDefinitionFlows';
@@ -296,7 +296,7 @@ function HubWidgetSlot(props: SlotProps & Readonly<{
     const definition = useWidgetDefinitionFlows({ instance, scope, providedContext: widgetProvidedContext(context), anchorRef: edit.anchorRef, editInputs: edit.editInputs, testID });
     // Rename stays optional (lab dbind N1): an empty name, or the widget's own, goes back to it.
     const renaming = useWidgetFrameRename({
-        title: instance.displayName ?? widget?.title ?? instance.id,
+        title: resolveWidgetInstanceTitle(instance, widget),
         testID,
         serverId: scope?.serverId,
         onRename: (next) => {
@@ -344,9 +344,9 @@ function HubWidgetSlot(props: SlotProps & Readonly<{
                     // The line between cards reorders here; inside a group, within that group (lab wgdnd B).
                     ...homeCardTarget({ surface: props.homeSurface, items: props.layout.items, itemId: props.section.id,
                         topLevelIds: props.topLevelIds,
-                        title: props.section.instance.displayName ?? props.section.widget?.title ?? props.section.id,
+                        title: resolveWidgetInstanceTitle(props.section.instance, props.section.widget),
                         groupId: props.parent?.group.id, sourceItem: props.movementSourceItem, childTitle }),
-                    title: props.section.instance.displayName ?? props.section.widget?.title ?? props.section.id,
+                    title: resolveWidgetInstanceTitle(props.section.instance, props.section.widget),
                     getItem: () => props.layout.items.some(item => item.kind === 'widget' ? item.instance.id === props.section.id
                         : item.children.some(child => child.instance.id === props.section.id))
                         ? { kind: 'home-section', scope: props.widgetDrag!.scope, sectionId: props.section.id } : null,
