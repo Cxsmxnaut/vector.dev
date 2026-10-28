@@ -7,6 +7,7 @@ import test from 'node:test';
 import { pathToFileURL } from 'node:url';
 import { createTempFixture } from './testkit/core/temp_fixture.mjs';
 import { writeFakeBin } from './testkit/core/fake_bin_harness.mjs';
+import { withDependencyRefresh } from './utils/proc/dependency_refresh.mjs';
 import { prepareCommandRepository, renderNativeExecutionProjection } from './utils/dev_targets/native_execution_projection.mjs';
 import { buildRemoteExecCommand, resolveHeavyweightMemoryFloorKiB } from './utils/dev_targets/remote_commands.mjs';
 import { buildNativeAdmissionFixtureEnv, installCliNativeCustodySourceFixture, installNativeAdmissionFixture } from './testkit/core/native_admission_fixture.mjs';
@@ -77,6 +78,75 @@ function nativeFixtureRuntime(stackDir) {
   return resolveDevTargetMutagenRuntime({ stackBaseDir: stackDir, sourceDir: repoRoot,
     env: { HAPPIER_STACK_STORAGE_DIR: dirname(stackDir) } });
 }
+
+test('sibling basis bootstrap and preparation use the basis UI tool contract', { skip: process.platform === 'win32' }, async t => {
+  const fixture = await createTempFixture(t, { prefix: 'hstack-basis-bootstrap-', parentDir: dirname(repoRoot) });
+  const ui = fixture.path('apps/ui');
+  const owners = fixture.path('apps/stack/scripts/utils/dev_targets');
+  await mkdir(join(ui, 'tools'), { recursive: true });
+  await mkdir(owners, { recursive: true });
+  await writeFile(fixture.path('package.json'), JSON.stringify({ private: true, packageManager: 'pnpm@12.14.0' }));
+  await writeFile(fixture.path('pnpm-lock.yaml'), '# basis fixture\n');
+  await writeFile(fixture.path('pnpm-workspace.yaml'), 'packages:\n  - apps/*\n');
+  await writeFile(fixture.path('apps/stack/package.json'), JSON.stringify({ name: '@happier-dev/stack' }));
+  await writeFile(join(ui, 'package.json'), JSON.stringify({ name: '@happier-dev/app',
+    scripts: { 'postinstall:real': 'node tools/postinstall.mjs' },
+    happier: { installFreshnessInputs: ['tools/resolveUiPostinstallTasks.mjs'] } }));
+  // The historical tool intentionally has no resolveUiPostinstallTaskInputs.
+  await writeFile(join(ui, 'tools/resolveUiPostinstallTasks.mjs'),
+    'export function resolveUiPostinstallTasks() { return ["historical-task"]; }\n');
+  // These source-owned executables model the other checkout's process boundary;
+  // their real imports must stay paired with that checkout's older UI contract.
+  for (const [name, output] of [['remote_dependency_bootstrap', 'bootstrap'], ['remote_validation_preparation', 'prepared']]) {
+    await writeFile(join(owners, `${name}.mjs`), `import { writeFileSync } from 'node:fs';
+import { resolveUiPostinstallTasks } from '../../../../ui/tools/resolveUiPostinstallTasks.mjs';
+if (process.env.HAPPIER_TEST_BASIS_BOOTSTRAP_FAILURE === '1') process.exit(29);
+writeFileSync(new URL('../../../../../${output}', import.meta.url), JSON.stringify(resolveUiPostinstallTasks()));
+`);
+  }
+  const { binDir } = writeFakeBin({ root: fixture.root, name: 'pnpm', content: `#!${process.execPath}
+const { readFileSync } = require('node:fs');
+for (const name of process.env.HAPPIER_TEST_BASIS_MISSING_PREPARATION === '1' ? ['bootstrap'] : ['bootstrap', 'prepared']) {
+  if (readFileSync(${JSON.stringify(fixture.root)} + '/' + name, 'utf8') !== '["historical-task"]') process.exit(37);
+}
+console.log('Vitest reached'); process.exit(17);
+` });
+  const env = { ...executionNeutralEnv, PATH: `${binDir}:${dirname(process.execPath)}:/usr/bin:/bin`, CI: '1',
+    HAPPIER_STACK_SKIP_REFRESH_DEPS: '1', HAPPIER_STACK_DISABLE_REFRESH_DEPS: '1',
+    HAPPIER_STACK_HOME_DIR: fixture.root, HAPPIER_STACK_STORAGE_DIR: fixture.path('stacks') };
+  await withDependencyRefresh({ installDir: fixture.root, componentDir: fixture.path('apps/stack'), env: { ...env,
+    HAPPIER_STACK_SKIP_REFRESH_DEPS: '0', HAPPIER_STACK_DISABLE_REFRESH_DEPS: '0' } },
+  async () => mkdir(fixture.path('node_modules')));
+  const args = [launcher, `--repo=${fixture.root}`, '--cwd=.', '--local', '--', 'pnpm', '--dir', 'apps/ui',
+    'exec', 'vitest', 'run', 'sources/historical.test.ts'];
+  const result = spawnSync('/bin/sh', args, { cwd: repoRoot, env, encoding: 'utf8' });
+  assert.equal(result.status, 17, result.stderr);
+  assert.match(result.stdout, /Vitest reached/);
+  const failure = spawnSync('/bin/sh', args, { cwd: repoRoot,
+    env: { ...env, HAPPIER_TEST_BASIS_BOOTSTRAP_FAILURE: '1' }, encoding: 'utf8' });
+  assert.equal(failure.status, 29, failure.stderr);
+  assert.doesNotMatch(failure.stdout, /Vitest reached/);
+
+  // Older checkouts such as 0.2 have bootstrap but no preparation entrypoint.
+  // Observe the Node process boundary while executing real preparation logic.
+  await rm(join(owners, 'remote_validation_preparation.mjs'));
+  await rm(fixture.path('prepared'));
+  const trace = fixture.path('preparation-trace');
+  writeFakeBin({ root: fixture.root, name: 'node', content: `#!/bin/sh
+printf '%s\\n' "$1" >> ${JSON.stringify(trace)}
+exec ${JSON.stringify(process.execPath)} "$@"
+` });
+  const historical = spawnSync('/bin/sh', args, { cwd: repoRoot,
+    env: { ...env, HAPPIER_TEST_BASIS_MISSING_PREPARATION: '1' }, encoding: 'utf8' });
+  assert.equal(historical.status, 17, historical.stderr);
+  assert.match(historical.stdout, /Vitest reached/);
+  const invoked = (await readFile(trace, 'utf8')).trim().split('\n');
+  assert.ok(invoked.includes(join(owners, 'remote_dependency_bootstrap.mjs')),
+    'available checkout bootstrap must retain precedence');
+  assert.ok(invoked.some(path => resolve(path) === join(repoRoot,
+    'apps/stack/scripts/utils/dev_targets/remote_validation_preparation.mjs')),
+  'missing checkout preparation must use the executor entrypoint');
+});
 
 test('managed pnpm remains visible during native worker preflight and dispatch', async t => {
   const fixture = await createTempFixture(t, { prefix: 'hstack-managed-pnpm-preflight-' });

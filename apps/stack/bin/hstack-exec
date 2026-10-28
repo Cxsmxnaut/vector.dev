@@ -1410,13 +1410,19 @@ run_local() {
     local_preparation_component=$policy_component
     [ "$local_preparation_component" != . ] || local_preparation_component=
     local_preparation_repo=${command_repo_root:-$repo_root}
+    # Prefer checkout-owned preparation and its package tools. Older --repo
+    # checkouts may lack either entrypoint; the executor still supports them.
     if [ "$policy_bootstrap" = 1 ]; then
-      node "$script_dir/../scripts/utils/dev_targets/remote_dependency_bootstrap.mjs" \
+      local_bootstrap_script="$local_preparation_repo/apps/stack/scripts/utils/dev_targets/remote_dependency_bootstrap.mjs"
+      [ -f "$local_bootstrap_script" ] || local_bootstrap_script="$script_dir/../scripts/utils/dev_targets/remote_dependency_bootstrap.mjs"
+      node "$local_bootstrap_script" \
         "--validation-kind=$policy_kind" "--component-relative-dir=$local_preparation_component" \
         "--repo-dir=$local_preparation_repo" --execution-placement=local || exit $?
     fi
     if [ "$policy_commandClass" = targeted-validation ]; then
-      node "$script_dir/../scripts/utils/dev_targets/remote_validation_preparation.mjs" \
+      local_preparation_script="$local_preparation_repo/apps/stack/scripts/utils/dev_targets/remote_validation_preparation.mjs"
+      [ -f "$local_preparation_script" ] || local_preparation_script="$script_dir/../scripts/utils/dev_targets/remote_validation_preparation.mjs"
+      node "$local_preparation_script" \
         "--validation-kind=$policy_kind" "--component-relative-dir=$local_preparation_component" \
         "--required-tools=$policy_requiredTools" \
         "--repo-dir=$local_preparation_repo" || exit $?
@@ -2855,13 +2861,15 @@ remote_script="$remote_script$explicit_remote_dependency_environment"
 if [ -n "$remote_path" ]; then remote_script="$remote_script PATH=$(quote_remote "$remote_path"):\$PATH; export PATH;"; fi
 remote_script="$remote_script PATH=$(quote_remote "$remote_home/cache/pnpm-toolchain/bin"):\$PATH; export PATH;"
 remote_setup_script=
+# Prefer each checkout-owned entrypoint, falling back for older checkouts.
+# File existence is evaluated on the worker after synchronizing that checkout.
 if [ "$requires_remote_dependencies" -eq 1 ]; then
   remote_script="$remote_script export npm_config_prefix=$(quote_remote "$remote_home/cache/pnpm-toolchain");"
-  remote_setup_script="$remote_setup_script cd -- $(quote_remote "$remote_repo"); export HAPPIER_STACK_PM_CACHE_BASE_DIR=$(quote_remote "$remote_home/cache"); node $(quote_remote "$remote_executor_repo/apps/stack/scripts/utils/dev_targets/remote_dependency_bootstrap.mjs") --execution-placement=remote $(quote_remote "--validation-kind=$remote_validation_kind") $(quote_remote "--component-relative-dir=$preparation_component_relative_dir") $(quote_remote "--repo-dir=$remote_repo") $(quote_remote "--default-build-mode=$remote_preparation_build_mode");"
+  remote_setup_script="$remote_setup_script cd -- $(quote_remote "$remote_repo"); export HAPPIER_STACK_PM_CACHE_BASE_DIR=$(quote_remote "$remote_home/cache"); node \"\$(if [ -f $(quote_remote "$remote_repo/apps/stack/scripts/utils/dev_targets/remote_dependency_bootstrap.mjs") ]; then printf '%s' $(quote_remote "$remote_repo/apps/stack/scripts/utils/dev_targets/remote_dependency_bootstrap.mjs"); else printf '%s' $(quote_remote "$remote_executor_repo/apps/stack/scripts/utils/dev_targets/remote_dependency_bootstrap.mjs"); fi)\" --execution-placement=remote $(quote_remote "--validation-kind=$remote_validation_kind") $(quote_remote "--component-relative-dir=$preparation_component_relative_dir") $(quote_remote "--repo-dir=$remote_repo") $(quote_remote "--default-build-mode=$remote_preparation_build_mode");"
   if [ -n "$command_repo_root" ]; then remote_setup_script="${remote_setup_script%;} --tools-only;"; fi
 fi
 if [ "$requires_remote_workspace_preparation" -eq 1 ]; then
-  remote_setup_script="$remote_setup_script cd -- $(quote_remote "$remote_repo"); export HAPPIER_STACK_PM_CACHE_BASE_DIR=$(quote_remote "$remote_home/cache"); node $(quote_remote "$remote_executor_repo/apps/stack/scripts/utils/dev_targets/remote_validation_preparation.mjs") $(quote_remote "--component-relative-dir=$preparation_component_relative_dir") $(quote_remote "--validation-kind=$remote_validation_kind") $(quote_remote "--required-tools=$policy_requiredTools") $(quote_remote "--repo-dir=$remote_repo") $(quote_remote "--default-build-mode=$remote_preparation_build_mode");"
+  remote_setup_script="$remote_setup_script cd -- $(quote_remote "$remote_repo"); export HAPPIER_STACK_PM_CACHE_BASE_DIR=$(quote_remote "$remote_home/cache"); node \"\$(if [ -f $(quote_remote "$remote_repo/apps/stack/scripts/utils/dev_targets/remote_validation_preparation.mjs") ]; then printf '%s' $(quote_remote "$remote_repo/apps/stack/scripts/utils/dev_targets/remote_validation_preparation.mjs"); else printf '%s' $(quote_remote "$remote_executor_repo/apps/stack/scripts/utils/dev_targets/remote_validation_preparation.mjs"); fi)\" $(quote_remote "--component-relative-dir=$preparation_component_relative_dir") $(quote_remote "--validation-kind=$remote_validation_kind") $(quote_remote "--required-tools=$policy_requiredTools") $(quote_remote "--repo-dir=$remote_repo") $(quote_remote "--default-build-mode=$remote_preparation_build_mode");"
 fi
 remote_setup_script="$remote_setup_script cd -- $(quote_remote "$remote_cwd");"
 remote_command_environment=
