@@ -64,6 +64,7 @@ describe('getServerUrl', () => {
 
     beforeEach(() => {
         clearServerEnv();
+        process.env.EXPO_PUBLIC_HAPPY_STORAGE_SCOPE = randomScope();
     });
 
     afterEach(() => {

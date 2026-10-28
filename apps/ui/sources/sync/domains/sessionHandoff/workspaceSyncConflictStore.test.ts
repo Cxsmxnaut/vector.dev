@@ -4,13 +4,15 @@ import { createPlainMachineRowFixture } from '@/dev/testkit/fixtures/machineFixt
 import { createWorkspaceSyncHarness } from '@/dev/testkit/harness/workspaceSyncHarness';
 
 const listWorkspaceSyncConflicts = vi.hoisted(() => vi.fn());
+const conflictReadHomeOrigins: string[] = [];
 
 // The daemon's Socket.IO reply is the boundary; scoped RPC, conflict request and page parsing stay real.
-// The harness reply does not name the Home, so a call records only the daemon-visible scope.
+// A call records the daemon-visible scope; the Home each read reached is recorded separately.
 const workspace = createWorkspaceSyncHarness(async input => {
     if (input.method !== RPC_METHODS.DAEMON_WORKSPACE_SYNC_CONFLICTS_LIST) {
         throw new Error(`Unexpected RPC: ${input.method}`);
     }
+    conflictReadHomeOrigins.push(input.serverUrl ? new URL(input.serverUrl).origin : 'unknown');
     const payload = input.payload as Readonly<{ relationshipId: string; cursor?: string }>;
     return await listWorkspaceSyncConflicts({
         controllerMachineId: input.machineId, relationshipId: payload.relationshipId,
@@ -33,6 +35,7 @@ describe('workspaceSyncConflictStore', () => {
     beforeEach(async () => {
         await workspace.reset();
         listWorkspaceSyncConflicts.mockReset();
+        conflictReadHomeOrigins.length = 0;
         resetWorkspaceSyncConflictStoreForTests();
     });
 
@@ -175,6 +178,7 @@ describe('workspaceSyncConflictStore', () => {
         }));
         expect(getWorkspaceSyncConflictSnapshot(other)).toMatchObject({ phase: 'ready', list: { totalCount: 2 } });
         expect(listWorkspaceSyncConflicts).toHaveBeenCalledTimes(3);
+        expect(conflictReadHomeOrigins).toEqual(['https://workspace-sync.test', 'https://other-workspace.test', 'https://workspace-sync.test']);
         unsubscribe();
     });
 

@@ -892,6 +892,43 @@ describe('adoptHomeProfileWithCredentials (real storage integration)', () => {
             .resolves.toBeNull();
     });
 
+    it('rolls back the exact credential write when Home profile persistence fails after it lands', async () => {
+        process.env.EXPO_PUBLIC_HAPPY_STORAGE_SCOPE = `adopt_credentials_profile_write_failure_${Date.now()}_${Math.random()}`;
+        const localStorageMock = installLocalStorageMock();
+        restoreLocalStorage = localStorageMock.restore;
+
+        const profiles = await import('@/sync/domains/server/serverProfiles');
+        const { TokenStorage } = await import('@/auth/storage/tokenStorage');
+        const { adoptHomeProfileWithCredentials } = await import('./adoptHomeProfile');
+        const { MMKV } = await import('react-native-mmkv');
+        const write = observeCredentialWrite(localStorageMock, 'must-roll-back');
+        const writeNativeValue = MMKV.prototype.set;
+        // The device store refuses the Home profile write once the credential has landed.
+        const profileWrite = vi.spyOn(MMKV.prototype, 'set').mockImplementation(function (this: InstanceType<typeof MMKV>, key, value) {
+            if (write.key !== null && key === 'server-state-v1') throw new Error('profile storage unavailable');
+            writeNativeValue.call(this, key, value);
+        });
+
+        try {
+            await expect(adoptHomeProfileWithCredentials({
+                descriptor: HOME_B_DESCRIPTOR,
+                source: 'qr',
+                credentials: { token: 'must-roll-back' },
+            })).rejects.toMatchObject({ name: 'ServerProfilesPersistenceError' });
+        } finally {
+            profileWrite.mockRestore();
+        }
+
+        expect(write.key).not.toBeNull();
+        expect(localStorageMock.store.has(write.key!)).toBe(false);
+        for (const [, value] of localStorageMock.store.entries()) expect(value).not.toContain('must-roll-back');
+        expect(profiles.listServerProfiles()).not.toEqual(expect.arrayContaining([
+            expect.objectContaining({ serverIdentityId: 'srv_home_b' }),
+        ]));
+        await expect(TokenStorage.getCredentialsForServerUrl('https://home-b.test', { serverId: 'srv_home_b' }))
+            .resolves.toBeNull();
+    });
+
     it('reports a partial commit with both errors when credential rollback cannot remove the write', async () => {
         process.env.EXPO_PUBLIC_HAPPY_STORAGE_SCOPE = `adopt_credentials_rollback_failure_${Date.now()}_${Math.random()}`;
         const localStorageMock = installLocalStorageMock();
