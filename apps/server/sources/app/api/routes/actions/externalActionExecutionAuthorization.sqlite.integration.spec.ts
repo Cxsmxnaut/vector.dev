@@ -2964,6 +2964,75 @@ describe("external Action execution authorization", () => {
         } finally { await app.close(); vi.unstubAllEnvs(); }
     });
 
+    it('composes fresh Session status with accepted checkout through signed requester HTTP', async () => {
+        const fixture = await createFixture({ qualifiedPat: false });
+        const homeId = await getOrCreateServerIdentityId();
+        const token = await auth.createToken(fixture.account.id, undefined, { kind: 'account', authority: 'present_user' });
+        const credentials = { token, encryption: null } as const;
+        const ref = { id: crypto.randomUUID(), serverId: homeId, machineId: fixture.machine.id,
+            rootPath: '/fresh-project', projectKey: crypto.randomUUID(), createdAtMs: 1 };
+        const fields = buildSessionMetadataEnvelopeCreateFields({ credentials, accountEncryptionMode: 'plain',
+            storedContentMode: 'plain', metadata: createTestMetadata({ machineId: ref.machineId, path: ref.rootPath,
+                workspaceId: ref.id, projectId: ref.projectKey }), agentState: null });
+        const session = await db.session.create({ data: { accountId: fixture.account.id, tag: crypto.randomUUID(),
+            encryptionMode: 'plain', metadataLayoutVersion: fields.metadataLayoutVersion,
+            metadata: fields.sharedMetadata.ciphertext, ownerMetadata: JSON.stringify(fields.ownerMetadata), agentState: fields.agentState } });
+        const reads: Array<{ path: string; status: number }> = [];
+        const { app } = await createApp(fixture.team.id, false, undefined, undefined, false, routes => {
+            routes.addHook('onResponse', async (request, reply) => {
+                if (request.url.startsWith('/v1/account/project-rows/')) reads.push({ path: request.url, status: reply.statusCode });
+            });
+        });
+        const channel = await createRequesterCurrentnessSocketHarness();
+        try {
+            const key = { kind: 'workspace-ref', serverId: homeId, id: ref.id } as const;
+            const graphKey = { kind: 'relationship-graph' } as const;
+            const seeded = await app.inject({ method: 'POST', url: '/v1/account/project-rows/mutate',
+                headers: { authorization: `Bearer ${token}` }, payload: ProjectAccountRowMutationRequestV1Schema.parse({
+                    mutations: [{ key, expectedRevision: 'absent', content: { t: 'plain', v: { key, value: ref } } },
+                        { key: graphKey, expectedRevision: 'absent', content: { t: 'plain', v: { key: graphKey, value: { relationships: [] } } } }],
+                    expectedRefs: [], topologyChange: true }) });
+            expect(seeded.statusCode, seeded.body).toBe(200);
+            reads.length = 0;
+            const input = { sessionId: session.id, includeAcceptedWorkspace: true };
+            const authorization = await mint(app, fixture, 'session.status.get', { ...fixture.envelope, input });
+            const serverHttpBaseUrl = await app.listen({ port: 0, host: '127.0.0.1' });
+            const http = await projectExternalActionRequesterHttpAuthorization({ authorization, serverId: homeId,
+                serverIdentityId: homeId, serverHttpBaseUrl, target: authorization.binding.target,
+                installationId: fixture.machine.installationId!, privateKey: fixture.keyPair.secretKey });
+            if (!http) throw new Error('Signed requester HTTP was not admitted');
+            const projected = await projectRequesterAccountActionAuthorization({ authorization: http, serverIdentityId: homeId,
+                bootstrap: { credentials, serverHttpBaseUrl, isCurrent: async () => true,
+                    attribution: { serverId: homeId, accountId: fixture.account.id, machineId: fixture.machine.id,
+                        installationId: fixture.machine.installationId! } } });
+            if (!projected) throw new Error('Requester Account projection was not admitted');
+            const executor = createActionExecutor(createCliActionDeps({ credentials, token, sessionId: session.id,
+                serverId: homeId, serverIdentityId: homeId, serverHttpBaseUrl, mode: 'plain', ctx: null,
+                externalActionMachineRequestPrivateKey: fixture.keyPair.secretKey,
+                externalActionMachineInstallationId: fixture.machine.installationId! }));
+            const result = await executor.execute('session.status.get', input, {
+                surface: 'ui', authority: 'present_user', serverId: homeId, defaultSessionId: session.id, runtimeAccountId: fixture.account.id,
+                externalActionExecutionAuthorization: projected, externalActionTarget: projected.binding.target,
+            });
+            expect(result, JSON.stringify({ reads, result })).toMatchObject({ ok: true, result: { session: { id: session.id },
+                acceptedWorkspace: { checkout: { serverId: homeId, workspaceId: ref.id, machineId: ref.machineId, rootPath: ref.rootPath } } } });
+            expect(reads).toEqual([{ path: '/v1/account/project-rows/read', status: 200 }]);
+            // Older path-associated Sessions consume the same signed owner,
+            // with a Home/kind-filtered census rather than an accepted id.
+            const pathFields = buildSessionMetadataEnvelopeCreateFields({ credentials, accountEncryptionMode: 'plain',
+                storedContentMode: 'plain', metadata: createTestMetadata({ machineId: ref.machineId, path: ref.rootPath,
+                    projectId: ref.projectKey }), agentState: null });
+            await db.session.update({ where: { id: session.id }, data: {
+                metadata: pathFields.sharedMetadata.ciphertext, ownerMetadata: JSON.stringify(pathFields.ownerMetadata) } });
+            reads.length = 0;
+            expect(await executor.execute('session.status.get', input, {
+                surface: 'ui', authority: 'present_user', serverId: homeId, defaultSessionId: session.id, runtimeAccountId: fixture.account.id,
+                externalActionExecutionAuthorization: projected, externalActionTarget: projected.binding.target,
+            })).toMatchObject({ ok: true, result: { acceptedWorkspace: { checkout: { workspaceId: ref.id } } } });
+            expect(reads).toEqual([{ path: '/v1/account/project-rows/list', status: 200 }]);
+        } finally { await channel.close(); await app.close(); }
+    });
+
     it('admits declaration-owned SessionTarget preparation reads only under the original signed root', async () => {
         const fixture = await createFixture({ qualifiedPat: false });
         const session = await db.session.create({ data: { accountId: fixture.account.id, tag: crypto.randomUUID(),
@@ -3005,6 +3074,10 @@ describe("external Action execution authorization", () => {
                 ['GET', censusPath, undefined, {}],
                 ['GET', participantsPath, undefined, { discussionId: 'discussion-1' }],
                 ['POST', '/v1/account/project-rows/list', {}, {}],
+                ['POST', '/v1/account/project-rows/read', { key: { kind: 'workspace-ref', serverId: 'home', id: 'checkout' } },
+                    { key: { kind: 'workspace-ref', serverId: 'home', id: 'checkout' } }],
+                ['POST', '/v1/account/project-rows/list', { kinds: ['workspace-ref'], serverId: 'home' },
+                    { kinds: ['workspace-ref'], serverId: 'home' }],
                 ['GET', assignmentsPath, undefined, assignmentsInput],
             ] as const) expect(await verify(method, path, body, routeInput), path).not.toBeNull();
             expect(await verify('GET', sourcesPath, undefined, { destinationSessionId: session.id }, scope)).not.toBeNull();
@@ -3076,6 +3149,9 @@ describe("external Action execution authorization", () => {
                 ['PUT', censusPath, {}, undefined],
                 ['GET', `${censusPath}?accountId=foreign`, undefined, { accountId: 'foreign' }],
                 ['POST', '/v1/account/project-rows/mutate', {}, undefined],
+                ['POST', '/v1/account/project-rows/read', { key: { kind: 'workspace-ref', serverId: 'home', id: 'checkout' }, extra: true }, undefined],
+                ['POST', '/v1/account/project-rows/list', { kinds: ['workspace-ref'], extra: true }, undefined],
+                ['POST', '/v1/account/project-rows/read?extra=true', { key: { kind: 'workspace-ref', serverId: 'home', id: 'checkout' } }, undefined],
                 ['GET', `${assignmentsPath}&includeAllTagAssignments=true`, undefined, { ...assignmentsInput, includeAllTagAssignments: true }],
                 ['GET', '/v2/account/settings', undefined, {}],
             ] as const) expect(await verify(method, path, body, routeInput), path).toBeNull();
@@ -3092,6 +3168,16 @@ describe("external Action execution authorization", () => {
                 authorizationToken: actionRestricted.token, effectActionId: actionId, method: 'GET', path: censusPath,
                 body: undefined, privateKey: fixture.keyPair.secretKey }) });
             expect([privateDenied.statusCode, privateDenied.json()]).toEqual([403, { error: 'credential_scope_denied' }]);
+            for (const [path, body] of [
+                ['/v1/account/project-rows/read', { key: { kind: 'workspace-ref', serverId: 'home', id: 'checkout' } }],
+                ['/v1/account/project-rows/list', { kinds: ['workspace-ref'], serverId: 'home' }],
+                ['/v1/account/project-rows/list', {}],
+            ] as const) {
+                const denied = await app.inject({ method: 'POST', url: path, payload: body, headers: machineHeaders({
+                    authorizationToken: actionRestricted.token, effectActionId: actionId, method: 'POST', path,
+                    body, privateKey: fixture.keyPair.secretKey }) });
+                expect(denied.statusCode).toBe(401);
+            }
             await db.accountApiToken.update({ where: { id: fixture.pat.tokenId }, data: { accessGrant: {
                 ...API_TOKEN_FULL_GRANT_V1, actions: { families: [], ids: [actionId, 'session.goal.set'] },
                 targets: { sessions: [session.id], machines: [fixture.machine.id] },
@@ -3101,6 +3187,10 @@ describe("external Action execution authorization", () => {
                 ['POST', '/v2/sessions/query', query, query], ['GET', censusPath, undefined, {}],
                 ['GET', participantsPath, undefined, { discussionId: 'discussion-1' }],
                 ['POST', '/v1/account/project-rows/list', {}, {}],
+                ['POST', '/v1/account/project-rows/read', { key: { kind: 'workspace-ref', serverId: 'home', id: 'checkout' } },
+                    { key: { kind: 'workspace-ref', serverId: 'home', id: 'checkout' } }],
+                ['POST', '/v1/account/project-rows/list', { kinds: ['workspace-ref'], serverId: 'home' },
+                    { kinds: ['workspace-ref'], serverId: 'home' }],
             ] as const) expect(await verify(method, path, body, routeInput, undefined, restricted), path).toBeNull();
             expect(await verify('GET', sourcesPath, undefined, { destinationSessionId: session.id }, scope, restricted)).not.toBeNull();
             expect(await verify('GET', '/v2/sessions/outside/follows/sessions', undefined, { destinationSessionId: 'outside' },

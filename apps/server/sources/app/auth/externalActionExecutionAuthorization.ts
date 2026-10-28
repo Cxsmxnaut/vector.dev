@@ -1411,6 +1411,17 @@ function isSessionTargetPreparationHttpPurpose(verified: VerifiedExternalActionE
             method, path: proof.path, routeInput: proof.routeInput,
         })) return true;
     }
+    // Accepted-workspace status reads use an exact row when metadata has its
+    // accepted id, or a Home/kind-filtered census for path-associated Sessions.
+    // Both spend the same Account-wide read authority checked above.
+    if (root.data === 'session.status.get' && method === 'POST' && !proof.sessionRouteTarget) {
+        const rows = proof.path === `${PROJECT_ACCOUNT_ROWS_ROUTE_V1}/read`
+            ? ProjectAccountRowReadRequestV1Schema.safeParse(proof.body)
+            : proof.path === `${PROJECT_ACCOUNT_ROWS_ROUTE_V1}/list`
+                ? ProjectAccountRowListRequestV1Schema.safeParse(proof.body) : null;
+        if (rows?.success) return ('authentication' in verified.binding || !isApiTokenGrantRestrictedV1(verified.binding.grant))
+            && (proof.routeInput === undefined || sameManagedInput(proof.routeInput, rows.data));
+    }
     // Follow's existing transport owns the closed Project/assignment fact reads.
     return isSessionFollowActionHttpRequestV1('follow.preview', { method, path: proof.path, body: proof.body,
         routeInput: proof.routeInput, sessionRouteSessionId: proof.sessionRouteTarget?.sessionId });
