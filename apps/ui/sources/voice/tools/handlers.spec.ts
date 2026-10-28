@@ -2235,6 +2235,53 @@ describe('voice tool handlers', () => {
     expect(serialized).not.toContain('private connected-service');
   });
 
+  it.each(['session_stop_failed', 'session_stop_requested'] as const)(
+    'reports an unconfirmed Session Stop as a Voice tool failure (%s)', (code) => {
+      const serialized = serializeVoiceActionExecuteResult('session.stop', {
+        ok: true,
+        result: {
+          sessionId: 's1', stopped: false, success: false, code,
+          message: 'Session stop incomplete: private host diagnostic',
+        },
+      });
+
+      expect(JSON.parse(serialized)).toMatchObject({
+        ok: false, actionId: 'session.stop', errorCode: code, errorMessage: code,
+      });
+      expect(serialized).not.toContain('private host diagnostic');
+    },
+  );
+
+  it('preserves a confirmed Session Stop in the Voice tool result', () => {
+    const result = { sessionId: 's1', stopped: true, success: true };
+    expect(JSON.parse(serializeVoiceActionExecuteResult('session.stop', { ok: true, result })))
+      .toEqual({ ok: true, ...result });
+  });
+
+  it.each(['session_stop', 'action_execute'] as const)(
+    'carries the daemon Stop refusal through the real Voice front door (%s)', async toolName => {
+      const previous = daemonRpc.getMockImplementation();
+      daemonRpc.mockImplementation(async request => {
+        if (request.method === RPC_METHODS.STOP_SESSION) {
+          return { status: 'incomplete', reason: 'missing_topology_proof' };
+        }
+        if (!previous) throw new Error('Voice daemon boundary is unavailable');
+        return previous(request);
+      });
+      const tools = createVoiceToolHandlers({ resolveSessionId: () => 's1' });
+      const input = { sessionId: 's1', serverId: homeA, stopIntent: 'lifecycle_control' };
+      const parameters = toolName === 'action_execute' ? { actionId: 'session.stop', input } : input;
+
+      const result = JSON.parse(await tools[toolName]!(parameters, { serverId: homeA }));
+
+      expect(result).toMatchObject({ ok: false, errorCode: 'session_stop_failed' });
+      // A topology refusal is terminal for this invocation; reporting it must
+      // not retry Stop against a replacement runner or another authority.
+      expect(daemonRpc.mock.calls.filter(([request]) => request.method === RPC_METHODS.STOP_SESSION))
+        .toHaveLength(1);
+    },
+  );
+
   it('does not serialize a partial tracked-set Action result as full success', () => {
     const serialized = serializeVoiceActionExecuteResult('session.target.tracked.set', {
       ok: true,

@@ -1,6 +1,4 @@
-import { ActionApprovalRequestCreatedResultSchema, type ActionExecuteResult } from '@happier-dev/protocol/actions/actionExecutionResult';
 import { getActionSpec, listVoiceToolActionSpecs } from '@happier-dev/protocol/actions/actionSpecs';
-import { normalizeSpawnSessionErrorDetail } from '@happier-dev/protocol/spawnSession';
 import { parseSessionAwarenessListResultV1 } from '@happier-dev/protocol/sessions/awareness/action';
 import { PluginContributionIdentityV1Schema } from '@happier-dev/protocol/plugins/contribution-identity';
 import type { ActionId } from '@happier-dev/protocol/actions/actionIds';
@@ -36,6 +34,9 @@ import {
   isCurrentUiContextVoiceAction,
   isVoiceActionAvailableInState,
 } from './resolveDisabledVoiceActionIds';
+import { jsonError, jsonOk, serializeVoiceActionExecuteResult } from './voiceActionResult';
+
+export { serializeVoiceActionExecuteResult } from './voiceActionResult';
 
 type AgentRequestKind = SessionPendingRequest['kind'];
 type PendingVoiceRequest = Readonly<{
@@ -97,82 +98,6 @@ function readVoiceActionInvocationInput(value: unknown): VoiceActionInvocationIn
   return input.success ? { action: action.data, input: input.data } : null;
 }
 
-
-type ToolOk = { ok: true } & Record<string, unknown>;
-type ToolError = { ok: false; errorCode: string; errorMessage: string } & Record<string, unknown>;
-
-function jsonOk(payload?: Record<string, unknown>): string {
-  return JSON.stringify({ ok: true, ...(payload ?? {}) } satisfies ToolOk);
-}
-
-function jsonError(errorCode: string, errorMessage?: string, payload?: Record<string, unknown>): string {
-  return JSON.stringify({
-    ok: false,
-    errorCode,
-    errorMessage: (errorMessage ?? errorCode) || 'unknown_error',
-    ...(payload ?? {}),
-  } satisfies ToolError);
-}
-
-function jsonOkFromUnknown(value: unknown): string {
-  if (value && typeof value === 'object' && !Array.isArray(value)) {
-    const carrier: any = value;
-    if (typeof carrier.ok === 'boolean') return JSON.stringify(carrier);
-    return jsonOk(carrier as Record<string, unknown>);
-  }
-  return jsonOk({ result: value });
-}
-
-function getNestedActionFailure(value: unknown): { errorCode: string; errorMessage: string } | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  const carrier: any = value;
-  if (carrier.ok !== false) return null;
-  return {
-    errorCode: String(carrier.errorCode ?? 'unknown_error'),
-    errorMessage: String(carrier.errorMessage ?? carrier.errorCode ?? 'unknown_error'),
-  };
-}
-
-export function serializeVoiceActionExecuteResult(
-  actionId: ActionId,
-  result: ActionExecuteResult,
-  options?: Readonly<{
-    failurePayload?: Record<string, unknown>;
-    executedPayload?: Record<string, unknown>;
-  }>,
-): string {
-  if (!result.ok) {
-    const details = asPlainObject(result.details);
-    const errorDetail = normalizeSpawnSessionErrorDetail(details?.errorDetail);
-    return jsonError(result.errorCode, result.errorCode, {
-      actionId,
-      ...(typeof details?.sessionId === 'string' ? { sessionId: details.sessionId } : {}),
-      ...(errorDetail ? { errorDetail } : {}),
-      ...(options?.failurePayload ?? {}),
-    });
-  }
-
-  const domainResult = asPlainObject(result.result);
-  if (domainResult?.ok === false && domainResult.status === 'partial') {
-    return JSON.stringify(domainResult);
-  }
-
-  const nestedFailure = getNestedActionFailure(result.result);
-  if (nestedFailure) {
-    return jsonError(nestedFailure.errorCode, nestedFailure.errorMessage, {
-      actionId,
-      ...(options?.failurePayload ?? {}),
-    });
-  }
-
-  if (ActionApprovalRequestCreatedResultSchema.safeParse(result.result).success) {
-    return jsonOkFromUnknown(result.result);
-  }
-
-  return options?.executedPayload
-    ? jsonOk(options.executedPayload)
-    : jsonOkFromUnknown(result.result);
-}
 
 function asSession(value: unknown): Session | null {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -494,7 +419,7 @@ export function createVoiceToolHandlers(
     )) {
       return jsonError('tool_cancelled', 'tool_cancelled');
     }
-    if (canonicalResult && res.ok) return JSON.stringify(res);
+    if (canonicalResult) return serializeVoiceActionExecuteResult(actionId, res, { canonicalResult: true });
     if (res.ok && actionId === 'session.list') {
       const awareness = parseSessionAwarenessListResultV1(res.result);
       if (awareness) {
