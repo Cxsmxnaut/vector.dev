@@ -72,6 +72,16 @@ function normalizeNonEmptyString(value: unknown): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
+function resolveSessionAgentPath(metadata: SessionTargetMetadataLike): string | null {
+  const path = normalizeNonEmptyString(metadata?.path);
+  if (path) return path;
+  return resolveSessionWorkspaceRootForMachine({
+    metadata,
+    machineId: resolveSessionMachineId(metadata) ?? '',
+    candidatePath: '',
+  }).agentPath ?? null;
+}
+
 function resolveUniqueActiveMachineByHost(
   machines: ReadonlyArray<MachineControlCandidate>,
   host: string | null,
@@ -118,7 +128,7 @@ function resolveLegacyHostMachineTarget(input: Readonly<{
   if (resolveSessionMachineId(input.metadata)) return null;
   if (normalizeNonEmptyString(input.projectMachineId)) return null;
 
-  const basePath = normalizeNonEmptyString(input.metadata?.path);
+  const basePath = resolveSessionAgentPath(input.metadata);
   if (!basePath) return null;
 
   const machine = resolveUniqueActiveMachineByHost(input.machines, normalizeNonEmptyString(input.metadata?.host));
@@ -141,7 +151,7 @@ export function resolveMachineTargetForSessionFromState(
     sessionId,
     sessionActive: session?.active === true,
     sessionMachineId: resolveSessionMachineId(metadata),
-    sessionPath: normalizeNonEmptyString(metadata?.path),
+    sessionPath: resolveSessionAgentPath(metadata),
     projectMachineId,
     projectPath: normalizeNonEmptyString(project?.key?.path),
     machines: machinesById,
@@ -206,7 +216,7 @@ function resolveStaleInactiveMachineControlTarget(input: Readonly<{
   }
 
   const basePath = normalizeNonEmptyString(input.displayTarget?.basePath)
-    ?? normalizeNonEmptyString(input.metadata?.path);
+    ?? resolveSessionAgentPath(input.metadata);
   if (!basePath) return null;
 
   const host = normalizeNonEmptyString(input.metadata?.host)
@@ -327,7 +337,7 @@ export function resolveDisplayMachineTargetForSessionFromState(input: Readonly<{
     return resolveSessionDisplayTarget({
       sessionActive: session?.active === true,
       sessionMachineId: resolveSessionMachineId(metadata),
-      sessionPath: normalizeNonEmptyString(metadata?.path),
+      sessionPath: resolveSessionAgentPath(metadata),
       projectMachineId: project?.key?.machineId ?? null,
       projectPath: normalizeNonEmptyString(project?.key?.path),
       // The store's own id-keyed record, handed over as-is. This resolver is called once per
@@ -341,7 +351,7 @@ export function resolveDisplayMachineTargetForSessionFromState(input: Readonly<{
   return resolveSessionDisplayTarget({
     sessionActive: false,
     sessionMachineId: resolveSessionMachineId(metadata),
-    sessionPath: normalizeNonEmptyString(metadata?.path),
+    sessionPath: resolveSessionAgentPath(metadata),
     projectMachineId: null,
     projectPath: null,
     machines: input.state.machines ?? {},
@@ -387,7 +397,7 @@ export function resolveDisplayIdentityForSessionFromState(input: Readonly<{
   });
   return {
     machineId: target?.machineId || resolveSessionMachineId(input.metadata) || '',
-    basePath: target?.basePath || normalizeNonEmptyString(input.metadata?.path) || '',
+    basePath: target?.basePath || resolveSessionAgentPath(input.metadata) || '',
   };
 }
 

@@ -2729,7 +2729,7 @@ describe('registerMachineRpcHandlers', () => {
     expect(String(createdMeta.replaySeedV1?.seedText ?? '')).toContain('ON_DEMAND_SUMMARY');
   });
 
-  it('forks a session by replaying transcript context and storing forkV1/replaySeedV1 in child metadata', async () => {
+  it.each(['/repo', ''])('forks a session by replaying transcript context with parent path %j and storing forkV1/replaySeedV1', async (path) => {
     const registered = new Map<string, (params: any) => Promise<any>>();
     const rpcHandlerManager = {
       registerHandler: (method: string, handler: (params: any) => Promise<any>) => {
@@ -2766,7 +2766,11 @@ describe('registerMachineRpcHandlers', () => {
     });
 
     const parentMetadataCiphertext = encodeBase64(
-      encrypt(sessionEncryptionKey, 'dataKey', { path: '/repo', flavor: 'claude', permissionMode: { v: 1, mode: 'default', updatedAt: 1 } }),
+      encrypt(sessionEncryptionKey, 'dataKey', {
+        path, machineId: 'machine-1', flavor: 'claude',
+        sessionWorkspaceLocationV1: { v: 1, machineId: 'machine-1', agentPath: '/agent/repo', machinePath: '/repo' },
+        permissionMode: { v: 1, mode: 'default', updatedAt: 1 },
+      }),
     );
 
     const encryptedMessages: string[] = [];

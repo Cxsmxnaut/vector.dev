@@ -37,6 +37,7 @@ import {
   SessionRunnerStatusGetRequestV1Schema,
   SessionSpawnSourceContextV1Schema,
   getActionSpec,
+  resolveSessionWorkspaceRootForMachine,
   type ConnectedServiceBindingsV1,
   type SessionForkRpcResult,
   type SessionHandoffStartRequest,
@@ -1549,9 +1550,11 @@ export function registerMachineRpcHandlers(params: Readonly<{
       };
     }
 
-    const directory = typeof parentMetadata.path === 'string' && parentMetadata.path.trim().length > 0
-      ? parentMetadata.path.trim()
-      : '';
+    const directory = resolveSessionWorkspaceRootForMachine({
+      metadata: parentMetadata,
+      machineId: typeof parentMetadata.machineId === 'string' ? parentMetadata.machineId : '',
+      candidatePath: typeof parentMetadata.path === 'string' ? parentMetadata.path.trim() : '',
+    }).machinePath;
     if (!directory) {
       return {
         ok: false,

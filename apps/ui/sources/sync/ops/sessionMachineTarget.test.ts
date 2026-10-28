@@ -14,6 +14,27 @@ vi.mock('@/sync/domains/state/storage', async () => {
 });
 
 describe('sessionMachineTarget', () => {
+    it('targets an existing Direct session with an empty path using its same-machine workspace mapping', async () => {
+        const { resolveMachineControlTargetForSessionFromState } = await import('./sessionMachineTarget');
+        const state = {
+            sessions: { direct: { active: true, metadata: {
+                path: '', machineId: 'machine-1',
+                sessionWorkspaceLocationV1: { v: 1, machineId: 'machine-1',
+                    agentPath: '/agent/project', machinePath: '/host/project' },
+            } } },
+            machines: {},
+        };
+        expect(resolveMachineControlTargetForSessionFromState(state, 'direct')).toEqual({
+            machineId: 'machine-1', basePath: '/host/project', agentBasePath: '/agent/project',
+            confidence: 'metadata_direct',
+        });
+        expect(resolveMachineControlTargetForSessionFromState({
+            ...state, sessions: { direct: { active: true, metadata: {
+                ...state.sessions.direct.metadata, machineId: 'other-machine',
+            } } },
+        }, 'direct')).toBeNull();
+    });
+
     it('keeps a foreign Home display target separate from a colliding active Session and project', async () => {
         const { resolveDisplayMachineTargetForSessionFromState } = await import('./sessionMachineTarget');
         const state = {
