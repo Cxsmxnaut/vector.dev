@@ -59,6 +59,7 @@ export { formatPathRelativeToHome } from './formatPathRelativeToHome';
  */
 export type SessionAwarenessPresentationV1 = Readonly<{
     state: SessionAwarenessPresentationStateV1;
+    actionRequiredReason?: ReturnType<typeof readSessionAwarenessWorkStatusV1>['actionRequiredReason'];
     statusText: string;
     /** The canonical owner's judgement that this state needs no badge (idle online, archived). */
     quiet: boolean;
@@ -67,6 +68,7 @@ export type SessionAwarenessPresentationV1 = Readonly<{
 type UiSessionAwareness = SessionAwarenessPresentationFactsV1;
 
 export interface SessionStatus {
+    actionRequiredReason?: ReturnType<typeof readSessionAwarenessWorkStatusV1>['actionRequiredReason'];
     /** Optional authored explanation, independent of the runtime-derived status label. */
     statusReason?: string;
     /**
@@ -368,9 +370,11 @@ export function presentSessionAwarenessV1(
         freshness?: UiSessionAwareness['freshness'];
     }>,
 ): SessionAwarenessPresentationV1 {
-    return presentSessionAwarenessStateV1(readSessionAwarenessPresentationV1(awareness), {
+    const status = readSessionAwarenessWorkStatusV1({ awareness });
+    const presented = presentSessionAwarenessStateV1(status.state, {
         ...options, freshness: awareness.freshness,
     });
+    return status.actionRequiredReason ? { ...presented, actionRequiredReason: status.actionRequiredReason } : presented;
 }
 
 /** Localize an already classified state without running a second presentation decision. */
@@ -461,6 +465,7 @@ export function getSessionStatus(session: SessionStatusSource, nowMs: number = D
     return {
         awareness,
         state: presented.state,
+        ...(status.actionRequiredReason ? { actionRequiredReason: status.actionRequiredReason } : {}),
         bucket: status.bucket,
         tone: status.tone,
         statusText: presented.statusText,

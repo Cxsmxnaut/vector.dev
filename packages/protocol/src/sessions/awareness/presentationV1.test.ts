@@ -4,6 +4,31 @@ import { listSessionPresentationStatesForWorkStatusFilterV1, readSessionAwarenes
 import { projectSessionAwarenessV1 } from './projectV1.js';
 
 describe('readSessionAwarenessWorkStatusV1', () => {
+  it('preserves blocked-input recovery separately from real requests without changing Session attention', () => {
+    const blocked = projectSessionAwarenessV1({
+      sessionId: 'carrier', nowMs: 1_000_000, content: { mode: 'plain' },
+      runtime: { presence: 'online', active: true, lastObservedAtMs: 1_000_000 },
+      lifecycle: {}, pending: { queuedInputCount: 3, blockedInputCount: 3 },
+      currentness: { lifecycle: 'observed', runtime: 'observed', pending: 'observed', work: 'observed' },
+    });
+    expect(readSessionAwarenessWorkStatusV1({ awareness: blocked })).toMatchObject({
+      state: 'action_required', bucket: 'needs_you', tone: 'attention', actionRequiredReason: 'blocked_input',
+    });
+    expect(readSessionAwarenessWorkStatusV1({ awareness: { runtime: 'idle', operational: { primary: 'none' },
+      viewer: { attention: { reasons: ['pending_blocked'] } } } })).toMatchObject({ actionRequiredReason: 'blocked_input' });
+    for (const awareness of [
+      { ...blocked, operational: { ...blocked.operational, reasons: [...blocked.operational.reasons, 'action_required' as const] } },
+      { ...blocked, viewer: { attention: { reasons: ['user_action_required' as const, 'pending_blocked' as const] } } },
+      { runtime: 'idle' as const, operational: { primary: 'action_required' as const } },
+    ]) {
+      expect(readSessionAwarenessWorkStatusV1({ awareness })).toMatchObject({
+        state: 'action_required', bucket: 'needs_you', actionRequiredReason: 'request',
+      });
+    }
+    expect(readSessionAwarenessWorkStatusV1({ awareness: { ...blocked, operational: {
+      ...blocked.operational, reasons: [...blocked.operational.reasons, 'permission_required'],
+    } } })).toMatchObject({ state: 'permission_required', bucket: 'needs_you' });
+  });
   it('keeps a completed worker settled across runtime detach and observation expiry', () => {
     const nowMs = 1_000_000;
     for (const runtime of [

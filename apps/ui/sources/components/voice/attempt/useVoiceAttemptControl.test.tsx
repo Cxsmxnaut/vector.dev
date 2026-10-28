@@ -17,7 +17,7 @@ import 'fake-indexeddb/auto';
 import { installDisconnectedServerSocketBoundary, restoreServerAccountForTest } from '@/dev/testkit/harness/serverAccountConnectionHarness';
 import { installWebLockManagerMock } from '@/auth/storage/tokenStorage.web.testHelpers';
 import { primeServerFeaturesSnapshot } from '@/sync/api/capabilities/serverFeaturesClient';
-import { tryWriteServerEnabledBitInPlace, createSessionOwnerMetadataV1, createPlainSessionOwnerMetadataEnvelopeV1, projectSessionSharedMetadataV1, projectSessionOwnerCompatibilityViewV1 } from '@happier-dev/protocol';
+import { tryWriteServerEnabledBitInPlace, createSessionOwnerMetadataV1, projectSessionSharedMetadataV1, projectSessionOwnerCompatibilityViewV1 } from '@happier-dev/protocol';
 import { settingsParse } from '@/sync/domains/settings/settings';
 import { ActionsSettingsV1Schema } from '@happier-dev/protocol/actions/actionSettings';
 import { voiceSettingsParse } from '@/sync/domains/settings/voiceSettings';
@@ -134,14 +134,20 @@ async function installElevenLabsLifecycle(target: SessionAddress | null = null) 
     const owner = createSessionOwnerMetadataV1({ metadata });
     if (!owner.ok) throw new Error('Voice History owner metadata was not admitted');
     const sharedMetadata = projectSessionSharedMetadataV1({ metadata, agentState: null });
-    const conversation = createSessionFixture({ id: 'attempt-history', serverId: recoveryRuntime.serverId, encryptionMode: 'plain', active: false,
+    // Use the hosted producer, including its current strict display projection,
+    // rather than rebuilding a tuple that drifts when the HTTP contract evolves.
+    const { createSessionCreateOrLoad } = await import('@/sync/domains/session/hostedSystemSession');
+    const created = await createSessionCreateOrLoad({ credentials: connection.credentials, accountMode: 'plain', encryption: null,
+        tag: VOICE_TRANSCRIPT_HISTORY_SYSTEM_SESSION_TAG, metadata, randomBytes: length => new Uint8Array(length),
+        request: async (_path, init) => sessionHttp.createSessionFromPost('attempt-history', init), assertCurrent() {} });
+    // Hydrated state has the producer's actual revisions. A newer invented
+    // fixture tuple correctly makes the real Retry hydration refuse this row.
+    const conversation = createSessionFixture({ id: created.session.id, serverId: recoveryRuntime.serverId,
+        encryptionMode: 'plain', active: false, seq: created.session.seq,
+        createdAt: created.session.createdAt, updatedAt: created.session.updatedAt,
+        metadataVersion: created.session.metadataVersion, agentStateVersion: created.session.agentStateVersion,
         metadataLayoutVersion: 1, metadata: parseDecryptedSessionMetadata(sharedMetadata, 1),
         ownerMetadataView: MetadataSchema.parse(projectSessionOwnerCompatibilityViewV1({ sharedMetadata, ownerMetadata: owner.ownerMetadata })) });
-    // The hosted History producer writes the current shared/owner tuple. Keep
-    // both its HTTP record and hydrated fixture at that same real codec shape.
-    sessionHttp.createSessionFromPost(conversation.id, { method: 'POST', body: JSON.stringify({ tag: VOICE_TRANSCRIPT_HISTORY_SYSTEM_SESSION_TAG,
-        metadataLayoutVersion: 1, sharedMetadata: { ciphertext: JSON.stringify(sharedMetadata) },
-        ownerMetadata: createPlainSessionOwnerMetadataEnvelopeV1(owner.ownerMetadata), agentState: null, dataEncryptionKey: null, encryptionMode: 'plain' }) });
     const targetSession = target ? createSessionFixture({ id: target.sessionId, serverId: target.serverId, metadata: { path: '/repo', host: 'test', flavor: 'claude' } }) : null;
     getStorage().setState(state => ({ sessions: { ...state.sessions, [conversation.id]: conversation,
         ...(targetSession ? { [targetSession.id]: targetSession } : {}) } }));
@@ -1015,6 +1021,56 @@ describe('useVoiceAttemptControl capture and caption projection', () => {
         );
     }
 
+    it('keeps the live call phase for blocked-only hidden input and a real request retains Needs you', async () => {
+        const { setVoiceSessionSnapshot } = await import('@/voice/session/voiceSessionStore');
+        const session = createSessionFixture({ id: 'blocked-carrier', serverId: recoveryRuntime.serverId,
+            active: true, activeAt: Date.now(), pendingCount: 3, pendingBlockedCount: 3,
+            pendingPermissionRequestCount: 0, pendingUserActionRequestCount: 0,
+            metadata: { ...createSessionFixture().metadata!, systemSessionV1: { v: 1, key: 'voice_conversation', hidden: true } } });
+        getStorage().setState(state => ({ sessions: { ...state.sessions, [session.id]: session } }));
+        const hook = await renderControl({ adapterId: 'local_conversation', sessionId: session.id,
+            status: 'connected', mode: 'listening', canStop: true });
+        try {
+            expect(hook.getCurrent()).toMatchObject({ statusCell: null, statusWord: t('voiceAssistant.listening'),
+                statusLabel: t('voiceAssistant.listening'), primaryAction: 'end' });
+            await act(async () => setVoiceSessionSnapshot({ adapterId: 'local_conversation', sessionId: session.id,
+                status: 'connected', mode: 'speaking', canStop: true }));
+            expect(hook.getCurrent()).toMatchObject({ statusCell: null, statusWord: t('voiceAssistant.speaking'),
+                statusLabel: t('voiceAssistant.speaking') });
+            await act(async () => getStorage().setState(state => ({ sessions: { ...state.sessions,
+                [session.id]: { ...session, pendingPermissionRequestCount: 1, pendingRequestObservedAt: Date.now() } } })));
+            expect(hook.getCurrent()).toMatchObject({ statusCell: 'needs_you', statusWord: t('workStatus.buckets.needs_you') });
+        } finally { await hook.unmount(); }
+    });
+
+    it.each([
+        { permissionCount: 1, thinking: false, cell: 'needs_you' },
+        { permissionCount: 0, thinking: true, cell: 'working' },
+    ] as const)('keeps the call phase accessible alongside the shared $cell word', async ({ permissionCount, thinking, cell }) => {
+        const { setVoiceSessionSnapshot } = await import('@/voice/session/voiceSessionStore');
+        const session = createSessionFixture({ id: 'attention-carrier', serverId: recoveryRuntime.serverId,
+            active: true, activeAt: Date.now(), updatedAt: Date.now(), thinking, thinkingAt: Date.now(),
+            pendingPermissionRequestCount: permissionCount, pendingUserActionRequestCount: 0, pendingRequestObservedAt: Date.now() });
+        getStorage().setState(state => ({ sessions: { ...state.sessions, [session.id]: session } }));
+        const hook = await renderControl({ adapterId: 'local_conversation', sessionId: session.id,
+            status: 'connected', mode: 'listening', canStop: true });
+        try {
+            expect(hook.getCurrent().statusCell).toBe(cell);
+            expect(hook.getCurrent().statusWord).toBe(t(`workStatus.buckets.${cell}`));
+            expect(hook.getCurrent().statusLabel).toBe(t('voiceAssistant.listening'));
+            await act(async () => setVoiceSessionSnapshot({ adapterId: 'local_conversation', sessionId: session.id,
+                status: 'connected', mode: 'speaking', canStop: true }));
+            expect(hook.getCurrent().statusCell).toBe(cell);
+            expect(hook.getCurrent().statusWord).toBe(t(`workStatus.buckets.${cell}`));
+            expect(hook.getCurrent().statusLabel).toBe(t('voiceAssistant.speaking'));
+            expect(hook.getCurrent().primaryAction).toBe('end');
+            await act(async () => setVoiceSessionSnapshot({ adapterId: 'local_conversation', sessionId: session.id,
+                status: 'connected', mode: 'speaking', micMuted: true, canStop: true }));
+            expect(hook.getCurrent().statusWord).toBe(t(`workStatus.buckets.${cell}`));
+            expect(hook.getCurrent().statusLabel).toBe(t('voicePresence.muted'));
+        } finally { await hook.unmount(); }
+    });
+
     it('keeps command-only attempt consumers unchanged while canonical transcript text changes', async () => {
         seedVoiceSettings({ providerId: 'local_conversation', ui: { activityFeedEnabled: true }, providers: { local_conversation: { schemaVersion: 1, config: { conversationMode: 'agent' } } } });
         const { voiceSessionBindingStore } = await import('@/voice/binding/voiceConversationBindingStore');
@@ -1568,6 +1624,75 @@ describe('useVoiceAttemptControl idle targeting', () => {
         voiceSessionBindingStore.getState().unbind('active-conversation-session');
     });
 
+    it.each(['voice_conversation', 'voice_carrier', 'voice_conversation_retired'])('hides a %s target while retaining its exact request and navigation addresses', async (key) => {
+        const { voiceSessionBindingStore } = await import('@/voice/binding/voiceConversationBindingStore');
+        const address = { serverId: recoveryRuntime.serverId, sessionId: 'hidden-target' };
+        const routing = await installRoutingLifecycle(address);
+        await routing.controller.toggle(address);
+        expect(routing.controller.getAttemptTargetSessionAddress()).toEqual(address);
+        const session = createSessionFixture({ id: address.sessionId, serverId: address.serverId,
+            active: true, activeAt: Date.now(), pendingCount: 3, pendingBlockedCount: 3,
+            pendingPermissionRequestCount: 0, pendingUserActionRequestCount: 0,
+            metadata: { ...createSessionFixture().metadata!, name: 'Voice conversation (system)',
+                systemSessionV1: { v: 1, key, hidden: true } } });
+        getStorage().setState(state => ({ sessions: { ...state.sessions, [session.id]: session } }));
+        const binding = voiceSessionBindingStore.getState().getByControlSessionId(address.sessionId);
+        const { useVoiceAttemptControl } = await import('./useVoiceAttemptControl');
+        const { useVoiceHistoryPendingRecovery } = await import('@/voice/history/useVoiceHistoryPendingRecovery');
+        let renders = 0;
+        const hook = await renderHook(() => {
+            renders += 1;
+            const control = useVoiceAttemptControl(GLOBAL_TARGET);
+            const pendingRecovery = useVoiceHistoryPendingRecovery(control.pendingRequestSessionAddress ?? null);
+            return { ...control, pendingRecovery };
+        });
+        try {
+            expect(hook.getCurrent().targetSessionAddress).toBeNull();
+            expect(hook.getCurrent().statusCell).toBeNull();
+            expect(hook.getCurrent().statusWord).toBe(hook.getCurrent().statusLabel);
+            expect(hook.getCurrent().pendingRecovery).toMatchObject({ address });
+            const [{ createWorkspaceState, reduceWorkspaceState }, { createWorkspaceNavigationAdapter },
+                { createWorkspaceActionAdapter }, { resolveCompactAppDestinations }] = await Promise.all([
+                import('@/components/appShell/workspace/workspaceState'), import('@/components/appShell/workspace/workspaceNavigationAdapter'),
+                import('@/components/appShell/workspace/workspaceActions'), import('@/components/appShell/destinations/compactAppDestinationCatalog'),
+            ]);
+            let workspace = createWorkspaceState({ id: 'history-tab', target: { kind: 'voice', params: {} }, pinned: false, preview: false });
+            const catalog = resolveCompactAppDestinations({ builtins: { externalSessions: false, inbox: true, workflows: true, friends: false }, pages: [] });
+            const navigation = createWorkspaceNavigationAdapter({ getState: () => workspace, getCatalog: () => catalog,
+                dispatch: action => { workspace = reduceWorkspaceState(workspace, action); },
+                transport: { commit() {} }, createId: () => 'recovery-tab', onChange() {} });
+            const execute = createWorkspaceActionAdapter({ getState: () => workspace, navigation, readCanvas: () => null, createId: () => 'recovery-tab' });
+            const recovery = hook.getCurrent().pendingRecovery;
+            if (!recovery) throw new Error('Expected canonical Pending recovery');
+            expect(execute(recovery.openAction.actionId, recovery.openAction.input)).toMatchObject({ ok: true });
+            expect(workspace.tabs[workspace.groups[workspace.focusedGroupId].activeTabId].target)
+                .toMatchObject({ kind: 'session', params: { id: address.sessionId, serverId: address.serverId } });
+            expect(hook.getCurrent().pendingRequestSessionAddress).toEqual(address);
+            expect(hook.getCurrent().openConversationSessionAddress).toEqual(address);
+            expect(voiceSessionBindingStore.getState().getByControlSessionId(address.sessionId)).toEqual(binding);
+            const baseline = renders;
+            await act(async () => getStorage().setState(state => ({ sessions: { ...state.sessions,
+                unrelated: createSessionFixture({ id: 'unrelated', serverId: address.serverId }) } })));
+            expect(renders).toBe(baseline);
+            await act(async () => getStorage().setState(state => ({ sessions: { ...state.sessions,
+                [session.id]: { ...session, pendingUserActionRequestCount: 1, pendingRequestObservedAt: Date.now() } } })));
+            expect(hook.getCurrent().statusCell).toBe('needs_you');
+            expect(hook.getCurrent().statusWord).toBe(t('workStatus.buckets.needs_you'));
+            expect(hook.getCurrent().pendingRecovery).toMatchObject({ address });
+            await act(async () => getStorage().setState(state => ({ sessions: { ...state.sessions,
+                [session.id]: { ...session, metadata: { ...session.metadata!, systemSessionV1: { v: 1, key, hidden: false } } } } })));
+            expect(hook.getCurrent().targetSessionAddress).toEqual(address);
+            expect(hook.getCurrent().pendingRecovery).toBeNull();
+            expect(hook.getCurrent().openConversationSessionAddress).toEqual(address);
+            await act(async () => getStorage().setState(state => ({ sessions: { ...state.sessions,
+                [session.id]: { ...session, pendingCount: 0, pendingBlockedCount: 0 } } })));
+            expect(hook.getCurrent().pendingRecovery).toBeNull();
+        } finally {
+            await hook.unmount();
+            voiceSessionBindingStore.getState().unbind(address.sessionId);
+        }
+    });
+
     it('opens History for a targetless runtime attempt without navigating its hidden carrier or rebinding', async () => {
         const { voiceSessionBindingStore } = await import('@/voice/binding/voiceConversationBindingStore');
         const { setVoiceSessionSnapshot } = await import('@/voice/session/voiceSessionStore');
@@ -1701,24 +1826,21 @@ describe('useVoiceAttemptControl terminal connection failures', () => {
             code: 'voice_connection_failed',
         });
         sdk.startSession.mockRejectedValue(connectionFailure);
-        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const consoleInfo = vi.spyOn(console, 'info').mockImplementation(() => {});
         const { controller } = await installElevenLabsLifecycle();
         const { useVoiceAttemptControl } = await import('./useVoiceAttemptControl');
         const hook = await renderHook(() => useVoiceAttemptControl(GLOBAL_TARGET));
 
         await act(async () => {
-            hook.getCurrent().onToggle();
-            await Promise.resolve();
+            await hook.getCurrent().onToggle();
         });
 
-        await waitForTestEvent(hook.subscribe, hook.getCurrent, value => value.primaryAction === 'recover');
         expect(hook.getCurrent().primaryAction).toBe('recover');
         expect(hook.getCurrent().recoveryLabel).toBe(t('common.retry'));
         await act(async () => {
-            hook.getCurrent().onRecover();
-            await Promise.resolve();
+            expect(await hook.getCurrent().onRecover()).toBe(true);
         });
-        await waitForTestEvent(hook.subscribe, hook.getCurrent, value => value.primaryAction === 'recover' && sdk.startSession.mock.calls.length === 2);
+        expect(hook.getCurrent().primaryAction).toBe('recover');
         // Retry retains the admitted Global target; the provider's synthetic carrier id
         // is not a new requested Session target.
         expect(sdk.startSession).toHaveBeenCalledTimes(2);
@@ -1726,15 +1848,14 @@ describe('useVoiceAttemptControl terminal connection failures', () => {
         expect(hook.getCurrent().canDismissFailedAttempt).toBe(true);
         expect(hook.getCurrent().ended).toBeNull();
         await act(async () => {
-            hook.getCurrent().onDismissFailedAttempt?.();
+            await hook.getCurrent().onDismissFailedAttempt?.();
         });
-        await waitForTestEvent(hook.subscribe, hook.getCurrent, value => value.surfaceState === 'idle');
         expect(hook.getCurrent().surfaceState).toBe('idle');
         expect(hook.getCurrent().markPose).toBe('mic');
         expect(hook.getCurrent().recoveryAvailable).toBe(false);
         expect(hook.getCurrent().canDismissFailedAttempt).toBe(false);
         expect(hook.getCurrent().ended).toBeNull();
-        expect(consoleError.mock.calls.some(([entry]) =>
+        expect(consoleInfo.mock.calls.some(([entry]) =>
             String(entry).includes('[fireAndForget] VoiceAttemptControl.'),
         )).toBe(false);
 

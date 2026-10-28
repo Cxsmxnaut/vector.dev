@@ -89,6 +89,18 @@ function setWorkingTextAnimation(enabled: boolean) {
 }
 
 describe('nullable static session presentation', () => {
+    it('carries canonical blocked-input recovery through localized Session presentation', async () => {
+        const { getSessionStatus, presentSessionAwarenessV1 } = await import('./sessionUtils');
+        const blocked = createSessionListRenderableSessionFixture({ encryptionMode: 'plain', active: true,
+            presence: 'online', activeAt: 1_000, pendingCount: 3, pendingBlockedCount: 3,
+            hasPendingPermissionRequests: false, hasPendingUserActionRequests: false });
+        const status = getSessionStatus(blocked, 1_001);
+        expect(status).toMatchObject({ state: 'action_required', actionRequiredReason: 'blocked_input',
+            bucket: 'needs_you', statusText: 'status.actionRequired' });
+        expect(presentSessionAwarenessV1(status.awareness)).toMatchObject({
+            state: 'action_required', actionRequiredReason: 'blocked_input', statusText: 'status.actionRequired',
+        });
+    });
     it('uses Protocol stopped state and static request chrome from the same canonical status', async () => {
         const { getSessionStatus } = await import('./sessionUtils');
         const stopped = createSessionListRenderableSessionFixture({ encryptionMode: 'plain', active: false,

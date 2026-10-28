@@ -42,6 +42,7 @@ import { useVoiceExecutionMachinePresentation } from '@/voice/credentials/useExe
 import { normalizeNonEmptyString } from '@/voice/shared/normalizeNonEmptyString';
 import { resolveVoiceBindingBySessionId } from '@/voice/binding/resolveVoiceBindingBySessionId';
 import { resolveVoiceConversationNavigationAddress } from '@/voice/binding/resolveVoiceConversationNavigationAddress';
+import { isVoiceConversationCustodySessionMetadata } from '@/voice/persistence/voiceConversationSystemSessionLookup';
 import { SETTINGS_ROUTES } from '@/components/settings/catalog/routes';
 import { useVoiceSetupDismissed } from '@/voice/settings/setup/useVoiceSetupItem';
 import { resolveVoiceMarkEvent, type VoiceMarkEvent } from '@/components/voice/presence/resolveVoiceMarkPose';
@@ -143,8 +144,9 @@ export type VoiceAttemptControlProjection = VoiceAttemptControl & Readonly<{
     /** The presented service, including an active attempt that outlives a settings selection. Omitted by static previews. */
     serviceTitle?: string;
     /**
-     * The admitted Session target, retained for the same Account's clean ended moment (null in
-     * global mode or after dismissal). Presentation never substitutes the caller's next idle target.
+     * The person-facing admitted Session target, retained for the same Account's clean ended moment.
+     * Global mode and hidden Voice carriers have no displayed target; request/navigation addresses
+     * keep their exact custody independently. Never substitutes the caller's next idle target.
      */
     targetSessionAddress?: SessionAddress | null;
     /** Exact request owner, independent of whether navigation exposes a conversation or History. */
@@ -435,9 +437,12 @@ export function useVoiceAttemptControl(idleTarget: VoiceAttemptIdleTarget): Voic
         : capturedAttemptTarget;
     const targetServerId = presentedTarget?.serverId ?? null;
     const targetSessionId = presentedTarget?.sessionId ?? null;
+    const targetSession = useSession(targetSessionId ?? '', targetServerId);
+    const hiddenTarget = targetSession !== null
+        && isVoiceConversationCustodySessionMetadata(readSessionOwnerMetadataView(targetSession));
     const targetSessionAddress = React.useMemo<SessionAddress | null>(
-        () => targetSessionId && targetServerId ? { serverId: targetServerId, sessionId: targetSessionId } : null,
-        [targetServerId, targetSessionId],
+        () => !hiddenTarget && targetSessionId && targetServerId ? { serverId: targetServerId, sessionId: targetSessionId } : null,
+        [hiddenTarget, targetServerId, targetSessionId],
     );
     const subscribeBindingSources = React.useCallback((notify: () => void) => {
         const unsubscribeSessions = storage.subscribe(notify);
@@ -512,7 +517,7 @@ export function useVoiceAttemptControl(idleTarget: VoiceAttemptIdleTarget): Voic
     const openConversationSessionAddress = openConversationTarget?.address ?? null;
     const openConversationSessionId = openConversationSessionAddress?.sessionId ?? null;
     const canOpenConversation = openConversationTarget !== null;
-    const pendingRequestSessionAddress = targetSessionAddress ?? activeOpenConversationTarget?.requestAddress ?? null;
+    const pendingRequestSessionAddress = presentedTarget ?? activeOpenConversationTarget?.requestAddress ?? null;
 
     const firstSuccessAttemptId = React.useSyncExternalStore(
         subscribeToVoiceSessionEndedAttempt,
@@ -535,6 +540,8 @@ export function useVoiceAttemptControl(idleTarget: VoiceAttemptIdleTarget): Voic
     const presentedSession = useSession(pendingRequestSessionAddress?.sessionId ?? openConversationSessionId ?? snapSessionId ?? '',
         pendingRequestSessionAddress?.serverId ?? openConversationSessionAddress?.serverId ?? recoverySessionServerId);
     const sessionStatus = useSessionStatus(presentedSession, { subscribeToSession: false, workingTextMode: 'static' });
+    const presentedSessionIsHidden = presentedSession !== null
+        && isVoiceConversationCustodySessionMetadata(readSessionOwnerMetadataView(presentedSession));
     const elapsedStartedAt = getVoiceSessionAttemptStartedAt();
     // Hold is not inferred from commitInput or mute: the capture-input owner must admit the gesture.
     const canHoldToTalk = snap.status === 'connected' && snap.canHoldToTalk === true;
@@ -581,6 +588,7 @@ export function useVoiceAttemptControl(idleTarget: VoiceAttemptIdleTarget): Voic
          */
         setupOffered: !setupDismissed && (bindingScope === 'global' || startSessionId !== null),
         sessionStatus,
+        hiddenSession: presentedSessionIsHidden,
     }), [
         bindingScope,
         setupDismissed,
@@ -589,6 +597,8 @@ export function useVoiceAttemptControl(idleTarget: VoiceAttemptIdleTarget): Voic
         startSessionId,
         sessionStatus?.state,
         sessionStatus?.statusText,
+        sessionStatus?.actionRequiredReason,
+        presentedSessionIsHidden,
         snap.canStop,
         snap.canCommitInput,
         snap.micMuted,
@@ -605,14 +615,16 @@ export function useVoiceAttemptControl(idleTarget: VoiceAttemptIdleTarget): Voic
     const statusPresentation = resolveVoiceSurfaceStatusPresentation(surfaceState);
     const statusOverride = presentedEnded
         ? t('voicePresence.ended')
-        : control.statusCell === 'working' || control.statusCell === 'needs_you'
-        ? sessionStatus?.statusText ?? null
         // A muted conversation says so: its mode may still read "Listening", which would invite talking.
         : control.muted && VOICE_CONVERSING_SURFACE_STATES.has(surfaceState)
         ? t('voicePresence.muted')
         : null;
     const statusLabel = statusOverride ?? t(statusPresentation.labelKey);
-    const statusWord = statusOverride ?? t(statusPresentation.wordKey ?? statusPresentation.labelKey);
+    const statusWord = presentedEnded ? t('voicePresence.ended') : (
+        control.statusCell === 'working' || control.statusCell === 'needs_you'
+            ? t(`workStatus.buckets.${control.statusCell}`)
+            : statusOverride ?? t(statusPresentation.wordKey ?? statusPresentation.labelKey)
+    );
     const canStop = control.canStop;
     const canStart = control.canStart;
     const canMute = control.canMute;

@@ -80,8 +80,18 @@ export function readSessionAwarenessWorkStatusV1(input: Readonly<{
   state: SessionAwarenessPresentationStateV1;
   bucket: 'needs_you' | 'working' | 'finished' | 'idle' | 'offline';
   tone: 'neutral' | 'attention' | 'danger';
+  /** Action-required is either a real request or deliberate Pending input recovery. */
+  actionRequiredReason?: 'request' | 'blocked_input';
 }> {
-  return readSessionPresentationStateWorkStatusV1(readSessionAwarenessPresentationV1(input.awareness), input.settled);
+  const status = readSessionPresentationStateWorkStatusV1(readSessionAwarenessPresentationV1(input.awareness), input.settled);
+  if (status.state !== 'action_required') return status;
+  const reasons = input.awareness.operational.reasons;
+  const personal = input.awareness.viewer?.attention.reasons;
+  // The operational primary also says action_required for blocked input. Concurrent real
+  // requests win; an older caller with only the primary retains its existing request meaning.
+  const blocked = reasons?.includes('blocked_input') || personal?.includes('pending_blocked');
+  const request = reasons?.includes('action_required') || personal?.includes('user_action_required');
+  return { ...status, actionRequiredReason: blocked && !request ? 'blocked_input' : 'request' };
 }
 
 function readSessionPresentationStateWorkStatusV1(
