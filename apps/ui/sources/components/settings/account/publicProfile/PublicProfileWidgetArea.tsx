@@ -14,15 +14,13 @@ import {
   usageWidgetSurfaceContext,
 } from '@/components/settings/usage/usageWidgetPageContext';
 import { UsageWidgetBatchProvider } from '@/components/settings/usage/widgets/usageWidgetBatch';
-import { useWidgetAreaLayouts } from '@/components/projects/overview/useProjectDashboards';
 import { WidgetArea } from '@/components/widgets/area/WidgetArea';
 import {
   WidgetAreaLayoutBar,
-  type WidgetAreaLayoutActions,
   type WidgetAreaLayoutLabels,
 } from '@/components/widgets/area/WidgetAreaLayoutBar';
+import { useCorePageWidgetAreaLayoutBar } from '@/components/widgets/area/useCorePageWidgetAreaLayoutBar';
 import { WidgetAreaPresetLine } from '@/components/widgets/area/WidgetAreaPresetLine';
-import { Modal } from '@/modal';
 import type { WidgetSurfaceContext } from '@/components/widgets/surface/widgetSurfaceSetup';
 import type { UsagePeriod } from '@/sync/api/account/usagePeriods';
 import { t } from '@/text';
@@ -95,66 +93,19 @@ export function PublicProfileWidgetArea(
 ): React.ReactElement {
   const { binding, area } = props.widgetArea;
   const ready = area.state.status === 'ready' ? area.state : null;
-  const owner = ready?.surface.owner ?? binding.surface?.owner ?? null;
-  const base = binding.surface;
-  const areaSurface = React.useMemo(() => base && base.owner.kind === 'corePage'
-    ? { serverId: base.serverId, accountId: base.accountId, owner: { kind: 'corePage' as const, pageId: base.owner.pageId, area: base.owner.area } }
-    : null, [base?.serverId, base?.accountId]);
-  const layouts = useWidgetAreaLayouts({ surface: areaSurface, execute: binding.executeLayoutAction });
   const names = React.useMemo(publicProfilePresetNames, []);
-  // An unnamed area starts from the first preset, as the binding reads it.
-  const selectedId = (owner?.kind === 'corePage' ? owner.layoutId : undefined) ?? PUBLIC_PROFILE_LAYOUT_PRESET_IDS_V1[0];
-  const listed = layouts.state.dashboards;
-  const options = React.useMemo(() => {
-    const rows = listed.map((row) => ({ id: row.surface.owner.kind === 'corePage' ? row.surface.owner.layoutId ?? PUBLIC_PROFILE_LAYOUT_PRESET_IDS_V1[0] : row.artifactId,
-      name: row.isPreset && row.surface.owner.kind === 'corePage' && row.surface.owner.layoutId && row.surface.owner.layoutId in names
-        ? names[row.surface.owner.layoutId as PublicProfileLayoutPresetIdV1] : row.name,
-      isPreset: row.isPreset, edited: row.isEdited, summary: row }));
-    // Held while the inventory loads: the presets are known, so the bar never appears late.
-    return rows.length ? rows : PUBLIC_PROFILE_LAYOUT_PRESET_IDS_V1.map((id) => ({ id, name: names[id], isPreset: true, edited: false, summary: null }));
-  }, [listed, names]);
-  const selectLayout = binding.selectLayout;
-  const create = React.useCallback(async () => {
-    const source = ready?.surface;
-    const name = (await Modal.prompt(t('usage.board.page.newViewTitle'), t('publicIdentity.editor.newLayoutBody'),
-      { placeholder: t('usage.board.page.newViewPlaceholder'), confirmText: t('common.create') }))?.trim();
-    if (!name || !source) return;
-    const created = await layouts.create(name, source);
-    const layoutId = created.ok && created.dashboard?.surface.owner.kind === 'corePage' ? created.dashboard.surface.owner.layoutId : undefined;
-    if (layoutId) await selectLayout(layoutId);
-  }, [layouts, ready?.surface, selectLayout]);
-  const selected = options.find((option) => option.id === selectedId) ?? null;
-  const actions = React.useMemo((): WidgetAreaLayoutActions | null => {
-    const summary = selected?.summary;
-    if (!summary || !ready?.canEdit) return null;
-    const index = options.findIndex((option) => option.id === selected.id);
-    const before = options[index - 1]?.summary;
-    const after = options[index + 1]?.summary;
-    return {
-      rename: async () => {
-        const name = (await Modal.prompt(t('usage.board.page.renameViewTitle'), undefined,
-          { defaultValue: selected.name, confirmText: t('common.save') }))?.trim();
-        if (name && name !== selected.name) await layouts.rename(summary, name);
-      },
-      ...(before ? { moveBefore: { name: options[index - 1]!.name, onPress: () => { void layouts.reorder(summary, { anchorId: before.artifactId, placement: 'before' }); } } } : {}),
-      ...(after ? { moveAfter: { name: options[index + 1]!.name, onPress: () => { void layouts.reorder(summary, { anchorId: after.artifactId, placement: 'after' }); } } } : {}),
-      // A preset is the page's own stock composition: it resets rather than going away.
-      delete: summary.isPreset ? { disabledReason: t('projects.dashboard.defaultProtected') } : { onPress: async () => {
-        const removed = await layouts.remove(summary);
-        if (removed.ok && !removed.approvalPending) await selectLayout(PUBLIC_PROFILE_LAYOUT_PRESET_IDS_V1[0]);
-      } },
-    };
-  }, [layouts, options, ready?.canEdit, selected, selectLayout]);
-  const title = selected?.name ?? t('publicIdentity.editor.blocksTitle');
+  const presets = React.useMemo(() => PUBLIC_PROFILE_LAYOUT_PRESET_IDS_V1.map((id) => ({ id, name: names[id] })), [names]);
+  const bar = useCorePageWidgetAreaLayoutBar({ binding, area, presets, newLayoutBody: t('publicIdentity.editor.newLayoutBody') });
+  const title = bar.selectedName ?? t('publicIdentity.editor.blocksTitle');
   return (
     <UsageWidgetBatchProvider clauses={props.clauses}>
       <View style={styles.area} testID="public-profile-area-editor">
         <WidgetAreaLayoutBar
-          layouts={options}
-          selectedId={selectedId}
-          onSelect={(id) => { void selectLayout(id); }}
-          onCreate={ready?.canEdit ? () => { void create(); } : null}
-          actions={actions}
+          layouts={bar.layouts}
+          selectedId={bar.selectedId}
+          onSelect={bar.onSelect}
+          onCreate={bar.onCreate}
+          actions={bar.actions}
           labels={LAYOUT_LABELS}
           heading="section"
           testID="public-profile-area-layouts"
