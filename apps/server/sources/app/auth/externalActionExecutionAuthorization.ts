@@ -1778,6 +1778,10 @@ export async function verifyExternalActionDomainExecutionRequest(
         // export input. Home retains only its envelope digest, not the opened
         // query: it cannot independently reconstruct parent/child input equality.
         // The native signature binds the read bytes; the existing route still
+    } else if (verified.binding.actionId === 'session.targets.resolve') {
+        // Inspection has no final Session effect. A non-preparation read must
+        // not borrow the generic read-root admission below (for example messages).
+        return null;
         // owns current actor, Team and resource authorization.
         if (!isTeamCredentialUsageExportReadEffect(verified.binding.actionId, verified.effectActionId)
             || !isAccountActionHttpOperation(verified.effectActionId, proof)) return null;
