@@ -47,6 +47,7 @@ export function useEmbeddedTerminalTransportHandlers(params: Readonly<{
         }
 
         void carrier.sendInput(terminalId, event).catch((error) => {
+            if (params.terminalIdRef.current !== terminalId || params.terminalStreamCarrierRef.current !== carrier) return;
             params.onInputError?.(error);
         });
     }, [params.machineId, params.onInputError, params.terminalIdRef, params.terminalStreamCarrierRef]);
@@ -148,9 +149,11 @@ export function useEmbeddedTerminalTransportHandlers(params: Readonly<{
             if (readOnlyRef.current) return;
             const pending = pendingResizeRef.current;
             if (!pending) return;
+            if (params.terminalIdRef.current !== terminalId) return;
             const carrier = params.terminalStreamCarrierRef.current;
             if (!carrier) return;
             void carrier.sendInput(terminalId, { t: 'resize', cols: pending.cols, rows: pending.rows }).catch((error) => {
+                if (params.terminalIdRef.current !== terminalId || params.terminalStreamCarrierRef.current !== carrier) return;
                 // Fixed-size PTYs remain usable for input and output after an unsupported resize.
                 if (readTerminalStreamInputErrorCode(error) === 'terminal_resize_unavailable') return;
                 params.onInputError?.(error);
