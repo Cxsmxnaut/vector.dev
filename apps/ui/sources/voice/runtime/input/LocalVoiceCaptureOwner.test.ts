@@ -669,6 +669,43 @@ describe('createLocalVoiceCaptureOwner', () => {
         await owner.stopSession();
     });
 
+    it('releases acquired browser media on End while recognizer startup is pending', async () => {
+        const browser = installBrowserCaptureBoundary();
+        const vadEntered = createDeferred<void>();
+        const vadReady = createDeferred<void>();
+        micVadNew.mockImplementationOnce(async () => {
+            vadEntered.resolve();
+            await vadReady.promise;
+            return { start: micVadStart, pause: micVadPause };
+        });
+        const onCaptureStarted = vi.fn();
+        const admission = createVoiceCaptureAdmissionController();
+        const rawOwner = createLocalVoiceCaptureOwner({
+            getSettings: () => ({}), onCaptureStarted, onCaptureError() {},
+        });
+        const owner = createVoiceCaptureAdmissionBinding({
+            admission, captureOwner: rawOwner, productOwner: 'conversation',
+        });
+        const start = owner.startCapture({ handsFree: false, provider: 'device', sessionId: 'pending-browser-start' });
+        await vadEntered.promise;
+        expect(browser.micTrack.readyState).toBe('live');
+        try {
+            await owner.stopSession('pending-browser-start');
+            expect(browser.micTrack.readyState).toBe('ended');
+            expect(onCaptureStarted).not.toHaveBeenCalled();
+            const next = admission.acquire('dictation');
+            expect(next.status).toBe('acquired');
+            if (next.status === 'acquired') next.lease.release();
+        } finally {
+            vadReady.resolve();
+            await start;
+            await owner.stopSession();
+        }
+        expect(browser.micTrack.readyState).toBe('ended');
+        expect(onCaptureStarted).not.toHaveBeenCalled();
+        expect(sdk.recognitionStart).not.toHaveBeenCalled();
+    });
+
     it('releases the owned browser track before a pending daemon STT stop settles', async () => {
         const browser = installBrowserCaptureBoundary();
         const { boundary, getSettings } = await installDaemonCaptureBoundary();
