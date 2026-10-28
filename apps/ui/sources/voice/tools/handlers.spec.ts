@@ -119,6 +119,7 @@ async function mountCurrentUiContext(wireResult: Readonly<Record<string, boolean
   const { CurrentUiContextProvider, useOptionalCurrentUiContextReader, usePublishCurrentUiContext } = await import('@/components/appShell/currentUiContext/CurrentUiContextProvider');
   const { useCurrentUiContextVoiceToolPort } = await import('@/components/appShell/currentUiContext/currentUiContextVoiceToolPort');
   const { AppShellPluginUiProjectionProvider, useAppShellPluginUiProjection } = await import('@/components/appShell/plugins/AppShellPluginUiProjection');
+  const { usePluginUiProjectionCurrentness } = await import('@/sync/domains/plugins/ui/usePluginUiProjectionCurrentness');
   const { PluginProjectionV2Schema, PluginProjectedActionV2Schema, formatQualifiedPluginActionId,
     DaemonPluginActionSchemasReadResponseSchema, DaemonPluginStructuredMessageActionExecuteResponseSchema } = await import('@happier-dev/protocol');
   // These are daemon-authored declarations, consumed by the real normalizer,
@@ -154,12 +155,16 @@ async function mountCurrentUiContext(wireResult: Readonly<Record<string, boolean
   clearDaemonMergedProjectionCacheForTests();
   resetMachineProjectionReadsForTests();
   storage.getState().applyMachines([storage.getState().machines.m1], true);
+  const { observeMachinePresenceForTest } = await import('@/dev/testkit/harness/machinePresence');
+  observeMachinePresenceForTest(account.scope, ['m1']);
   const enrichment = { entity: { kind: 'plugin', label: 'PLUGIN_LABEL_SENTINEL' }, commands: [{
     title: 'Open issue #124', command: { kind: 'executeAction' as const,
       action: { pluginId: 'acme.triage', localId: 'refresh-issues' },
       input: { repository: 'acme/widgets', privateQuery: 'must-remain-local' } },
   }] };
   function Publication() {
+    // The presented Machine surface owns acquisition; AppShell only observes it.
+    usePluginUiProjectionCurrentness({ machineId: 'm1', serverId: homeA });
     usePublishCurrentUiContext(enrichment);
     return null;
   }
