@@ -149,7 +149,7 @@ export const MachineVitalsOverview = React.memo(function MachineVitalsOverview(
     );
   }
 
-  const freshness = props.online === null ? { kind: 'none' as const } : resolveVitalsFreshnessChip(view, retry);
+  const freshness = props.online === null ? { kind: 'none' as const } : resolveVitalsFreshnessChip(view, retry, overview.refreshing);
   return (
     <>
       {offlineBanner}
