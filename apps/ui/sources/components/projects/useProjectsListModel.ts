@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { t } from '@/text';
-import { useActiveServerAccountScope, useWorkspaceRefs, usePinnedWorkspaceRefIds, useAllMachines, useProjectOrganizations, useProjectAccountRows, useIsDataReady } from '@/sync/domains/state/storage';
+import { useActiveServerAccountScope, useWorkspaceRefs, usePinnedWorkspaceRefIds, useAllMachines, useMachineDisplayById, useProjectOrganizations, useProjectAccountRows, useIsDataReady } from '@/sync/domains/state/storage';
 import { isProjectAccountRowsCensusComplete } from '@/sync/store/domains/projectAccountRows';
 import type { WorkspaceRefUnconfirmed } from './detail/useWorkspaceRefById';
 import { projectWorkspaceRefV1, workspaceAddressFromRefV1, type QualifiedProjectKeyV1, type WorkspaceAddressV1 } from '@happier-dev/protocol/workspaces';
@@ -27,7 +27,7 @@ import { createFrontDoorActionExecute } from '@/sync/ops/actions/frontDoorRuntim
 import { areServerProfileIdentifiersEquivalent } from '@/sync/domains/server/serverProfiles';
 import { useProjectsSourcesComposition } from './useProjectsSourcesComposition';
 import { buildProjectsTreeHiddenItems, buildProjectsTreeProjects, type ProjectsTreeProject } from './projectsTreeRows';
-import { resolveMachineDisplayNames } from '@/utils/sessions/machineDisplayNames';
+import { isMachineDisplayHydrating, resolveMachineDisplayNames } from '@/utils/sessions/machineDisplayNames';
 import { useMachinePresenceSummaries } from '@/sync/domains/machines/reachability/useMachinePresenceSummary';
 import { resolveWorkspaceRefByAddress } from '@/sync/domains/workspaces/workspaceRefs';
 import { ActionApprovalRequestCreatedResultSchema, type ActionApprovalRequestCreatedResult,
@@ -104,12 +104,16 @@ export function useProjectsListModel() {
         .flatMap(group => group.items), [groups.projectGroups, groups.hiddenProjectGroups]);
     const openedSourceIds = React.useMemo(() => new Set(treeRefs.flatMap(ref => ref.source ? [ref.source.sourceId] : [])), [treeRefs]);
     const composition = useProjectsSourcesComposition(openedSourceIds);
+    // Display metadata can already be known while the full Machine content is
+    // still opening. Use that canonical projection rather than waiting for it.
+    const machineDisplays = useMachineDisplayById(displays => allMachines.map(machine =>
+        isMachineDisplayHydrating(machine) ? displays[machine.id] ?? machine : machine));
     // One naming owner for every Machine the tree shows: listed Machines with the same name get the
     // suffix the pickers use, and a checkout on a Machine this Home no longer lists says so.
     const machineNames = React.useMemo(() => resolveMachineDisplayNames([
-        ...allMachines,
+        ...machineDisplays,
         ...[...new Set(treeRefs.map(ref => ref.machineId))].filter(id => !machinesById.has(id)).map(id => ({ id, absence: 'unlisted' as const })),
-    ]), [allMachines, machinesById, treeRefs]);
+    ]), [machineDisplays, machinesById, treeRefs]);
     const previousTreeProjects = React.useRef<{ visible: ProjectsTreeProject[]; hidden: ProjectsTreeProject[] }>({ visible: [], hidden: [] });
     const treeProjection = React.useMemo(() => {
         const presenceById = new Map(allMachines.map((machine, index) => [machine.id, machinePresence[index]] as const));

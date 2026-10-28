@@ -175,6 +175,37 @@ describe('PF3 real Projects model → tree cost', () => {
 });
 
 describe('Projects model Action admission', () => {
+    it('uses canonical display names while Machine content is hydrating and follows name updates without fetching', async () => {
+        const machine = createMachineFixture({ id: 'machine', activeAt: Date.now() });
+        const hydrating = { ...machine, metadata: null, availability: undefined };
+        storage.getState().applyMachines([hydrating], true, { sourceServerId: serverId });
+        storage.getState().replaceMachineDisplays([{
+            ...machine, metadata: { ...machine.metadata!, displayName: 'Build machine' },
+        }], { sourceServerId: serverId });
+        const hook = await renderHook(() => useProjectsListModel());
+        expect(hook.getCurrent().treeProjects[0]?.checkouts[0]?.machineName).toBe('Build machine');
+        homes.requests.length = 0;
+        await act(async () => {
+            storage.getState().replaceMachineDisplays([{
+                ...machine, metadata: { ...machine.metadata!, displayName: 'Renamed build machine' },
+            }], { sourceServerId: serverId });
+        });
+        expect(hook.getCurrent().treeProjects[0]?.checkouts[0]?.machineName).toBe('Renamed build machine');
+        expect(homes.requests).toEqual([]);
+        await act(async () => {
+            storage.getState().applyMachines([{ ...hydrating,
+                availability: { kind: 'locked', reason: 'decryption_failed' },
+            }], true, { sourceServerId: serverId });
+        });
+        const { t } = await import('@/text');
+        expect(hook.getCurrent().treeProjects[0]?.checkouts[0]?.machineName).toBe(t('machine.lockedMachine'));
+        await act(async () => {
+            storage.getState().replaceMachineDisplays([machine], { sourceServerId: serverId });
+        });
+        expect(hook.getCurrent().treeProjects[0]?.checkouts[0]?.machineName).toBe(t('machine.lockedMachine'));
+        await hook.unmount();
+    });
+
     it('does not render 150 unchanged Projects on five admitted Machine heartbeats', async () => {
         const { observeMachinePresenceForTest } = await import('@/dev/testkit/harness/machinePresence');
         const scope = { serverId, accountId: 'account-a' };
