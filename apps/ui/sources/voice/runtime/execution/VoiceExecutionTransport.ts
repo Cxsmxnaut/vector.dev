@@ -8,6 +8,7 @@ import { createAbortRacer } from '@/voice/agent/voiceAgentAbort';
 import { voiceConversationRuntimeMachine } from '@/voice/runtime/machine/VoiceConversationRuntimeMachine';
 
 import { createVoiceRunRecovery } from './voiceRunRecovery';
+import { VoiceRunStopUnconfirmedError } from './voiceRunStopReconciliation';
 import { createVoiceTurnStreaming } from './voiceTurnStreaming';
 import { createVoiceWelcomePolicy } from './voiceWelcomePolicy';
 
@@ -175,8 +176,17 @@ export function createVoiceExecutionTransport(): VoiceExecutionTransport {
                     voiceAgentStopPromiseBySessionId.delete(sessionId);
                 }
             },
-            () => {
-                stop.failed = true;
+            (error: unknown) => {
+                if (error instanceof VoiceRunStopUnconfirmedError) {
+                    // End may retire this client's custody without claiming a
+                    // remote acknowledgement. Recovery keeps its persisted Run;
+                    // the next explicit activation uses normal current admission.
+                    if (voiceAgentStopPromiseBySessionId.get(sessionId) === stop) {
+                        voiceAgentStopPromiseBySessionId.delete(sessionId);
+                    }
+                } else {
+                    stop.failed = true;
+                }
             },
         );
         return stopPromise;

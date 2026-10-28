@@ -30,6 +30,117 @@ afterAll(() => restoreHarnessModuleLoader());
 describe('local voice engine stop', () => {
   registerLocalVoiceEngineHarnessHooks();
 
+  it.each(['terminal_run', 'inactive_carrier', 'unreachable', 'running'] as const)('completes public End locally after target_unavailable and admits Start (%s)', async (targetState) => {
+    const storage = await getStorage();
+    const local = readLocalConversationVoiceSettings(storage.getState().settings.voice);
+    storage.__setState({ settings: { ...storage.getState().settings, voice: {
+      ...storage.getState().settings.voice, providerId: 'local_conversation',
+      welcome: { ...storage.getState().settings.voice.welcome, enabled: false },
+      providers: { ...storage.getState().settings.voice.providers,
+        local_conversation: { schemaVersion: 1, config: { ...local, conversationMode: 'agent',
+          agent: { ...local.agent, prewarmOnConnect: false },
+          tts: { ...local.tts, autoSpeakReplies: false },
+        } },
+      },
+    } } });
+    const { createLocalConversationVoiceAdapter } = await import('@/voice/adapters/localConversation/localConversationAdapter');
+    const { registerVoiceAdapters } = await import('@/voice/session/voiceAdapterRegistry');
+    const { createVoiceSessionLifecycleController } = await import('@/voice/session/voiceSessionLifecycleController');
+    const { setVoiceSessionLifecycleController } = await import('@/voice/session/voiceSessionLifecycleControllerStore');
+    const { getVoiceSessionPresentedAttemptId, setVoiceSessionSnapshot } = await import('@/voice/session/voiceSessionStore');
+    const { executeVoiceConversationAction } = await import('@/sync/ops/actions/voiceConversationAction');
+    const { voiceAgentSessions } = await import('@/voice/agent/voiceAgentSessions');
+    const { readPersistedVoiceConversationRuntimeState } = await import('@/voice/binding/voiceConversationBindingPersistence');
+    const { readVoiceAgentRunMetadataFromSession } = await import('@/voice/persistence/voiceAgentRunMetadata');
+    const { sessionRpcWithServerScope, localVoiceHomeId } = await import('./localVoiceEngine.testHarness');
+    const { createRetainedVoiceAgentRpcBoundary } = await import('@/dev/testkit/harness/voiceAgentRpcBoundary');
+    const responder = sessionRpcWithServerScope.getMockImplementation()!;
+    const freshDaemon = await createRetainedVoiceAgentRpcBoundary({ runId: 'after-unavailable-end',
+      handleOtherRpc: (method, payload) => responder({ sessionId: 's1', serverId: localVoiceHomeId, method, payload }),
+    });
+    registerVoiceAdapters([createLocalConversationVoiceAdapter()]);
+    const lifecycle = createVoiceSessionLifecycleController();
+    setVoiceSessionLifecycleController(lifecycle);
+    const unsubscribe = lifecycle.subscribe(() => setVoiceSessionSnapshot(lifecycle.getSnapshot()));
+    lifecycle.setConfiguredProviderId('local_conversation');
+    const target = { serverId: localVoiceHomeId, sessionId: 's1' };
+    const refusedRequests: string[] = [];
+    try {
+      await lifecycle.toggle(target);
+      await voiceAgentSessions.ensureRunning(VOICE_AGENT_GLOBAL_SESSION_ID);
+      const previousRun = localVoiceAgentRpc.readRetainedRun();
+      const retained = readPersistedVoiceConversationRuntimeState({ managedSessionId: VOICE_AGENT_GLOBAL_SESSION_ID });
+      if (!previousRun || !retained) throw new Error('Expected admitted Voice Run and carrier');
+      if (targetState === 'terminal_run') previousRun.status = 'failed';
+      if (targetState === 'inactive_carrier') {
+        const carrier = storage.getState().sessions[retained.metadataSessionId];
+        if (!carrier) throw new Error('Expected hydrated carrier');
+        storage.__setState({ sessions: { ...storage.getState().sessions,
+          [carrier.id]: { ...carrier, active: false },
+        } });
+      }
+      sessionRpcWithServerScope.mockImplementation(async request => {
+        if (request.method === SESSION_RPC_METHODS.EXECUTION_RUN_STOP
+          || ((targetState === 'unreachable' || targetState === 'inactive_carrier') && request.method === SESSION_RPC_METHODS.EXECUTION_RUN_GET)
+          || request.method === SESSION_RPC_METHODS.EXECUTION_RUN_STREAM_START_V2) {
+          refusedRequests.push(request.method);
+          return { ok: false, errorCode: 'target_unavailable', error: 'Target unavailable' };
+        }
+        return responder(request);
+      });
+      if (targetState !== 'running') {
+        // Real turn failure releases local media before the person presses End.
+        const { sendLocalVoiceAgentTextTurn } = await import('./localVoiceEngine');
+        await expect(sendLocalVoiceAgentTextTurn(VOICE_AGENT_GLOBAL_SESSION_ID, 'Question', {
+          localId: 'unavailable-target-turn', deliveryCommand: 'interrupt_and_send',
+        })).rejects.toMatchObject({ rpcErrorCode: 'target_unavailable' });
+        expect(lifecycle.getSnapshot()).toMatchObject({ status: 'disconnected', canStop: false });
+      } else {
+        expect(lifecycle.getSnapshot()).toMatchObject({ status: 'connected', canStop: true });
+      }
+      const callsBeforeEnd = sessionRpcWithServerScope.mock.calls.length;
+      const end = await executeVoiceConversationAction('ui.voice_global.end', {
+        expectedAttempt: getVoiceSessionPresentedAttemptId(),
+      }, { navigate() {} });
+      expect(end.status).toBe('completed');
+      expect(lifecycle.getSnapshot()).toMatchObject({ status: 'disconnected', canStop: false });
+      expect(voiceAgentSessions.isActive(VOICE_AGENT_GLOBAL_SESSION_ID)).toBe(false);
+      expect(refusedRequests.filter(method => method === SESSION_RPC_METHODS.EXECUTION_RUN_STOP)).toHaveLength(1);
+      const endRequests = sessionRpcWithServerScope.mock.calls.slice(callsBeforeEnd).map(([request]) => request.method);
+      expect(endRequests.filter(method => method === SESSION_RPC_METHODS.EXECUTION_RUN_GET)).toHaveLength(targetState === 'inactive_carrier' ? 0 : 1);
+      const metadata = readVoiceAgentRunMetadataFromSession({ sessionId: retained.metadataSessionId, serverId: localVoiceHomeId });
+      if (targetState === 'unreachable' || targetState === 'running') {
+        expect(metadata?.runId).toBe(previousRun.runId);
+        expect(lifecycle.getAttemptTargetSessionAddress()).toEqual(target);
+        expect(lifecycle.getSnapshot()).toMatchObject({ errorCode: 'provider_error', errorRecoveryAction: 'retry' });
+        expect(previousRun.status).toBe('running');
+      } else {
+        expect(metadata).toBeNull();
+      }
+      // Restored transport serves a fresh Run; no failed-Stop barrier may veto this Start.
+      sessionRpcWithServerScope.mockImplementation(request => freshDaemon.dispatch(request.method, request.payload));
+      const start = targetState === 'running'
+        ? await executeVoiceConversationAction('ui.voice_global.recover', { expectedAttempt: getVoiceSessionPresentedAttemptId() }, { navigate() {} })
+        : await executeVoiceConversationAction('ui.voice_global.start', {
+          target: { kind: 'session', sessionAddress: target }, expectedAttempt: null,
+        }, { navigate() {} });
+      expect(start.status, start.status === 'unavailable' ? start.code : undefined).toBe('completed');
+      expect(lifecycle.getSnapshot()).toMatchObject({ status: 'connected', canStop: true });
+      await expect(voiceAgentSessions.sendTurn(VOICE_AGENT_GLOBAL_SESSION_ID, 'Fresh question', {
+        userTranscript: { mode: 'suppress' },
+      })).resolves.toMatchObject({ assistantText: 'Daemon reply' });
+      expect(freshDaemon.readRetainedRun()?.runId).toBe('after-unavailable-end');
+      expect(freshDaemon.requests.filter(request => request.method === SESSION_RPC_METHODS.EXECUTION_RUN_STOP)).toHaveLength(0);
+      expect(previousRun.status).toBe(targetState === 'terminal_run' ? 'failed' : 'running');
+      expect(refusedRequests.filter(method => method === SESSION_RPC_METHODS.EXECUTION_RUN_STOP)).toHaveLength(1);
+    } finally {
+      sessionRpcWithServerScope.mockImplementation(request => freshDaemon.dispatch(request.method, request.payload));
+      await lifecycle.dispose();
+      unsubscribe();
+      setVoiceSessionLifecycleController(null);
+    }
+  });
+
   it.each([
     { prewarmOnConnect: true, freshStartup: 'ready', fixedGlobalAgent: false },
     { prewarmOnConnect: false, freshStartup: 'ready', fixedGlobalAgent: false },
