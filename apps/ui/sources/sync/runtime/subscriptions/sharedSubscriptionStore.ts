@@ -290,6 +290,10 @@ export function createSharedSubscriptionStore<
             if (entry.refreshRequested && entry.refCount > 0 && !abortController?.signal.aborted) {
                 const refresh = runRefresh(entry);
                 if (config.watchAfterRefresh) void refresh.then(() => runWatchLoop(entry));
+            } else if (config.watchAfterRefresh && !abortController?.signal.aborted) {
+                // Direct reads also own the wake if an old watch answered while
+                // they were pending; there may be no subscribe/invalidate waiter.
+                void runWatchLoop(entry);
             }
         } })();
         entry.inFlight = promise;
@@ -305,7 +309,10 @@ export function createSharedSubscriptionStore<
     };
     const runWatchLoop = (entry: Entry): Promise<void> => {
         const watch = config.watch;
-        if (!watch || entry.watching || entry.watchRetired || entry.refCount <= 0 || config.shouldWatch?.(entry.state) === false) {
+        // A coalesced recovery read may already have started when the previous
+        // read's waiter resumes. Seed the watch from that current read's cursor.
+        if (!watch || entry.watching || entry.watchRetired || entry.refCount <= 0
+            || (config.watchAfterRefresh && entry.inFlight !== null) || config.shouldWatch?.(entry.state) === false) {
             return Promise.resolve();
         }
         entry.watching = true;
