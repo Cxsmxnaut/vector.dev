@@ -3498,6 +3498,10 @@ export const ru: TranslationStructure = {
   },
 
   settingsDesktop: {
+    nativeTitleBarTitle: 'Использовать строку заголовка Windows',
+    nativeTitleBarSubtitle: 'Показывать стандартную рамку и кнопки управления окном Windows.',
+    nativeTitleBarChangeFailed: 'Не удалось изменить строку заголовка. Попробуйте ещё раз.',
+    nativeTitleBarPersistenceFailed: 'Не удалось загрузить или сохранить настройку строки заголовка. Измените её снова, чтобы повторить попытку.',
     title: 'Рабочий стол',
     footer: 'Управляет поведением Happier на этом компьютере.',
     backgroundServiceTitle: 'Оставаться доступным в фоне',

@@ -3268,6 +3268,10 @@ export const en = {
     },
 
     settingsDesktop: {
+        nativeTitleBarTitle: 'Use Windows title bar',
+        nativeTitleBarSubtitle: 'Show the standard Windows frame and window controls.',
+        nativeTitleBarChangeFailed: 'The title bar could not be changed. Try again.',
+        nativeTitleBarPersistenceFailed: 'The title bar preference could not be loaded or saved. Change it again to retry.',
         title: 'Desktop',
         footer: 'Controls how Happier behaves on this computer.',
         backgroundServiceTitle: 'Stay reachable in the background',

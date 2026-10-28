@@ -3267,6 +3267,10 @@ export const de: TranslationStructure = {
     },
 
     settingsDesktop: {
+        nativeTitleBarTitle: 'Windows-Titelleiste verwenden',
+        nativeTitleBarSubtitle: 'Den standardmäßigen Windows-Rahmen und die Fenstersteuerung anzeigen.',
+        nativeTitleBarChangeFailed: 'Die Titelleiste konnte nicht geändert werden. Versuche es erneut.',
+        nativeTitleBarPersistenceFailed: 'Die Einstellung für die Titelleiste konnte nicht geladen oder gespeichert werden. Ändere sie erneut, um es noch einmal zu versuchen.',
         title: 'Desktop',
         footer: 'Steuert, wie sich Happier auf diesem Computer verhält.',
         backgroundServiceTitle: 'Im Hintergrund erreichbar bleiben',

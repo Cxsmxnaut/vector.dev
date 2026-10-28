@@ -3839,6 +3839,10 @@ localTailscale: {
   },
 
   settingsDesktop: {
+    nativeTitleBarTitle: 'Windows のタイトルバーを使用',
+    nativeTitleBarSubtitle: 'Windows 標準のウィンドウ枠と操作ボタンを表示します。',
+    nativeTitleBarChangeFailed: 'タイトルバーを変更できませんでした。もう一度お試しください。',
+    nativeTitleBarPersistenceFailed: 'タイトルバーの設定を読み込むか保存することができませんでした。設定をもう一度変更して再試行してください。',
     title: 'デスクトップ',
     footer: 'このコンピューターでの Happier の動作を設定します。',
     backgroundServiceTitle: 'バックグラウンドで接続を維持',

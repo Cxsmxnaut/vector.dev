@@ -3890,6 +3890,10 @@ export const it: TranslationStructure = {
   },
 
   settingsDesktop: {
+    nativeTitleBarTitle: 'Usa la barra del titolo di Windows',
+    nativeTitleBarSubtitle: 'Mostra la cornice e i controlli della finestra standard di Windows.',
+    nativeTitleBarChangeFailed: 'Impossibile modificare la barra del titolo. Riprova.',
+    nativeTitleBarPersistenceFailed: 'Impossibile caricare o salvare la preferenza della barra del titolo. Modificala di nuovo per riprovare.',
     title: 'Scrivania',
     footer: 'Controlla come si comporta Happier su questo computer.',
     backgroundServiceTitle: 'Restare raggiungibile in background',

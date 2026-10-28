@@ -3576,6 +3576,10 @@ export const pl: TranslationStructure = {
   },
 
   settingsDesktop: {
+    nativeTitleBarTitle: 'Używaj paska tytułu systemu Windows',
+    nativeTitleBarSubtitle: 'Pokaż standardową ramkę i przyciski sterowania oknem systemu Windows.',
+    nativeTitleBarChangeFailed: 'Nie udało się zmienić paska tytułu. Spróbuj ponownie.',
+    nativeTitleBarPersistenceFailed: 'Nie udało się wczytać lub zapisać ustawienia paska tytułu. Zmień je ponownie, aby spróbować jeszcze raz.',
     title: 'Pulpit',
     footer: 'Określa, jak Happier działa na tym komputerze.',
     backgroundServiceTitle: 'Pozostań dostępny w tle',

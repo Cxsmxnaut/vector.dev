@@ -3267,6 +3267,10 @@ export const fr: TranslationStructure = {
     },
 
     settingsDesktop: {
+        nativeTitleBarTitle: 'Utiliser la barre de titre Windows',
+        nativeTitleBarSubtitle: 'Afficher le cadre et les commandes de fenêtre standard de Windows.',
+        nativeTitleBarChangeFailed: 'Impossible de modifier la barre de titre. Réessayez.',
+        nativeTitleBarPersistenceFailed: 'Impossible de charger ou d’enregistrer la préférence de barre de titre. Modifiez-la à nouveau pour réessayer.',
         title: 'Bureau',
         footer: 'Contrôle le comportement de Happier sur cet ordinateur.',
         backgroundServiceTitle: 'Rester joignable en arrière-plan',

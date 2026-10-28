@@ -3244,6 +3244,10 @@ const zhHantOverrides: DeepPartial<TranslationStructure> = {
     },
 
 		    settingsDesktop: {
+		        nativeTitleBarTitle: '使用 Windows 標題列',
+		        nativeTitleBarSubtitle: '顯示 Windows 標準視窗邊框和控制按鈕。',
+		        nativeTitleBarChangeFailed: '無法變更標題列。請再試一次。',
+		        nativeTitleBarPersistenceFailed: '無法載入或儲存標題列偏好設定。請再次變更此設定以重試。',
 		        title: '桌面',
 		        footer: '控制 Happier 在這台電腦上的行為。',
 		        backgroundServiceTitle: '在背景保持可連線',

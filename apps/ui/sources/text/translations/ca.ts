@@ -3353,6 +3353,10 @@ export const ca: TranslationStructure = {
     },
 
     settingsDesktop: {
+        nativeTitleBarTitle: 'Utilitza la barra de títol del Windows',
+        nativeTitleBarSubtitle: 'Mostra el marc i els controls de finestra estàndard del Windows.',
+        nativeTitleBarChangeFailed: 'No s’ha pogut canviar la barra de títol. Torna-ho a provar.',
+        nativeTitleBarPersistenceFailed: 'No s’ha pogut carregar o desar la preferència de la barra de títol. Torna-la a canviar per reintentar-ho.',
         title: 'Escriptori',
         footer: 'Controla com es comporta el Happier en aquest ordinador.',
         backgroundServiceTitle: 'Segueix disponible en segon pla',

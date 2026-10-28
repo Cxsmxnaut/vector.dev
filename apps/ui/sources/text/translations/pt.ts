@@ -3668,6 +3668,10 @@ export const pt: TranslationStructure = {
   },
 
   settingsDesktop: {
+    nativeTitleBarTitle: 'Usar a barra de título do Windows',
+    nativeTitleBarSubtitle: 'Mostrar a moldura e os controles de janela padrão do Windows.',
+    nativeTitleBarChangeFailed: 'Não foi possível alterar a barra de título. Tente novamente.',
+    nativeTitleBarPersistenceFailed: 'Não foi possível carregar ou salvar a preferência da barra de título. Altere-a novamente para tentar outra vez.',
     title: 'Área de trabalho',
     footer: 'Controla como o Happier se comporta neste computador.',
     backgroundServiceTitle: 'Continuar acessível em segundo plano',

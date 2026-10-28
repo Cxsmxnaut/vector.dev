@@ -3445,6 +3445,10 @@ export const zhHans: TranslationStructure = {
   },
 
   settingsDesktop: {
+    nativeTitleBarTitle: '使用 Windows 标题栏',
+    nativeTitleBarSubtitle: '显示 Windows 标准窗口边框和控制按钮。',
+    nativeTitleBarChangeFailed: '无法更改标题栏。请重试。',
+    nativeTitleBarPersistenceFailed: '无法加载或保存标题栏偏好设置。请再次更改此设置以重试。',
     title: '桌面',
     footer: '控制 Happier 在这台电脑上的行为。',
     backgroundServiceTitle: '在后台保持可连接',
