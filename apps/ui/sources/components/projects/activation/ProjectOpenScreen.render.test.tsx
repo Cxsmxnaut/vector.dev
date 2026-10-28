@@ -40,9 +40,12 @@ vi.mock('@/sync/ops/sessionDrafts/sessionDraftPersistenceStorage', () => {
     }) };
 });
 
+const routerSpies = vi.hoisted(() => ({ back: undefined as undefined | { mockClear(): void; mock: { calls: unknown[][] } } }));
 vi.mock('expo-router', async () => {
     const { createExpoRouterMock } = await import('@/dev/testkit/mocks/router');
-    return createExpoRouterMock({ params: { draftId: '00000000-0000-4000-8000-000000000081', serverId: 'home' } }).module;
+    const mock = createExpoRouterMock({ params: { draftId: '00000000-0000-4000-8000-000000000081', serverId: 'home' } });
+    routerSpies.back = mock.spies.back;
+    return mock.module;
 });
 
 // Collect the real screen outside the test timer; cold module loading is not an Open operation.
@@ -193,8 +196,21 @@ describe('Project Open rendered choices', () => {
         await act(async () => { screen.findByTestId('projects.open')!.props.onLayout({ nativeEvent: { layout: { width: 390 } } }); });
         const before = seeded.read()?.selection.value;
         expect(screen.findByTestId('projects.open.cancel')).toBeFalsy();
+        // The hosted web page has no native header, so its page header draws the Back that leaves the page.
+        routerSpies.back!.mockClear();
+        await screen.pressByTestIdAsync('projects.open.back');
+        expect(routerSpies.back!.mock.calls).toHaveLength(1);
         screen.unmount();
         expect(seeded.read()?.selection.value).toEqual(before);
+    });
+
+    it('draws no page Back where both panes fit beside each other', async () => {
+        const draftId = '00000000-0000-4000-8000-000000000081';
+        await seedOpenDraft(draftId);
+        const screen = await renderScreen(<ProjectOpenScreen />);
+        await vi.waitFor(() => expect(screen.findByTestId('projects.open.choices')).toBeTruthy());
+        await act(async () => { screen.findByTestId('projects.open')!.props.onLayout({ nativeEvent: { layout: { width: 1000 } } }); });
+        expect(screen.findByTestId('projects.open.back')).toBeFalsy();
     });
 
     it.each([{ timed: true, connect: true }, { timed: false, connect: true }, { timed: true, connect: false }])

@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { View, type StyleProp, type ViewStyle } from 'react-native';
+import { View } from 'react-native';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 import { Collection, useHappierCollection, type CollectionAnatomy, type CollectionRowActions } from '@happier-dev/plugin-ui';
 import { DetailsPaneOpenAsPageButton } from '@happier-dev/plugin-ui/components';
@@ -19,7 +19,7 @@ import { ToolbarSelect } from '@/components/ui/forms/ToolbarSelect';
 import { Icon } from '@/components/ui/icons/Icon';
 import { PageHeader } from '@/components/ui/layout/PageHeader';
 import { NavigationBackChromeProvider, useNavigationBackControl } from '@/components/ui/layout/NavigationBackChrome';
-import { DefaultBackButton } from '@/components/navigation/Header';
+import { usePageBackControl } from '@/components/ui/layout/usePageBackControl';
 import { safeRouterBack } from '@/utils/navigation/safeRouterBack';
 import { PageContentColumn } from '@/components/ui/lists/PageContentColumn';
 import { ItemList } from '@/components/ui/lists/ItemList';
@@ -128,12 +128,7 @@ export function ArtifactsBrowser(props: Readonly<{
     const deviceType = useDeviceType();
     const phoneLayout = deviceType === 'phone';
     const inheritedBack = useNavigationBackControl();
-    const phoneBack = React.useCallback(({ style }: Readonly<{ style: StyleProp<ViewStyle> }>) => (
-        <View style={style}>
-            <DefaultBackButton testID="artifacts:back" tintColor={theme.colors.text.primary}
-                onPress={() => safeRouterBack({ router, fallbackHref: '/' })} />
-        </View>
-    ), [router, theme.colors.text.primary]);
+    const phoneBack = usePageBackControl('artifacts:back', () => safeRouterBack({ router, fallbackHref: '/' }));
     const { artifacts, loaded, loadFailed, usage } = props;
     const [query, setQuery] = React.useState('');
     const [kind, setKind] = React.useState<ArtifactBrowserKind | 'all'>('all');

@@ -36,6 +36,7 @@ import { ArtifactsBrowser, ArtifactsBrowserScreen } from './ArtifactsBrowserScre
 import { sealArtifactPrivateRevisionMetadata } from '@/sync/domains/artifacts/accountArtifactEnvelope';
 import { ArtifactView } from './ArtifactView';
 import { NavigationTitleChromeProvider } from '@/components/ui/layout/navigationTitleChrome';
+import { DestinationInstanceContext } from '@/components/appShell/workspace/destinationInstanceContext';
 
 const initialState = getStorage().getState();
 let disposeHome: (() => Promise<void>) | undefined;
@@ -539,5 +540,20 @@ describe('Artifacts browser recovery', () => {
             expect(screen.findHostByTestId('artifacts:quota')).toBeNull();
             expect(screen.findHostByTestId('artifacts:storageMeter')?.props.accessibilityValue.now).toBe(10);
         } finally { account.dispose(); }
+    });
+});
+
+describe('Artifacts browser phone Back', () => {
+    // A retained Artifacts destination that is not in front must not draw (or publish) a Back of its own.
+    it.each([{ focused: true, drawn: 1 }, { focused: false, drawn: 0 }])('draws the phone Back only while its destination is in front (focused: $focused)', async ({ focused, drawn }) => {
+        vi.spyOn(ReactNative.Dimensions, 'get').mockReturnValue({ width: 390, height: 844, scale: 1, fontScale: 1 });
+        const screen = await renderScreen(
+            <DestinationInstanceContext.Provider value={{ tabId: 'artifacts', ref: { kind: 'home', params: {} }, pathname: '/artifacts', visible: true, focused,
+                navigation: { push: vi.fn(), replace: vi.fn(), back: vi.fn() } }}>
+                <RecoveryBrowser loadFailed={false} onRetry={() => {}} />
+            </DestinationInstanceContext.Provider>,
+        );
+        expect(screen.root.findAll(node => typeof node.type === 'string' && node.props.testID === 'artifacts:back')).toHaveLength(drawn);
+        await screen.unmount();
     });
 });
