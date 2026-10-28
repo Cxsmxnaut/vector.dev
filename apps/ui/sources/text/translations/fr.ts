@@ -9722,6 +9722,7 @@ settingsSession: {
         failedToConnectTerminal: 'Échec de la connexion du terminal',
         cameraPermissionsRequiredToConnectTerminal: 'L’accès à la caméra est nécessaire pour connecter le terminal',
         failedToLinkDevice: 'Échec de la liaison de l’appareil',
+        deviceLinkRequestNotFound: "Aucune demande d’association en attente n’a été trouvée sur ce relais. Vérifiez que les deux appareils utilisent le même relais, puis générez un nouveau code QR.",
         cameraPermissionsRequiredToScanQr: 'L’accès à la caméra est nécessaire pour scanner les QR codes',
         qrScannerUnavailable: 'Impossible d’ouvrir le scanner de QR code. Réessaie ou saisis l’URL manuellement.'
     },

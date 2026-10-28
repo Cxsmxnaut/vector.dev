@@ -9946,6 +9946,7 @@ settingsSession: {
     failedToConnectTerminal: "连接终端失败",
     cameraPermissionsRequiredToConnectTerminal: "连接终端需要相机权限",
     failedToLinkDevice: "链接设备失败",
+    deviceLinkRequestNotFound: "此中继上没有待处理的设备关联请求。请确认两台设备使用同一个中继，然后生成新的二维码。",
     cameraPermissionsRequiredToScanQr: "扫描二维码需要相机权限",
     qrScannerUnavailable: "无法打开二维码扫描器。请重试或手动输入 URL。",
   },

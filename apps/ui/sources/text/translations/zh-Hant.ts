@@ -8354,6 +8354,7 @@ settingsSession: {
         failedToConnectTerminal: '連線終端失敗',
         cameraPermissionsRequiredToConnectTerminal: '連線終端需要相機權限',
         failedToLinkDevice: '連結裝置失敗',
+        deviceLinkRequestNotFound: "此中繼上沒有待處理的裝置連結請求。請確認兩台裝置使用相同的中繼，然後產生新的 QR 碼。",
         cameraPermissionsRequiredToScanQr: '掃描 QR Code 需要相機權限',
         qrScannerUnavailable: '無法開啟 QR 掃描器。請再試一次或手動輸入 URL。'
     },

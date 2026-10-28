@@ -10536,6 +10536,7 @@ settingsSession: {
     cameraPermissionsRequiredToConnectTerminal:
       "ターミナルの接続にはカメラの権限が必要です",
     failedToLinkDevice: "デバイスのリンクに失敗しました",
+    deviceLinkRequestNotFound: "このリレーに保留中のデバイス連携リクエストが見つかりませんでした。両方のデバイスで同じリレーを使用していることを確認し、新しいQRコードを生成してください。",
     cameraPermissionsRequiredToScanQr:
       "QRコードのスキャンにはカメラの権限が必要です",
     qrScannerUnavailable:

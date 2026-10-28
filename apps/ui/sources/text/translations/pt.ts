@@ -10421,6 +10421,7 @@ settingsSession: {
     cameraPermissionsRequiredToConnectTerminal:
       "Permissões de câmera são necessárias para conectar terminal",
     failedToLinkDevice: "Falha ao vincular dispositivo",
+    deviceLinkRequestNotFound: "Não foi encontrado nenhum pedido de vinculação pendente neste relay. Verifique se ambos os dispositivos usam o mesmo relay e gere um novo código QR.",
     cameraPermissionsRequiredToScanQr:
       "Permissões de câmera são necessárias para escanear códigos QR",
     qrScannerUnavailable:

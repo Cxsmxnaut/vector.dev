@@ -10309,6 +10309,7 @@ settingsSession: {
     cameraPermissionsRequiredToConnectTerminal:
       "Uprawnienia do kamery są wymagane do połączenia terminala",
     failedToLinkDevice: "Nie udało się połączyć urządzenia",
+    deviceLinkRequestNotFound: "Na tym przekaźniku nie znaleziono oczekującej prośby o połączenie urządzeń. Sprawdź, czy oba urządzenia używają tego samego przekaźnika, a następnie wygeneruj nowy kod QR.",
     cameraPermissionsRequiredToScanQr:
       "Uprawnienia do kamery są wymagane do skanowania kodów QR",
     qrScannerUnavailable:

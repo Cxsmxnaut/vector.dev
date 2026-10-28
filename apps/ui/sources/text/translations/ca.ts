@@ -9671,6 +9671,7 @@ settingsSession: {
         failedToConnectTerminal: 'Ha fallat connectar el terminal',
         cameraPermissionsRequiredToConnectTerminal: 'Es requereixen permisos de càmera per connectar el terminal',
         failedToLinkDevice: 'Ha fallat enllaçar el dispositiu',
+        deviceLinkRequestNotFound: "No s’ha trobat cap sol·licitud d’enllaç pendent en aquest relay. Comprova que tots dos dispositius utilitzin el mateix relay i genera un codi QR nou.",
         cameraPermissionsRequiredToScanQr: 'Es requereixen permisos de càmera per escanejar codis QR',
         qrScannerUnavailable: 'No s’ha pogut obrir l’escàner de QR. Torna-ho a provar o introdueix l’URL manualment.'
     },

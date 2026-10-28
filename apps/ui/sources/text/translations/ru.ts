@@ -10268,6 +10268,7 @@ settingsSession: {
     cameraPermissionsRequiredToConnectTerminal:
       "Для подключения терминала требуется доступ к камере",
     failedToLinkDevice: "Не удалось связать устройство",
+    deviceLinkRequestNotFound: "На этом ретрансляторе не найден ожидающий запрос на привязку. Убедитесь, что оба устройства используют один и тот же ретранслятор, затем создайте новый QR-код.",
     cameraPermissionsRequiredToScanQr:
       "Для сканирования QR-кодов требуется доступ к камере",
     qrScannerUnavailable:

@@ -9735,6 +9735,7 @@ settingsSession: {
         failedToConnectTerminal: 'Das Terminal ließ sich nicht verbinden',
         cameraPermissionsRequiredToConnectTerminal: 'Für die Verbindung mit dem Terminal ist die Kamera-Berechtigung nötig',
         failedToLinkDevice: 'Das Gerät ließ sich nicht verknüpfen',
+        deviceLinkRequestNotFound: "Auf diesem Relay wurde keine ausstehende Verknüpfungsanfrage gefunden. Prüfe, ob beide Geräte dasselbe Relay verwenden, und erstelle dann einen neuen QR-Code.",
         cameraPermissionsRequiredToScanQr: 'Zum Scannen von QR-Codes ist die Kamera-Berechtigung nötig',
         qrScannerUnavailable: 'Der QR-Scanner ließ sich nicht öffnen. Versuch es noch einmal oder gib die URL von Hand ein.'
     },

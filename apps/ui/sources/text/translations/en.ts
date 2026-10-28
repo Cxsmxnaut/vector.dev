@@ -9767,6 +9767,7 @@ settingsSession: {
         failedToConnectTerminal: 'Failed to connect terminal',
         cameraPermissionsRequiredToConnectTerminal: 'Camera permissions are required to connect terminal',
         failedToLinkDevice: 'Failed to link device',
+        deviceLinkRequestNotFound: "No pending linking request was found on this relay. Check that both devices use the same relay, then generate a new QR code.",
         cameraPermissionsRequiredToScanQr: 'Camera permissions are required to scan QR codes',
         qrScannerUnavailable: 'Unable to open the QR scanner. Please try again or enter the URL manually.'
     },
