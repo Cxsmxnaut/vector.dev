@@ -3903,6 +3903,16 @@ to `projects.inspect`. If the proof is absent, the Agent reports the checkout
 identity unavailable rather than inferring identifiers from a folder name or
 Session path. Both Actions retain their existing approval policy.
 
+In 0.3 development source, `projects.inspect` reports setup readiness through
+the same requester-bound review used by Scripts. Signed-root CLI/MCP reads,
+including Agent `action_execute` calls through `/actions/root/execute`, acquire
+the same Home-authorized requester custody before the Machine reads private
+setup inputs. Local placement does not bypass that admission. A Session can
+read the readiness fact without gaining permission to execute or approve setup.
+Unavailable requester inputs remain `unknown`; a failed inspection preserves
+its typed reason code and records a content-free diagnostic. Unexpected failures
+use `project_setup_inspection_failed`, never `notRequired`.
+
 The shared Session recipe composer resolves saved Home aliases through the same
 server-profile identity owner as New Session before looking up its Machine and
 Agent catalog. Host targets, recipe seeds, offered candidates and returned drafts

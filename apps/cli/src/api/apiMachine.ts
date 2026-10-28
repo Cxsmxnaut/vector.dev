@@ -2021,7 +2021,7 @@ export class ApiMachineClient {
                     requestId: context.actionRequestId ?? ingress.transportRequestId,
                     durationMs: Math.round(performance.now() - startedAt), status: runtime ? 'completed' : 'refused' });
                 return runtime ? inspectProjectSetupFromRuntime({ runtime, ingress, workspace, context, reviewSetupConsent })
-                    : { setupReadiness: { kind: 'unknown' as const, code: 'project_setup_requester_review_unavailable' } };
+                    : { setupReadiness: { kind: 'unknown' as const, code: 'project_setup_runtime_unavailable' } };
             } } : {}),
         });
     }
