@@ -30,6 +30,19 @@ function createMetadata(
 }
 
 describe('createSessionMetadata', () => {
+    it('commits private authoring origin at birth beside resolved worker context', () => {
+        const authoringOrigin = { kind: 'project' as const, accountId: 'original-account',
+            workspace: { serverId: 'original-home', workspaceId: 'original-workspace', machineId: 'original-machine', rootPath: '/private/original' }, page: 'scripts' as const };
+        const initialSessionRolesV1 = { roleId: 'builder', overrides: {}, sessionRoles: {}, notes: '' };
+        const options = { directory: '/execution/repo', authoringOrigin, initialSessionRolesV1 };
+        const metadata = buildCommittedLaunchMetadata({ options, directory: options.directory });
+        const owner = createSessionOwnerMetadataV1({ metadata });
+        if (!owner.ok) throw new Error(owner.unsupportedFields.join(','));
+        expect(owner.ownerMetadata.work).toMatchObject({ authoringOriginV1: authoringOrigin, sessionRolesV1: initialSessionRolesV1 });
+        expect(JSON.stringify(projectSessionSharedMetadataV1({ metadata }))).not.toContain('/private/original');
+        expect(applyInitialSessionCreationFactsToMetadata(createTestMetadata({ work: { memoryEnabled: true } }), options).work)
+            .toMatchObject({ authoringOriginV1: authoringOrigin });
+    });
     it('keeps actual checkout branch private at birth and preserves detached observations on attach', () => {
         for (const branchName of ['feature/actual', null]) {
             const correspondence = buildSessionCreationCorrespondence({
