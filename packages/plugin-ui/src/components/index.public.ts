@@ -57,6 +57,7 @@ export { Avatar, type AvatarProps } from './Avatar.js';
 export { DetailsPane, DetailsPaneFooter, type DetailsPaneProps } from './DetailsPane.js';
 export { DetailsPaneOpenAsPageButton, type DetailsPaneOpenAsPageButtonProps } from './DetailsPaneOpenAsPageButton.js';
 export { DiffStat, type DiffStatProps } from './DiffStat.js';
+export { InlineCode, type InlineCodeProps } from './InlineCode.js';
 export { TaskStatusGlyph, type TaskStatusCategory, type TaskStatusGlyphProps } from './TaskStatusGlyph.js';
 export { CheckStatusGlyph, type CheckStatusGlyphProps, type CheckStatusKind } from './CheckStatusGlyph.js';
 export { AnsiText, type AnsiTextProps } from './AnsiText.js';
@@ -482,6 +483,12 @@ export {
   type HappierDiffStatProps,
   type HappierDiffStatTextProps,
 } from '../presentation/content/DiffStat.js';
+export {
+  HAPPIER_INLINE_CODE_METRICS,
+  HappierInlineCode,
+  type HappierInlineCodeProps,
+  type HappierInlineCodeTextProps,
+} from '../presentation/text/InlineCode.js';
 export {
   resolveHappierDiffViewerRequest,
   type HappierDiffViewerRequest,

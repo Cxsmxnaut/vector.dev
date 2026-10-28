@@ -221,7 +221,8 @@ A plugin page that configures something uses Happier's configuration-page
 anatomy through the same presentation owners Happier's own settings use:
 `PageHeader` (title, purpose, identity mark, meta line, actions; the host places
 its back arrow and hides the title under a native header), `ItemGroup` with a
-sentence-case `title`, `description` and optional section `action` (one hairline
+sentence-case `title`, `description` (a string, a `descriptionKey`, or a rich
+sentence around an `InlineCode` command chip) and optional section `action` (one hairline
 sheet, rows divided by full-width hairlines), `ItemAddRow` for a sheet's add
 action (a leading plus, optional controlled `expanded` state, no chevron), `Item` rows with one control in
 `accessory`, `Toggle`, `Select` with `presentation="segmented"` or `"field"`,

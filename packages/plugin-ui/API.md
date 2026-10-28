@@ -302,6 +302,7 @@ Declaration: `dist/index.d.ts`
 - value `HAPPIER_FRESHNESS_LINE_METRICS` from `dist/index.d.ts`
 - value `HAPPIER_ICON_BUTTON_SIZE` from `dist/index.d.ts`
 - value `HAPPIER_ICON_NAMES` from `dist/index.d.ts`
+- value `HAPPIER_INLINE_CODE_METRICS` from `dist/index.d.ts`
 - value `HAPPIER_INSTANT_AGENT_CURSOR_MOTION` from `dist/index.d.ts`
 - value `HAPPIER_INSTANT_DISCLOSURE_MOTION` from `dist/index.d.ts`
 - value `HAPPIER_LIST_MULTI_SELECTION_INERT_ROW_SNAPSHOT` from `dist/index.d.ts`
@@ -601,6 +602,9 @@ Declaration: `dist/index.d.ts`
 - type `HappierInfoStateProps` from `dist/index.d.ts`
 - value `HappierInfoTile` from `dist/index.d.ts`
 - type `HappierInfoTileProps` from `dist/index.d.ts`
+- value `HappierInlineCode` from `dist/index.d.ts`
+- type `HappierInlineCodeProps` from `dist/index.d.ts`
+- type `HappierInlineCodeTextProps` from `dist/index.d.ts`
 - value `HappierInputField` from `dist/index.d.ts`
 - type `HappierInputFieldDescriptor` from `dist/index.d.ts`
 - type `HappierInputFieldProps` from `dist/index.d.ts`
@@ -1088,6 +1092,8 @@ Declaration: `dist/index.d.ts`
 - type `IconProps` from `dist/index.d.ts`
 - value `Image` from `dist/index.d.ts`
 - type `ImageProps` from `dist/index.d.ts`
+- value `InlineCode` from `dist/index.d.ts`
+- type `InlineCodeProps` from `dist/index.d.ts`
 - value `IntervalTimeline` from `dist/index.d.ts`
 - type `IntervalTimelineInterval` from `dist/index.d.ts`
 - type `IntervalTimelineProps` from `dist/index.d.ts`
@@ -2098,6 +2104,7 @@ Declaration: `dist/components/index.d.ts`
 - value `HAPPIER_FRESHNESS_LINE_METRICS` from `dist/components/index.d.ts`
 - value `HAPPIER_ICON_BUTTON_SIZE` from `dist/components/index.d.ts`
 - value `HAPPIER_ICON_NAMES` from `dist/components/index.d.ts`
+- value `HAPPIER_INLINE_CODE_METRICS` from `dist/components/index.d.ts`
 - value `HAPPIER_INSTANT_AGENT_CURSOR_MOTION` from `dist/components/index.d.ts`
 - value `HAPPIER_INSTANT_DISCLOSURE_MOTION` from `dist/components/index.d.ts`
 - value `HAPPIER_LIST_MULTI_SELECTION_INERT_ROW_SNAPSHOT` from `dist/components/index.d.ts`
@@ -2397,6 +2404,9 @@ Declaration: `dist/components/index.d.ts`
 - type `HappierInfoStateProps` from `dist/components/index.d.ts`
 - value `HappierInfoTile` from `dist/components/index.d.ts`
 - type `HappierInfoTileProps` from `dist/components/index.d.ts`
+- value `HappierInlineCode` from `dist/components/index.d.ts`
+- type `HappierInlineCodeProps` from `dist/components/index.d.ts`
+- type `HappierInlineCodeTextProps` from `dist/components/index.d.ts`
 - value `HappierInputField` from `dist/components/index.d.ts`
 - type `HappierInputFieldDescriptor` from `dist/components/index.d.ts`
 - type `HappierInputFieldProps` from `dist/components/index.d.ts`
@@ -2884,6 +2894,8 @@ Declaration: `dist/components/index.d.ts`
 - type `IconProps` from `dist/components/index.d.ts`
 - value `Image` from `dist/components/index.d.ts`
 - type `ImageProps` from `dist/components/index.d.ts`
+- value `InlineCode` from `dist/components/index.d.ts`
+- type `InlineCodeProps` from `dist/components/index.d.ts`
 - value `IntervalTimeline` from `dist/components/index.d.ts`
 - type `IntervalTimelineInterval` from `dist/components/index.d.ts`
 - type `IntervalTimelineProps` from `dist/components/index.d.ts`

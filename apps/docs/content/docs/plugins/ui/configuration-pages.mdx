@@ -256,6 +256,24 @@ inside are divided by full-width hairlines. Explain the section in its
 section's content on the page with the same insets and no sheet. An
 `ItemGroup` without a title keeps its plain semantic role and draws nothing.
 
+When the explanation names a command, flag or identifier, pass the sentence as
+rich `description` content and set the code in `InlineCode`, the same chip
+Happier's own Scripts and Session guidance draw. The prose stays yours to
+localize; the code is never translated, and on the web the chip moves to the
+next line as one unit instead of breaking. A string `description` or a
+`descriptionKey` keeps the translated-text path.
+
+```tsx
+import { InlineCode, Item, ItemGroup } from '@happier-dev/plugin-ui';
+
+<ItemGroup
+  title="Agents"
+  description={<>Run <InlineCode>happier</InlineCode> on that computer to add it.</>}
+>
+  <Item title="Claude" subtitle="Ready" />
+</ItemGroup>;
+```
+
 Inside a section, `Item` takes the page row anatomy: title, one description line
 (`subtitle`) and one control per row in `accessory`. Put an interactive control
 beside, not inside, the row's own press target with `accessoryOutsidePressable`,

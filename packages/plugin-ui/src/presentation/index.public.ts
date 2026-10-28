@@ -615,6 +615,12 @@ export {
   type HappierDiffStatTextProps,
 } from './content/DiffStat.js';
 export {
+  HAPPIER_INLINE_CODE_METRICS,
+  HappierInlineCode,
+  type HappierInlineCodeProps,
+  type HappierInlineCodeTextProps,
+} from './text/InlineCode.js';
+export {
   HappierWidgetGlanceRow,
   type HappierWidgetGlanceRowColors,
   type HappierWidgetGlanceRowProps,
