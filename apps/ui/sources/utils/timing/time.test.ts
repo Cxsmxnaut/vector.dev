@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { HappyError } from '@/utils/errors/errors';
 import { RetryableServerResponseError } from '@/sync/runtime/connectivity/transientConnectivityErrors';
+import { ServerFetchReadSupersededError } from '@/sync/http/client';
 import { AsyncTimeoutError, backoff, createBackoff, linearBackoffDelay, withTimeout } from './time';
 
 describe('linearBackoffDelay', () => {
@@ -81,13 +82,27 @@ describe('withTimeout', () => {
 });
 
 describe('createBackoff', () => {
-    it('retries a transient Home response through the shared policy', async () => {
-        const retry = createBackoff({ minDelay: 0, maxDelay: 0, maxFailureCount: 2 });
+    it('replaces a superseded read before failure accounting, notifications or retry policy', async () => {
+        const onError = vi.fn();
+        const onRetry = vi.fn();
+        const shouldRetry = vi.fn(() => false);
+        const retry = createBackoff({ maxFailureCount: 1, onError, onRetry, shouldRetry });
+        const callback = vi.fn().mockRejectedValueOnce(new ServerFetchReadSupersededError()).mockResolvedValueOnce('current');
+        await expect(retry(callback)).resolves.toBe('current');
+        expect(shouldRetry).not.toHaveBeenCalled();
+        expect(onError).not.toHaveBeenCalled();
+        expect(onRetry).not.toHaveBeenCalled();
+    });
+    it('preserves the real failure budget after a superseded read', async () => {
+        const onError = vi.fn();
+        const retry = createBackoff({ minDelay: 0, maxDelay: 0, maxFailureCount: 2, onError });
+        const failure = new RetryableServerResponseError(503, 'temporarily unavailable');
         const callback = vi.fn()
-            .mockRejectedValueOnce(new RetryableServerResponseError(503, 'temporarily unavailable'))
+            .mockRejectedValueOnce(new ServerFetchReadSupersededError())
+            .mockRejectedValueOnce(failure)
             .mockResolvedValueOnce('recovered');
         await expect(retry(callback)).resolves.toBe('recovered');
-        expect(callback).toHaveBeenCalledTimes(2);
+        expect(onError).toHaveBeenCalledExactlyOnceWith(failure, 1);
     });
     it('does not console.warn by default when using the exported backoff', async () => {
         vi.useFakeTimers();

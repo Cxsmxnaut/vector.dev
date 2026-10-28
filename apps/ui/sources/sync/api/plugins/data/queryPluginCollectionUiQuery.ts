@@ -320,7 +320,7 @@ async function executeCapturedActivePluginCollectionUiQuery(
     try {
         authority = await captureServerRequestAuthorityForServerAccountScope({
             scope: captured.lifetime.scope,
-            activeRequest: (path, init) => apiSocket.request(path, init),
+            activeRequest: (path, init, options) => apiSocket.request(path, init, options),
         });
         assertLifetimeCurrent(captured.lifetime);
         assertServerGenerationCurrent(captured.serverSnapshot);

@@ -7,7 +7,7 @@ import type { QualifiedSessionSectionV1 } from '@happier-dev/protocol/sessions/o
 import type { WorkspaceRefV1 } from '@happier-dev/protocol/workspaces/workspaceRefV1';
 import { projectUiSessionAwareness } from '../awareness/sessionAwareness';
 import { getSessionStorageKind } from '../sessionStorageKind';
-import { readSessionListRenderableOwnerMetadataView } from './sessionListRenderableSessionProjection';
+import { readSessionListRenderableOwnerMetadataView, readSessionListPresentationOwnerMetadata, type SessionListPresentationSource } from './sessionListRenderableSessionProjection';
 import type { SessionListRenderableSession } from './sessionListRenderable';
 import { readSessionListRenderableSourceMetadata } from './sessionListRenderable';
 import { readSessionOwnerMetadataView } from '../readSessionOwnerMetadataView';
@@ -17,6 +17,7 @@ import { workspaceRefResolutionContextV1 } from '@/sync/domains/workspaces/works
 const ALL_STARTERS: SessionListFilterV1['startedBy'] = ['you', 'triggers', 'agents'];
 
 export type SessionListRowFilterFactsOptions = Readonly<{
+    presentationSource?: SessionListPresentationSource;
     nowMs: number;
     viewerAccountId?: string;
     workspaceRefs?: readonly WorkspaceRefV1[];
@@ -39,9 +40,10 @@ export function buildSessionListRowFilterFacts(
     options: SessionListRowFilterFactsOptions,
 ): SessionListFilterFactsV1 {
     const hydrated = row !== null && 'agentState' in row;
-    const metadata = row && !('metadataUnavailable' in row && row.metadataUnavailable)
+    const source = options.presentationSource;
+    const metadata = source ? source.metadata : row && !('metadataUnavailable' in row && row.metadataUnavailable)
         ? hydrated ? readSessionListRenderableSourceMetadata(row) : row.metadata : null;
-    const ownerMetadata = metadata && row
+    const ownerMetadata = source ? readSessionListPresentationOwnerMetadata(source) : metadata && row
         ? hydrated ? readSessionOwnerMetadataView(row) : readSessionListRenderableOwnerMetadataView(row) : null;
     const relevance = row?.viewer?.relevance;
     const follow = row?.viewer?.follow;
@@ -61,7 +63,7 @@ export function buildSessionListRowFilterFacts(
         metadata: metadata ? { bot: metadata.bot } : null,
         projectMetadata: ownerMetadata ? { projectId: ownerMetadata.projectId, workspaceId: ownerMetadata.workspaceId,
             machineId: ownerMetadata.machineId, path: ownerMetadata.path } : null,
-        ...(options.includeStatus !== false && row ? { status: readSessionAwarenessPresentationV1(projectUiSessionAwareness(row, options.nowMs, { includeTitle: false, includeWorkspace: false })) } : {}),
+        ...(options.includeStatus !== false && row ? { status: readSessionAwarenessPresentationV1(projectUiSessionAwareness(row, options.nowMs, { includeTitle: false, includeWorkspace: false, presentationSource: source })) } : {}),
         source: options.storageKind ?? (options.includeSource !== false && row
             ? getSessionStorageKind({ ...row, ownerMetadataView: ownerMetadata }) : undefined),
         attentionRequired: options.attentionRequired ?? row?.viewer?.attention.needsAttention,

@@ -5,6 +5,7 @@ import {
     encodeV2SessionListCursorV1,
     encodeV2SessionListCursorV2,
     V2SessionListResponseSchema,
+    V2SessionRecordSchema,
 } from "@happier-dev/protocol";
 import type { SessionRuntimeIssueV1 } from "@happier-dev/protocol";
 
@@ -71,14 +72,6 @@ function mapV2SessionListRow(
 }
 
 describe("session listing response contracts", () => {
-    it("keeps the released V1 list behind present-user or proof-bound Action admission", async () => {
-        const route = await createSessionRouteTestBuilder("GET", "/v1/sessions");
-        const config = getRouteEntry(route.app, "GET", "/v1/sessions").opts.config;
-
-        expect(config?.allowApiToken).toBeUndefined();
-        expect(config?.restrictedCredentialBinding).toBeUndefined();
-    });
-
     it.each([
         "/v2/sessions",
         "/v2/sessions/active",
@@ -580,11 +573,8 @@ describe("sessionRoutes v2 sessions snapshot", () => {
         expect(JSON.stringify(recipient)).not.toMatch(
             /oRoBAgMEBQYHCAkKCwwNDg8QERITFBUWFxh8aC0\+8\+YDECLScN6uQTItPyWVR7XbQA==|full-owner-agent-state/,
         );
-        expect(V2SessionListResponseSchema.safeParse({
-            sessions: [owner, recipient],
-            nextCursor: null,
-            hasNext: false,
-        }).success).toBe(true);
+        expect(V2SessionRecordSchema.safeParse(owner).success).toBe(true);
+        expect(V2SessionRecordSchema.safeParse(recipient).success).toBe(true);
     });
 
     it("rejects shared-recipient rows carrying owner projection authority", () => {
@@ -611,14 +601,10 @@ describe("sessionRoutes v2 sessions snapshot", () => {
             accessLevel: "edit",
             canApprovePermissions: true,
         });
-        expect(V2SessionListResponseSchema.safeParse({
-            sessions: [{
+        expect(V2SessionRecordSchema.safeParse({
                 ...recipient,
                 ownerMetadata: OWNER_METADATA_ENVELOPE_V1,
                 agentState: "full-owner-agent-state",
-            }],
-            nextCursor: null,
-            hasNext: false,
         }).success).toBe(false);
     });
 
@@ -659,11 +645,7 @@ describe("sessionRoutes v2 sessions snapshot", () => {
                 requiredByTeamPolicy: false,
             }],
         });
-        expect(V2SessionListResponseSchema.safeParse({
-            sessions: [recipient],
-            nextCursor: null,
-            hasNext: false,
-        }).success).toBe(true);
+        expect(V2SessionRecordSchema.safeParse(recipient).success).toBe(true);
     });
 
     it("GET /v2/sessions omits one unmigrated layout-zero share and keeps the rest of the page", async () => {

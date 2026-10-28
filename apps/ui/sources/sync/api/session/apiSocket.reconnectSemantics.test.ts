@@ -315,6 +315,41 @@ describe('apiSocket reconnect semantics', () => {
         } finally { apiSocket.disconnect(); markSessionSurfaceHidden('presence-session', serverId); }
     });
 
+    it('declares current transcript demand on the real focused socket registration and repeats admitted catch-up after reconnect', async () => {
+        const { registerSessionRealtimeTranscriptConsumer } = await import('@/sync/runtime/sessionRealtimeTranscriptConsumers');
+        const { getActiveServerSnapshot } = await import('@/sync/domains/server/serverRuntime');
+        const { apiSocket, socket, trigger } = await boot();
+        const serverId = getActiveServerSnapshot().serverId;
+        const release = registerSessionRealtimeTranscriptConsumer('consumed-session', serverId);
+        const admitted: unknown[] = [];
+        const stop = apiSocket.onSessionConsumptionAdmitted(value => admitted.push(value));
+        try {
+            await connect(socket);
+            await vi.waitFor(() => expect(admitted).toEqual([{ serverId, sessionIds: ['consumed-session'] }]), { timeout: 15_000 });
+            expect(socket.emitWithAck.mock.calls).toContainEqual(['session-consumption-replace', {
+                v: 1, liveSessionIds: ['consumed-session'], durableSessionIds: ['consumed-session'],
+            }]);
+            trigger('disconnect', 'transport close');
+            emitReachability('offline'); await connect(socket);
+            await vi.waitFor(() => expect(admitted).toHaveLength(2));
+        } finally { stop(); release(); apiSocket.disconnect(); }
+    });
+
+    it('warns about a refused consumption declaration while preserving the connected socket and connection error state', async () => {
+        const { apiSocket, socket } = await boot();
+        const respond = socket.emitWithAck.getMockImplementation();
+        if (!respond) throw new Error('Expected the canonical socket boundary ACK implementation');
+        socket.emitWithAck.mockImplementation(async (event, ...args) => event === 'session-consumption-replace'
+            ? { ok: false, error: 'not_allowed' } : respond(event, ...args));
+        const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const onError = vi.fn();
+        ownedSubscriptions.push(apiSocket.onError(onError));
+        await connect(socket);
+        await vi.waitFor(() => expect(warning).toHaveBeenCalledWith('[session-consumption]', 'session_consumption_not_allowed'));
+        expect(socket.connected).toBe(true);
+        expect(onError.mock.calls.every(([error]) => error === null)).toBe(true);
+    });
+
     it('fires onReconnected only after an unintentional transport outage cycle', async () => {
         const { apiSocket, socket, trigger } = await boot();
         const onReconnected = vi.fn(); ownedSubscriptions.push(apiSocket.onReconnected(onReconnected));

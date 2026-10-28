@@ -92,7 +92,7 @@ export function readSessionMessageReplies(params: Readonly<{
                     }, async authority => {
                         guard.check();
                         const response = await authority.request('/v2/sessions/messages/replies/read-batch', { method: 'POST',
-                            headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ requests }), signal: guard.signal }, { retry: 'none' });
+                            headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ requests }), signal: guard.signal }, { retry: 'none', recoveryRead: 'unbounded' });
                         if (!response.ok) return new Map<string, SessionMessageReplyReadResultV1>();
                         const payload: unknown = await response.json();
                         guard.check();

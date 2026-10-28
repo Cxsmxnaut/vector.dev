@@ -22,10 +22,15 @@ import { StoredMachinePublishedMetadataV1Schema } from '@happier-dev/protocol/ma
 import type { Metadata, AgentState } from "@happier-dev/session-core/state";
 import type { ComposerOptionsInputV1 } from '@happier-dev/protocol/embed';
 import { SESSION_OWNER_METADATA_PROJECTION, type SessionOwnerMetadataProjection } from '@/sync/domains/session/readSessionOwnerMetadataView';
+import { SESSION_LIST_DOCUMENT_ADMISSION, type SessionListDocumentAdmission } from '@/sync/domains/session/sessionDocumentAdmission';
 import type { ScmOperationState as ProtocolScmOperationState } from '@happier-dev/protocol/scm';
+import type { SessionWorkDisplayV1 } from '@happier-dev/protocol/sessions/work/state/sessionWorkStatePrimary';
 
 export interface Session {
     [SESSION_OWNER_METADATA_PROJECTION]?: SessionOwnerMetadataProjection | null,
+    [SESSION_LIST_DOCUMENT_ADMISSION]?: SessionListDocumentAdmission,
+    /** Ephemeral row display only; never a full work-state or mutation-readiness witness. */
+    workDisplay?: SessionWorkDisplayV1 | null,
     id: string,
     ownerAccountId?: string,
     serverId?: string,
@@ -113,7 +118,7 @@ export interface Session {
     hasOtherNamedCollaborator?: boolean,
     metadataLayoutVersion?: number,
     /** Producer-owned memory-only route projection; never changes the Session access role. */
-    metadataProjection?: 'sessionOnly',
+    metadataProjection?: 'sessionOnly' | 'displayOnly',
     metadata: Metadata | null,
     /**
      * Ephemeral safe shared title retained for an authorized layout-v1 recipient while the

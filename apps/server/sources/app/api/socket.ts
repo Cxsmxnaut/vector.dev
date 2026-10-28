@@ -1,5 +1,6 @@
 import { onShutdown } from "@/utils/process/shutdown";
 import { registerUiFocusSocketEvent } from '@/app/api/socket/registerUiFocusSocketEvent';
+import { registerSessionConsumptionSocketEvent } from '@/app/api/socket/sessionConsumption';
 import { registerSocketRoomDiscovery } from '@/app/api/socket/socketRoomDiscovery';
 import { Fastify } from "./types";
 import { buildMachineActivityEphemeral, buildSessionActivityEphemeral, buildUpdateSessionUpdate, ClientConnection, eventRouter } from "@/app/events/eventRouter";
@@ -814,6 +815,7 @@ export function startSocket(app: Fastify) {
 
         if (clientType === 'user-scoped') {
             registerUiFocusSocketEvent(socket, packetAdmission);
+            registerSessionConsumptionSocketEvent(socket, packetAdmission);
         }
 
         // Socket.IO adds this socket to the namespace before this callback. Join

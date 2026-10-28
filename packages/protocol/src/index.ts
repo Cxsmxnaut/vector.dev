@@ -85,6 +85,9 @@ export {
   shouldSuppressEmptyCanonicalTurnDiffToolCall,
 } from './sessions/messages/canonicalTurnDiffTool.js';
 export * from './sessions/messages/sessionMessagesPageV1.js';
+export * from './sessions/messages/sessionMessageObservationFactsV1.js';
+export * from './sessions/sessionEventDelivery.js';
+export * from './sessions/sessionConsumptionV1.js';
 export * from './sessions/read/sessionReadBatchV1.js';
 export * from './sessions/permissions/respondRpcParamsV1.js';
 export { readSessionUpdatedMessageChangeHintV1 } from './changes/index.js';
@@ -4405,6 +4408,7 @@ export {
   V2SessionMessageResponseSchema,
   V2SessionResourceAccessResponseSchema,
   V2SessionRecordSchema,
+  V2SessionListRowSchema,
   V2_SESSION_LIST_CURSOR_V1_PREFIX,
   V2_SESSION_LIST_CURSOR_V2_PREFIX,
   decodeV2SessionListCursorV1,
@@ -4478,6 +4482,7 @@ export {
   type V2SessionListResponse,
   type V2SessionMessageResponse,
   type V2SessionRecord,
+  type V2SessionListRow,
   type SessionSummary,
   SessionMetadataSchema,
   type SessionMetadata,
@@ -5112,7 +5117,12 @@ export {
   type SessionWorkStateWriteSnapshotV1,
 } from './sessions/work/state/index.js';
 export {
+  projectSessionWorkDisplayV1,
   readSessionWorkStatePrimaryItemV1,
+  SessionWorkDisplayItemV1Schema,
+  SessionWorkDisplayV1Schema,
+  type SessionWorkDisplayItemV1,
+  type SessionWorkDisplayV1,
 } from './sessions/work/state/sessionWorkStatePrimary.js';
 export {
   SESSION_AWARENESS_OPERATIONAL_PRIMARY_PRECEDENCE_V1,

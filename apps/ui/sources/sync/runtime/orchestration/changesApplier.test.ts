@@ -1,3 +1,5 @@
+import { InvalidateSync } from '@/utils/sessions/sync';
+import { createDeferred } from '@/dev/testkit';
 import { describe, expect, it, vi } from 'vitest';
 import type { AuthCredentials } from '@/auth/storage/tokenStorage';
 import { applyPlannedChangeActions } from './changesApplier';
@@ -72,6 +74,43 @@ function buildChange(params: {
 }
 
 describe('changesApplier', () => {
+    it('drains a retired real queue wait without admitting queued actions or a safe checkpoint', async () => {
+        // The deferred reply is the HTTP boundary; the planner, queue and applier stay real.
+        const reply = createDeferred<void>();
+        const started = createDeferred<void>();
+        const queue = new InvalidateSync(async () => { started.resolve(); await reply.promise; });
+        const controller = new AbortController();
+        let current = true;
+        let profileReads = 0;
+        const changes = [buildChange({ cursor: 8, kind: 'account' })];
+        const apply = applyPlannedChangeActions({
+            planned: planSyncActionsFromChanges(changes), credentials,
+            shouldContinue: () => current, concurrencyLimit: 1,
+            isSessionMessagesLoaded: () => false,
+            invalidate: {
+                settings: () => queue.invalidateAndAwait({ signal: controller.signal }),
+                profile: async () => { profileReads++; },
+            },
+            invalidateMessagesForSession: async () => {},
+            invalidateScmStatusForSession: () => {},
+            applyTodoSocketUpdates: async () => {},
+            kvBulkGet: async () => ({ values: [] }),
+        });
+        try {
+            await started.promise;
+            current = false;
+            controller.abort();
+            await expect(apply).resolves.toMatchObject({
+                status: 'partial', safeAdvanceCursor: null, processedChanges: 0, blockedCursor: '8',
+            });
+            expect(profileReads).toBe(0);
+        } finally {
+            reply.resolve();
+            await queue.awaitQueue();
+            await apply;
+        }
+    });
+
     it('materializes a connected-service page once without Settings reads and preserves the next settings-only refresh', async () => {
         const reads = { settings: 0, profile: 0, savedSecretResources: 0 };
         const apply = (changes: ApiChangeEntry[]) => applyPlannedChangeActions({

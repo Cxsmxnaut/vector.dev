@@ -1486,6 +1486,8 @@ model Session {
     metadata          String
     metadataVersion   Int                 @default(0)
     ownerMetadata     String?
+    /// Compact display envelopes linked to the same metadata tuple revision.
+    displayProjectionV1 String?
     metadataLayoutVersion Int             @default(0)
     /// Home-local opaque accepted Project identity; null until the owner publishes it.
     projectKey        String?

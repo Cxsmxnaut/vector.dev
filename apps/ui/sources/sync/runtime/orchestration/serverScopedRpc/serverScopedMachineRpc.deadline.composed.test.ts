@@ -310,14 +310,21 @@ it.each([false, true])('distinguishes held SCM setup boundaries from elapsed con
     setRuntimeFetch(async (input, init) => {
         const response = await fetch(input, init);
         const path = new URL(input instanceof Request ? input.url : String(input)).pathname;
-        if (path === '/v1/machines/read-batch') {
-            const parse = response.json.bind(response);
-            response.json = async () => {
-                const value: unknown = await parse();
-                if (stallContinuation) vi.setSystemTime(baselineTime + 31_000);
-                bodyConsumed.resolve();
-                return value;
-            };
+        if (path === '/v1/machines/read-batch' && response.body) {
+            // The HTTP owner wraps response bodies to retain cancellation, so
+            // observe the real stream rather than an instance's json method.
+            const reader = response.body.getReader();
+            return new Response(new ReadableStream<Uint8Array>({
+                async pull(controller) {
+                    const chunk = await reader.read();
+                    if (chunk.done) {
+                        controller.close();
+                        if (stallContinuation) vi.setSystemTime(baselineTime + 31_000);
+                        bodyConsumed.resolve();
+                    } else controller.enqueue(chunk.value);
+                },
+                cancel: reason => reader.cancel(reason),
+            }), { status: response.status, statusText: response.statusText, headers: response.headers });
         }
         return response;
     });

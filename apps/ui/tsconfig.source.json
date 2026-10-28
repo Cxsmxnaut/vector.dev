@@ -2976,6 +2976,7 @@
     "sources/dev/testkit/harness/sessionCollaborationNetworkBoundary.ts",
     "sources/dev/testkit/harness/sessionMetadataHttpBoundary.ts",
     "sources/dev/testkit/harness/sessionOpsNetworkBoundary.ts",
+    "sources/dev/testkit/harness/sessionReadBatchHttpBoundary.ts",
     "sources/dev/testkit/harness/settingsResetParityHarness.ts",
     "sources/dev/testkit/harness/settingsViewHarness.ts",
     "sources/dev/testkit/harness/sidechainTranscriptListHarness.ts",

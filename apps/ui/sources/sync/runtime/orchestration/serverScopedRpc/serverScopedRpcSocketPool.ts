@@ -15,7 +15,6 @@ import {
     resolveSocketIoTransportsForCarrier,
 } from '@/sync/runtime/socketIoTransports';
 import {
-    reportServerUnreachable,
     startServerReachabilitySupervisor,
     acquireServerReachabilitySupervisor,
     subscribeServerReachabilityNetworkAllowed,
@@ -47,7 +46,6 @@ type ReachabilityDeps = Readonly<{
     acquireReachability?: (params: Readonly<{ serverUrl: string; runtimeOrigin: string; token: string; homeCarrier?: HomeCarrier | null; signal?: AbortSignal }>) => Promise<Readonly<{ release: () => Promise<void> }>>;
     startReachability: (params: Readonly<{ serverUrl: string; token: string }>) => Promise<void>;
     waitForReachable: (params: Readonly<{ serverUrl: string; token: string; timeoutMs?: number; signal?: AbortSignal; homeIdentityId?: string; homeCarrier?: HomeCarrier | null }>) => Promise<void>;
-    reportUnreachable: (serverUrl: string, error: unknown, token: string) => void;
     subscribeNetworkAllowed: (listener: (allowed: boolean) => void) => () => void;
 }>;
 
@@ -84,7 +82,6 @@ type PoolEntry = {
     transport: ReturnType<typeof createSocketTransportAdapter>;
     inUseCount: number;
     connectInFlight: { result: Promise<void>; controller: AbortController; waiters: number; progress: { phase: ScopedRpcSocketConnectionPhase } } | null;
-    intentionalDisconnect: boolean;
     idleDisconnectTimer: ReturnType<typeof setTimeout> | null;
     reachabilityRelease: (() => Promise<void>) | null;
     /**
@@ -97,8 +94,6 @@ type PoolEntry = {
     teardownRequested: boolean;
     teardownInFlight: Promise<void> | null;
 };
-
-const INTENTIONAL_DISCONNECT_FLAG_RESET_MS = 1_000;
 
 function normalizeServerUrl(raw: unknown): string {
     const input = String(raw ?? '').trim();
@@ -173,7 +168,6 @@ export function createServerScopedRpcSocketPool(overrides?: Partial<Deps>): Read
                     homeCarrier: params.homeCarrier ?? null,
                 });
             },
-            reportUnreachable: (serverUrl, error, token) => reportServerUnreachable(serverUrl, error, token),
             subscribeNetworkAllowed: subscribeServerReachabilityNetworkAllowed,
         },
         now: overrides?.now ?? (() => Date.now()),
@@ -206,16 +200,11 @@ export function createServerScopedRpcSocketPool(overrides?: Partial<Deps>): Read
     ) => `${buildKey(reachabilityServerUrl, token)}::${homeIdentityId ?? ''}::${serverUrl}::${carrier}::${homeCarrier?.endpointId ?? ''}`;
 
     const disconnectEntrySocket = async (entry: PoolEntry): Promise<void> => {
-        entry.intentionalDisconnect = true;
         try {
             await entry.transport.disconnect({ intentional: true });
         } catch {
             // Teardown still owns releasing reachability and carrier custody.
         }
-        // Socket.IO adapters may publish the intentional disconnect asynchronously.
-        setTimeout(() => {
-            entry.intentionalDisconnect = false;
-        }, INTENTIONAL_DISCONNECT_FLAG_RESET_MS);
     };
 
     const stopEntrySocket = (entry: PoolEntry, remove: boolean): Promise<void> => {
@@ -305,7 +294,6 @@ export function createServerScopedRpcSocketPool(overrides?: Partial<Deps>): Read
             transport,
             inUseCount: 0,
             connectInFlight: null,
-            intentionalDisconnect: false,
             idleDisconnectTimer: null,
             reachabilityRelease: null,
             carrierRelease,
@@ -313,20 +301,6 @@ export function createServerScopedRpcSocketPool(overrides?: Partial<Deps>): Read
             teardownRequested: false,
             teardownInFlight: null,
         };
-
-        socket.on('disconnect', (reason: unknown) => {
-            if (entry.intentionalDisconnect) {
-                entry.intentionalDisconnect = false;
-                return;
-            }
-            if (!entry.backgroundTask) deps.reachability.reportUnreachable(reachabilityServerUrl, new Error(typeof reason === 'string' ? reason : 'socket disconnect'), token);
-        });
-        socket.on('connect_error', (error: unknown) => {
-            if (!entry.backgroundTask) deps.reachability.reportUnreachable(reachabilityServerUrl, error, token);
-        });
-        socket.on('error', (error: unknown) => {
-            if (!entry.backgroundTask) deps.reachability.reportUnreachable(reachabilityServerUrl, error, token);
-        });
 
         if (!backgroundTask) entriesByKey.set(key, entry);
         return entry;

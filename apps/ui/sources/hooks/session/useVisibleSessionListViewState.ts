@@ -531,6 +531,8 @@ export function useVisibleSessionListViewState(
         ? options.queryHomes?.map(home => ({ ...home, query: { ...home.query, bot: 'bot' as const, includeInactive: true }, queryMembership: 'rowOnly' as const }))
         : options.queryHomes, [options.botsRoster, options.queryHomes]);
     const { selection, source, query } = useVisibleSessionListSourceState({
+        agentTargetDemand: options.sessionListSurfaceDataActive !== false && Boolean(options.workFilter?.agents
+            && options.workFilter.agents.include.length + options.workFilter.agents.exclude.length > 0),
         queryHomes,
         emptyQuerySelectionComplete: options.emptyQuerySelectionComplete,
     });

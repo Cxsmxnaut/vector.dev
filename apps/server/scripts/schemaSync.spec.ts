@@ -10,6 +10,15 @@ import { generateMySqlSchemaFromPostgres, generateSqliteSchemaFromPostgres } fro
 const serverRoot = join(import.meta.dirname, "..");
 
 describe("schemaSync", () => {
+    it('keeps the optional Session display envelope provider-complete without narrowing its storage', () => {
+        const postgres = readFileSync(join(serverRoot, 'prisma/schema.prisma'), 'utf8');
+        for (const schema of [postgres, generateSqliteSchemaFromPostgres(postgres)]) {
+            const session = schema.match(/model Session\s*\{([\s\S]*?)^\}/mu)?.[1] ?? '';
+            expect(session).toMatch(/^\s*displayProjectionV1\s+String\?\s*$/mu);
+        }
+        const mysql = generateMySqlSchemaFromPostgres(postgres).match(/model Session\s*\{([\s\S]*?)^\}/mu)?.[1] ?? '';
+        expect(mysql).toMatch(/^\s*displayProjectionV1\s+String\?\s+@db\.LongText\s*$/mu);
+    });
     it('preserves the full source id plus its domain prefix in MySQL Follow identity', () => {
         const postgres = readFileSync(join(serverRoot, 'prisma/schema.prisma'), 'utf8');
         const mysql = generateMySqlSchemaFromPostgres(postgres);

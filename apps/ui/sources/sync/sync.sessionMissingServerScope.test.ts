@@ -331,6 +331,7 @@ function createPlainNewMessageUpdate(params: Readonly<{
         createdAt: params.seq,
         body: {
             t: 'new-message',
+            delivery: 'full' as const,
             sid: params.sessionId,
             message: {
                 id: params.messageId,

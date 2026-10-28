@@ -3,7 +3,7 @@ import axios from 'axios';
 
 import { projectLegacySessionAccessCapabilitiesV1, type SessionListQueryV1 } from '@happier-dev/protocol';
 import { runWithServerHttpBaseUrl } from '@/api/client/serverHttpBaseUrl';
-import { createCurrentSessionProjectionRecordFixture } from '@/testkit/backends/sessionFixtures';
+import { createCompactSessionListRowFixture, createCurrentSessionProjectionRecordFixture } from '@/testkit/backends/sessionFixtures';
 import { createEnvKeyScope } from '@/testkit/env/envScope';
 
 const query: SessionListQueryV1 = {
@@ -18,7 +18,7 @@ const query: SessionListQueryV1 = {
 };
 
 function createStrictQueryRow() {
-  return createCurrentSessionProjectionRecordFixture({
+  return createCompactSessionListRowFixture(createCurrentSessionProjectionRecordFixture({
     id: 'session-1',
     effectiveAccess: {
       v: 1 as const,
@@ -34,7 +34,7 @@ function createStrictQueryRow() {
       follow: { follows: false, notificationLevel: null },
       notification: { level: 'none' as const, source: 'none' as const },
     },
-  });
+  }));
 }
 
 describe('fetchSessionsQueryPage', () => {

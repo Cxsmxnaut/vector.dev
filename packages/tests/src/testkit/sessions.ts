@@ -5,9 +5,11 @@ import {
   CURRENT_ACCOUNT_STORED_CONTENT_COMPATIBILITY_DECLARATION,
   SessionMetadataOwnerPatchV1Schema,
   SessionRuntimeIssueV1Schema,
+  V2SessionListRowSchema,
   type PrimaryTurnStatusV1,
   type SessionMetadataOwnerPatchV1,
   type SessionRuntimeIssueV1,
+  type V2SessionListRow,
 } from '@happier-dev/protocol';
 
 import { fetchJson } from './http';
@@ -397,10 +399,7 @@ export type SessionV2 = {
   lastRuntimeIssue: SessionRuntimeIssueV1 | null;
 };
 
-export type SessionV2ListRow = SessionV2 & {
-  dataEncryptionKey: string | null;
-  share: { accessLevel: string; canApprovePermissions: boolean } | null;
-};
+export type SessionV2ListRow = V2SessionListRow;
 
 export type SessionV2ById = SessionV2 & Record<string, unknown>;
 
@@ -472,28 +471,9 @@ function parseSessionV2Common(value: unknown, context: string): SessionV2 {
 }
 
 function parseSessionV2ListRow(value: unknown, context: string): SessionV2ListRow {
-  const session = parseSessionV2Common(value, context);
-  const row = value as Record<string, unknown>;
-  const dataEncryptionKey = row.dataEncryptionKey;
-  const share = row.share;
-
-  if (!(dataEncryptionKey === null || typeof dataEncryptionKey === 'string')) {
-    throw new Error(`Invalid v2 session dataEncryptionKey (${context})`);
-  }
-  if (
-    !(
-      share === null ||
-      (isRecord(share) && typeof share.accessLevel === 'string' && typeof share.canApprovePermissions === 'boolean')
-    )
-  ) {
-    throw new Error(`Invalid v2 session share (${context})`);
-  }
-
-  return {
-    ...session,
-    dataEncryptionKey,
-    share: share as { accessLevel: string; canApprovePermissions: boolean } | null,
-  };
+  const parsed = V2SessionListRowSchema.safeParse(value);
+  if (!parsed.success) throw new Error(`Invalid v2 session list row (${context})`);
+  return parsed.data;
 }
 
 export async function fetchSessionsV2(baseUrl: string, token: string, opts?: { cursor?: string; limit?: number }): Promise<{

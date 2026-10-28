@@ -418,7 +418,7 @@ const ROW_LEVEL_SESSION_CHANGE_HINT_KEYS = new Set([
     'sessionDiscussions',
 ]);
 
-function isRowLevelSessionChangeHint(hint: unknown): boolean {
+export function isRowLevelSessionChangeHint(hint: unknown): boolean {
     if (hint === null || hint === undefined) return true;
     if (!isRecord(hint)) return false;
     const keys = Object.keys(hint);

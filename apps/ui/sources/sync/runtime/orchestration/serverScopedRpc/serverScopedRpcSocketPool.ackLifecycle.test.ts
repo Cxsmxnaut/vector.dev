@@ -35,7 +35,7 @@ it.each([
         },
         reachability: {
             startReachability: async () => {}, waitForReachable: async () => {},
-            reportUnreachable: () => {}, subscribeNetworkAllowed: () => () => {},
+            subscribeNetworkAllowed: () => () => {},
         },
         readIdleDisconnectMs: () => 0,
     });
@@ -79,7 +79,7 @@ it('settles a pending physical connection when the pool stops before the handsha
         },
         reachability: {
             startReachability: async () => {}, waitForReachable: async () => {},
-            reportUnreachable: () => {}, subscribeNetworkAllowed: () => () => {},
+            subscribeNetworkAllowed: () => () => {},
         },
         readIdleDisconnectMs: () => 0,
     });
@@ -169,7 +169,7 @@ it('refuses an ACK write after its pooled physical socket disconnects without bu
         // The live loopback server is already reachable; Socket.IO owns dialing.
         reachability: {
             startReachability: async () => {}, waitForReachable: async () => {},
-            reportUnreachable: () => {}, subscribeNetworkAllowed: () => () => {},
+            subscribeNetworkAllowed: () => () => {},
         },
         readIdleDisconnectMs: () => 0,
     });
@@ -225,7 +225,7 @@ it('settles the original issued read after namespace loss even when its pooled s
         },
         reachability: {
             startReachability: async () => {}, waitForReachable: async () => {},
-            reportUnreachable: () => {}, subscribeNetworkAllowed: () => () => {},
+            subscribeNetworkAllowed: () => () => {},
         },
         readIdleDisconnectMs: () => 0,
     });

@@ -124,7 +124,7 @@ describe('CLI input requester through protected custody and danger approval', ()
       : { mode, ctx: { encryptionKey: secret, encryptionVariant: 'legacy' as const } };
     const delivered: ReturnType<typeof UserMessageSchema.parse>[] = [];
     handleSessionNewMessageUpdate({ ...crypto, sessionId, serverId,
-      update: { id: 'new-input', seq: 1, createdAt: 1, body: { t: 'new-message', sid: sessionId, message: {
+      update: { id: 'new-input', seq: 1, createdAt: 1, body: { t: 'new-message', delivery: 'full' as const, sid: sessionId, message: {
         id: 'committed-input', seq: 1, localId, messageRole: 'user', inputAdmissionReceipt: receipt,
         content: sealSessionStoredContent({ ...crypto, payload: { ...acceptedRecord,
           ...(authority ? { meta: withSessionInputAuthorityV1(acceptedRecord.meta, authority) } : {}) } }),

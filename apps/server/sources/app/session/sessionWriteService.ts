@@ -40,6 +40,9 @@ import { deriveSessionMessageAuthorAccountIdV1 } from '@happier-dev/protocol/ses
 import { createPlainSessionOwnerMetadataEnvelopeV1, createSessionOwnerMetadataV1, encodeSessionOwnerMetadataEnvelopeV1, projectSessionSharedMetadataV1, validateSessionOwnerMetadataEnvelopeForAccountModeV1, SessionOwnerMetadataEnvelopeV1Schema, SessionSharedMetadataV1Schema, SessionAgentStateActivitySummaryV1Schema, SessionMetadataPublisherPreconditionV1Schema, SESSION_METADATA_LAYOUT_VERSION_V1, type SessionMetadataInactiveModelIntentExpectationV1, type SessionOwnerMetadataEnvelopeV1, type SessionMetadataOwnerMigrationPatchV1, type SessionMetadataOwnerPatchV1, type SessionMetadataInactiveModelIntentOwnerPatchV1, type SessionMetadataPublisherPreconditionV1 } from '@happier-dev/protocol/sessions/metadata/sessionMetadataSchemasV1';
 import { SessionUserActionRequiredOccurrenceV1Schema, type SessionUserActionRequiredOccurrenceV1 } from '@happier-dev/protocol/sessions/userActionRequiredOccurrenceV1';
 import { SessionSharedActionConfirmationSummaryV1Schema } from '@happier-dev/protocol/sessions/metadata/sessionMetadataSchemasV1';
+import { SessionDisplayProjectionV1Schema, validateSessionDisplayProjectionV1, type SessionDisplayProjectionV1 } from '@happier-dev/protocol/sessions/metadata/sessionMetadataSchemasV1';
+import { validateSessionOwnerDisplayEnvelopeForAccountModeV1 } from '@happier-dev/protocol';
+import { projectSessionDisplayForRecipient } from './metadata/sessionMetadataRecipientProjection';
 import { type SessionMessageRole } from '@happier-dev/protocol/sessions/messages/sessionMessageRole';
 import { isDeepStrictEqual } from "node:util";
 import {
@@ -154,6 +157,8 @@ function scheduleSessionLifecycleAdmissionDiagnostics(params: Readonly<{
 type AccountEncryptionMigrationSessionRow = Readonly<{
     id: string;
     accountId: string;
+    encryptionMode: string;
+    displayProjectionV1: string | null;
     metadata: string;
     metadataVersion: number;
     metadataLayoutVersion: number;
@@ -216,6 +221,8 @@ async function readAccountEncryptionMigrationSessionRows(
         select: {
             id: true,
             accountId: true,
+            encryptionMode: true,
+            displayProjectionV1: true,
             metadata: true,
             metadataVersion: true,
             metadataLayoutVersion: true,
@@ -362,7 +369,7 @@ function doesStoredSessionOwnerMetadataMatchEnvelope(
  *
  * The Account transition already holds exclusive Account admission. This
  * owner inventories active and archived layout-1 Sessions, validates the exact
- * source tuple, changes only ownerMetadata, and advances the owner's canonical
+ * source tuple, changes owner metadata/display, and advances the owner's canonical
  * Account Session-change cursor. Shared recipients are not published because
  * their visible Session bytes do not change.
  */
@@ -405,7 +412,9 @@ export async function migrateSessionAccountEncryptionInTx(
         if (!validateSessionOwnerMetadataEnvelopeForAccountModeV1({
             accountMode: params.toMode,
             envelope: item.ownerMetadata,
-        }).ok) {
+        }).ok || (item.ownerDisplay !== undefined && !validateSessionOwnerDisplayEnvelopeForAccountModeV1({
+            accountMode: params.toMode, envelope: item.ownerDisplay,
+        }).ok)) {
             return { status: "invalid_content" };
         }
     }
@@ -430,6 +439,15 @@ export async function migrateSessionAccountEncryptionInTx(
             encodeSessionOwnerMetadataEnvelopeV1(
                 targetEnvelope,
             );
+        // Account-private content and display change in this same tuple CAS.
+        // The Session-key shared leaf and its outer linkage stay byte-exact.
+        const sharedDisplay = projectSessionDisplayForRecipient({
+            session: row,
+            recipient: { type: 'shared', accountId: null, ownerAccountMode: params.fromMode },
+        });
+        const nextDisplayProjectionV1 = sharedDisplay ? JSON.stringify({ ...sharedDisplay,
+            ...(item.ownerDisplay !== undefined ? { owner: item.ownerDisplay } : {}),
+        }) : null;
         const updated = await params.tx.session.updateMany({
             where: {
                 accountId: params.accountId,
@@ -439,11 +457,13 @@ export async function migrateSessionAccountEncryptionInTx(
                 metadataVersion:
                     item.expectedMetadataVersion,
                 ownerMetadata: row.ownerMetadata,
+                displayProjectionV1: row.displayProjectionV1,
                 agentStateVersion:
                     item.expectedAgentStateVersion,
             },
             data: {
                 ownerMetadata: nextOwnerMetadata,
+                displayProjectionV1: nextDisplayProjectionV1,
             },
         });
         if (updated.count !== 1) {
@@ -461,6 +481,7 @@ export async function migrateSessionAccountEncryptionInTx(
             session: {
                 ...row,
                 ownerMetadata: nextOwnerMetadata,
+                displayProjectionV1: nextDisplayProjectionV1,
             },
             ownerCursor,
         });
@@ -505,12 +526,27 @@ export async function matchSessionAccountEncryptionMigrationPostStateInTx(
             directive: directiveResult.data,
             envelopeSide: "target",
         });
-    return {
-        status:
-            inventory.status === "ready"
-                ? "matched"
-                : "mismatch",
-    };
+    if (inventory.status !== 'ready') return { status: 'mismatch' };
+    if (directiveResult.data.action === 'migrate') {
+        for (const row of rows) {
+            const item = inventory.itemsById.get(row.id)!;
+            if (item.ownerDisplay !== undefined && !validateSessionOwnerDisplayEnvelopeForAccountModeV1({
+                accountMode: params.toMode, envelope: item.ownerDisplay,
+            }).ok) return { status: 'mismatch' };
+            const storedDisplay = SessionDisplayProjectionV1Schema.safeParse(parseJsonForComparison(row.displayProjectionV1 ?? ''));
+            if (!storedDisplay.success) continue;
+            const sharedDisplay = projectSessionDisplayForRecipient({ session: row,
+                recipient: { type: 'shared', accountId: null, ownerAccountMode: params.toMode } });
+            // Unavailable optional display never makes matching full content
+            // unusable. A current shared projection, however, must carry the
+            // exact admitted target owner leaf (or its deliberate absence).
+            if (!sharedDisplay) continue;
+            const expectedDisplay = { ...sharedDisplay,
+                ...(item.ownerDisplay !== undefined ? { owner: item.ownerDisplay } : {}) };
+            if (!isDeepStrictEqual(storedDisplay.data, expectedDisplay)) return { status: 'mismatch' };
+        }
+    }
+    return { status: 'matched' };
 }
 
 function parseJsonForComparison(
@@ -4352,6 +4388,7 @@ export type UpdateSessionMetadataEnvelopeTupleInput =
         mutationIntent?: "rename_session";
         sharedActionConfirmationSummaryV1?: SessionMetadataOwnerPatchV1['sharedActionConfirmationSummaryV1'];
         sharedMetadata: Readonly<{ ciphertext: string; expectedVersion: number }>;
+        displayProjectionV1?: Omit<SessionDisplayProjectionV1, 'owner'> | null;
       }>;
 
 export type UpdateSessionMetadataEnvelopeTupleResult =
@@ -4406,6 +4443,7 @@ type ActiveSessionMetadataEnvelopeTupleInput = Exclude<
 
 type StoredSessionMetadataEnvelopeTuple = Readonly<{
     active: boolean;
+    displayProjectionV1: string | null;
     metadataLayoutVersion: number;
     metadataVersion: number;
     metadata: string;
@@ -4418,6 +4456,19 @@ function isNonNegativeInteger(value: unknown): value is number {
     return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 }
 
+export function doesStoredSessionDisplayMatchTupleWrite(
+    current: string | null,
+    requested: SessionDisplayProjectionV1 | null | undefined,
+    sharedEditor: boolean,
+): boolean {
+    if (requested == null) return current === null;
+    if (current === null) return false;
+    const parsed = SessionDisplayProjectionV1Schema.safeParse(parseJsonValue(current));
+    if (!parsed.success) return false;
+    const { owner: _owner, ...shared } = parsed.data;
+    return isDeepStrictEqual(sharedEditor ? shared : parsed.data, JSON.parse(JSON.stringify(requested)));
+}
+
 function isExactMetadataEnvelopeTupleRetry(
     current: StoredSessionMetadataEnvelopeTuple & Readonly<{ projectKey: string | null }>,
     params: ActiveSessionMetadataEnvelopeTupleInput,
@@ -4426,6 +4477,7 @@ function isExactMetadataEnvelopeTupleRetry(
         current.metadataLayoutVersion !== SESSION_METADATA_LAYOUT_VERSION_V1
         || current.metadataVersion !== params.sharedMetadata.expectedVersion + 1
         || current.metadata !== params.sharedMetadata.ciphertext
+        || !doesStoredSessionDisplayMatchTupleWrite(current.displayProjectionV1, params.displayProjectionV1, params.mode === 'shared_editor')
         || (params.mode === "owner" && params.projectKey !== undefined && current.projectKey !== params.projectKey)
     ) {
         return false;
@@ -4433,7 +4485,8 @@ function isExactMetadataEnvelopeTupleRetry(
     if (params.mode === "shared_editor") return true;
     return current.ownerMetadata ===
             encodeSessionOwnerMetadataEnvelopeV1(params.ownerMetadata)
-        && current.agentStateVersion === params.agentState.expectedVersion + 1
+        && (current.agentStateVersion === params.agentState.expectedVersion
+            || current.agentStateVersion === params.agentState.expectedVersion + 1)
         && current.agentState === params.agentState.ciphertext;
 }
 
@@ -4444,6 +4497,7 @@ function isExactOwnerMigrationRetry(
         sharedMetadata: string;
         ownerMetadata: string;
         agentState: string | null;
+        displayProjectionV1: string | null;
     }>,
 ): boolean {
     return (
@@ -4456,6 +4510,7 @@ function isExactOwnerMigrationRetry(
         && current.agentStateVersion
             === params.source.agentState.version + 1
         && current.agentState === target.agentState
+        && current.displayProjectionV1 === target.displayProjectionV1
     );
 }
 
@@ -4967,6 +5022,23 @@ async function updateSessionMetadataEnvelopeTupleAfterCursorFenceInTx(
         return { ok: false, error: "invalid-params" };
     }
 
+    const requestedDisplay = params.mode === 'owner_migration'
+        ? params.target.displayProjectionV1 : params.displayProjectionV1;
+    const displayVersion = params.mode === 'owner_migration'
+        ? params.source.metadata.version + 1 : params.sharedMetadata.expectedVersion + 1;
+    const displayAdmission = requestedDisplay == null ? null : validateSessionDisplayProjectionV1({
+        projection: requestedDisplay,
+        sessionMode: access.sessionEncryptionMode === 'plain' ? 'plain' : 'e2ee',
+        accountMode: accountCurrentness.currentness.encryptionMode,
+        metadataVersion: displayVersion,
+        metadataLayoutVersion: SESSION_METADATA_LAYOUT_VERSION_V1,
+    });
+    if ((displayAdmission !== null && !displayAdmission.ok)
+        || (params.mode === 'shared_editor' && requestedDisplay != null && Object.hasOwn(requestedDisplay, 'owner'))) {
+        return { ok: false, error: 'invalid-params' };
+    }
+    const admittedDisplay = displayAdmission?.ok ? displayAdmission.projection : null;
+
     if (params.mode === "owner_migration") {
         if (
             accountCurrentness?.status !== "ready"
@@ -5029,6 +5101,7 @@ async function updateSessionMetadataEnvelopeTupleAfterCursorFenceInTx(
             sharedMetadata: nextSharedMetadata,
             ownerMetadata: nextOwnerMetadata,
             agentState: nextAgentState,
+            displayProjectionV1: admittedDisplay ? JSON.stringify(admittedDisplay) : null,
         };
         const current = await tx.session.findUnique({
             where: { id: params.sessionId },
@@ -5037,6 +5110,7 @@ async function updateSessionMetadataEnvelopeTupleAfterCursorFenceInTx(
                 latestTurnId: true,
                 latestTurnStatus: true,
                 seq: true,
+                displayProjectionV1: true,
                 metadataLayoutVersion: true,
                 metadataVersion: true,
                 metadata: true,
@@ -5085,6 +5159,7 @@ async function updateSessionMetadataEnvelopeTupleAfterCursorFenceInTx(
                 metadata: nextSharedMetadata,
                 metadataVersion: nextMetadataVersion,
                 ownerMetadata: nextOwnerMetadata,
+                displayProjectionV1: target.displayProjectionV1,
                 agentState: nextAgentState,
                 agentStateVersion: nextAgentStateVersion,
                 ...normalizePendingRequestActivitySummary(params.activitySummaryV1 ?? {}),
@@ -5096,6 +5171,7 @@ async function updateSessionMetadataEnvelopeTupleAfterCursorFenceInTx(
                 where: { id: params.sessionId },
                 select: {
                     active: true,
+                    displayProjectionV1: true,
                     metadataLayoutVersion: true,
                     metadataVersion: true,
                     metadata: true,
@@ -5138,6 +5214,7 @@ async function updateSessionMetadataEnvelopeTupleAfterCursorFenceInTx(
         return toOwnerMigrationSuccess(
             {
                 active: current.active,
+                displayProjectionV1: target.displayProjectionV1,
                 metadataLayoutVersion:
                     SESSION_METADATA_LAYOUT_VERSION_V1,
                 metadataVersion: nextMetadataVersion,
@@ -5209,6 +5286,8 @@ async function updateSessionMetadataEnvelopeTupleAfterCursorFenceInTx(
             latestTurnStatus: true,
             seq: true,
             projectKey: true,
+            encryptionMode: true,
+            displayProjectionV1: true,
             metadataLayoutVersion: true,
             metadataVersion: true,
             metadata: true,
@@ -5330,11 +5409,25 @@ async function updateSessionMetadataEnvelopeTupleAfterCursorFenceInTx(
 
     const nextMetadataVersion =
         params.sharedMetadata.expectedVersion + 1;
-    const nextAgentStateVersion = params.mode !== "shared_editor"
+    const agentStateChanged = params.mode !== "shared_editor"
+        && current.agentState !== params.agentState.ciphertext;
+    const nextAgentStateVersion = agentStateChanged
         ? params.agentState.expectedVersion + 1
         : current.agentStateVersion;
+    const previousDisplay = params.mode === 'shared_editor' && admittedDisplay
+        ? projectSessionDisplayForRecipient({
+            session: { ...current, accountId: access.sessionOwnerId },
+            recipient: { type: 'owner', accountId: access.sessionOwnerId,
+                accountMode: accountCurrentness.currentness.encryptionMode },
+        })
+        : undefined;
+    const nextDisplayProjectionV1 = admittedDisplay ? JSON.stringify({
+        ...admittedDisplay,
+        ...(params.mode === 'shared_editor' && previousDisplay?.owner ? { owner: previousDisplay.owner } : {}),
+    }) : null;
     const updateData = params.mode !== "shared_editor"
         ? {
+            displayProjectionV1: nextDisplayProjectionV1,
             metadata: params.sharedMetadata.ciphertext,
             metadataVersion: nextMetadataVersion,
             ownerMetadata:
@@ -5351,6 +5444,7 @@ async function updateSessionMetadataEnvelopeTupleAfterCursorFenceInTx(
             ...sharedConfirmationSummary,
         }
         : {
+            displayProjectionV1: nextDisplayProjectionV1,
             metadata: params.sharedMetadata.ciphertext,
             metadataVersion: nextMetadataVersion,
             ...sharedConfirmationSummary,
@@ -5368,6 +5462,9 @@ async function updateSessionMetadataEnvelopeTupleAfterCursorFenceInTx(
                     agentStateVersion: params.agentState.expectedVersion,
                 }
                 : {
+                    // The exact retained owner leaf is proved unchanged by this
+                    // same durable tuple CAS, not a preceding read alone.
+                    ownerMetadata: current.ownerMetadata,
                     AND: [await buildSessionAccessWhere({ tx, accountId: params.actorUserId,
                         capability: params.mutationIntent === "rename_session" ? "renameSession" : "submitAgentInput",
                         mode: "effective_access_v1", authentication: params.authentication })],
@@ -5378,6 +5475,7 @@ async function updateSessionMetadataEnvelopeTupleAfterCursorFenceInTx(
 
     const nextTuple: StoredSessionMetadataEnvelopeTuple = {
         active: current.active,
+        displayProjectionV1: nextDisplayProjectionV1,
         metadataLayoutVersion: SESSION_METADATA_LAYOUT_VERSION_V1,
         metadataVersion: nextMetadataVersion,
         metadata: params.sharedMetadata.ciphertext,
@@ -5398,6 +5496,7 @@ async function updateSessionMetadataEnvelopeTupleAfterCursorFenceInTx(
                 active: true,
                 archivedAt: true,
                 projectKey: true,
+                displayProjectionV1: true,
                 metadataLayoutVersion: true,
                 metadataVersion: true,
                 metadata: true,

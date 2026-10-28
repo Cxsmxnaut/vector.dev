@@ -7,6 +7,7 @@ import { resolveBundledAgentIdFromContributionIdentity } from '@/agents/catalog/
 import { useSessionListRowsByServerId, useSessionOrganizationProjections } from '@/sync/domains/state/storage';
 import { projectSessionOrganizationSections } from '@/sync/domains/session/organization/sections';
 import { readSessionSectionChoiceLabels } from '@/sync/domains/session/organization/useSessionSectionChoiceLabels';
+import { useSessionListAgentTargetDemand } from '@/sync/domains/session/listing/useSessionListAgentTargetDemand';
 import { t } from '@/text';
 
 import { qualifySessionListFilterOptionLabel } from './sessionListFilterTagOptions';
@@ -49,13 +50,14 @@ export function buildSessionListFilterSectionOptions(homes: readonly SessionList
     });
 }
 
-/** Open-editor choices from admitted rows and organization facts only; never acquires a catalog or Session body. */
+/** Agent choices demand current private target facts only while their value picker is open. */
 export function useSessionListFilterLocalOptions(homes: readonly SessionListFilterHomeOption[], openedFieldId: string | null,
     hasSelectedSections: boolean): Readonly<{
     agents: readonly SessionListFilterAgentOption[];
     sections: readonly SessionListFilterSectionOption[];
 }> {
     const rowServerIds = React.useMemo(() => openedFieldId === 'agents' ? homes.map(home => home.serverId) : [], [homes, openedFieldId]);
+    useSessionListAgentTargetDemand(rowServerIds, openedFieldId === 'agents');
     const sectionServerIds = React.useMemo(() => openedFieldId === 'sections' || hasSelectedSections ? homes.map(home => home.serverId) : [], [homes, openedFieldId, hasSelectedSections]);
     const agentKeys = useSessionListRowsByServerId(rowServerIds, selectAgentTargets);
     const organization = useSessionOrganizationProjections(sectionServerIds);

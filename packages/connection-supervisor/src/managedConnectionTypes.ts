@@ -105,6 +105,8 @@ export interface ManagedConnectionSupervisorConfig extends ManagedConnectionTimi
 export interface ManagedConnectionSupervisor {
   start(): Promise<void>;
   stop(): Promise<void>;
+  /** Reset escalation only after the consuming transport actually connects. */
+  resetRetryBackoff?(): void;
   captureProbeReportScope?(): ManagedProbeReportScope;
   reportProbeResult?(
     probe: Exclude<ReadinessProbeResult, Readonly<{ status: 'ready' }>>,

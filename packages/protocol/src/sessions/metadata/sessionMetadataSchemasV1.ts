@@ -8,6 +8,9 @@ import { SessionForkFilesNotCopiedV1Schema } from '../creation/sessionSpawnNewRe
 import { SessionPublisherGenerationV1Schema } from '../control/machineSessionTerminalV1.js';
 import { SessionForkVisualCopyV1Schema, SessionForkVisualsV1Schema } from '../board/forkVisualCopies.js';
 import { SessionUserActionRequiredOccurrenceV1Schema } from '../userActionRequiredOccurrenceV1.js';
+import { SessionDisplayProjectionV1Schema } from './sessionDisplaySchemasV1.js';
+export { SessionDisplayProjectionV1Schema, validateSessionDisplayProjectionV1 } from './sessionDisplaySchemasV1.js';
+export type { SessionDisplayProjectionV1 } from './sessionDisplaySchemasV1.js';
 
 import type { AccountEncryptionMode } from '../../features/payload/capabilities/encryptionCapabilities.js';
 import { readAccountScopedCiphertextKindByte } from '../../crypto/accountScopedCipherEnvelope.js';
@@ -77,6 +80,8 @@ import { SessionMcpSelectionAuthoringV1Schema, SessionMcpSelectionRestartRequire
 import { SessionSkillSelectionAuthoringV1Schema } from '../../reach/sessionCapabilitySelectionV1.js';
 import { CapabilitySelectionApplyAuthoringV1Schema, SessionSkillSelectionRestartRequiredAuthoringV1Schema } from '../../reach/sessionCapabilityMetadataV1.js';
 import { SessionCapabilityAgentFactsV1Schema } from '../../reach/capabilityApplyTimingV1.js';
+import { SessionOwnerWorkspaceV1Schema, SessionOwnerCursorsV1Schema, SessionSharedAgentPresentationV1Schema, type SessionSharedAgentPresentationV1 } from './sessionMetadataPresentationSchemasV1.js';
+export { SessionSharedAgentPresentationV1Schema, type SessionSharedAgentPresentationV1 } from './sessionMetadataPresentationSchemasV1.js';
 
 export const SESSION_METADATA_LAYOUT_VERSION_V1 = 1 as const;
 export const SESSION_SHARED_METADATA_VERSION_V1 = 1 as const;
@@ -238,6 +243,7 @@ const SessionMetadataOwnerMigrationPatchBaseV1Schema = lazyZodSchema(() => z.str
   }),
   target: z.strictObject({
     metadataLayoutVersion: z.literal(SESSION_METADATA_LAYOUT_VERSION_V1),
+    displayProjectionV1: z.optional(z.nullable(SessionDisplayProjectionV1Schema)),
     sharedMetadata: z.strictObject({
       ciphertext: SessionOpaqueCiphertextSchema,
     }),
@@ -293,6 +299,7 @@ export type SessionMetadataPublisherPreconditionV1 = z.infer<
 
 export const SessionMetadataOwnerPatchV1Schema = lazyZodSchema(() => z.strictObject({
   mode: z.literal('owner'),
+  displayProjectionV1: z.optional(z.nullable(SessionDisplayProjectionV1Schema)),
   projectKey: z.optional(NonBlankOpaqueIdentifierSchema),
   activitySummaryV1: z.optional(SessionAgentStateActivitySummaryV1Schema),
   sharedActionConfirmationSummaryV1: z.optional(SessionSharedActionConfirmationSummaryV1Schema),
@@ -331,6 +338,7 @@ export const SessionMetadataTuplePatchV1Schema = lazyZodSchema(() => z.discrimin
   SessionMetadataOwnerPatchV1Schema,
   z.strictObject({
     mode: z.literal('shared_editor'),
+    displayProjectionV1: z.optional(z.nullable(z.omit(SessionDisplayProjectionV1Schema, { owner: true }))),
     mutationIntent: z.optional(z.literal('rename_session')),
     sharedActionConfirmationSummaryV1: z.optional(SessionSharedActionConfirmationSummaryV1Schema),
     metadataLayoutVersion: z.literal(SESSION_METADATA_LAYOUT_VERSION_V1),
@@ -401,6 +409,7 @@ export type SessionMetadataInactiveModelIntentVersionConflictV1 = z.infer<
 >;
 
 const SessionMetadataSharedRecipientProjectionV1Schema = lazyZodSchema(() => z.strictObject({
+  displayProjectionV1: z.optional(z.omit(SessionDisplayProjectionV1Schema, { owner: true })),
   metadata: SessionOpaqueCiphertextSchema,
   metadataVersion: SessionEnvelopeVersionSchema,
   metadataLayoutVersion: z.literal(SESSION_METADATA_LAYOUT_VERSION_V1),
@@ -411,6 +420,7 @@ const SessionMetadataSharedRecipientProjectionV1Schema = lazyZodSchema(() => z.s
 
 const SessionMetadataOwnerRecipientProjectionV1Schema =
   lazyZodSchema(() => (<T extends z.ZodMiniObject>(schema: T) => z.core.clone(schema, { ...schema._zod.def, catchall: z.never() }) as z.ZodMiniObject<T['shape'], z.core.$strict>)(z.extend(SessionMetadataSharedRecipientProjectionV1Schema, {
+    displayProjectionV1: z.optional(SessionDisplayProjectionV1Schema),
     ownerMetadata: SessionOwnerMetadataEnvelopeV1Schema,
     agentState: z.nullable(SessionOpaqueCiphertextSchema),
     agentStateVersion: SessionEnvelopeVersionSchema,
@@ -437,14 +447,6 @@ export const SessionSharedSummaryV1Schema = lazyZodSchema(() => z.strictObject({
 }));
 export type SessionSharedSummaryV1 = z.infer<
   typeof SessionSharedSummaryV1Schema
->;
-
-export const SessionSharedAgentPresentationV1Schema = lazyZodSchema(() => z.strictObject({
-  agentId: BoundedIdentifierSchema,
-  label: z.optional(z.string().check(z.trim(), z.minLength(1), z.maxLength(256))),
-}));
-export type SessionSharedAgentPresentationV1 = z.infer<
-  typeof SessionSharedAgentPresentationV1Schema
 >;
 
 export const SessionPublicCompletedRequestV1Schema = lazyZodSchema(() => z.strictObject({
@@ -510,29 +512,6 @@ const SESSION_NATIVE_VENDOR_RESUME_ID_FIELDS_V1 = Object.freeze(
     .map((entry) => entry.vendorResumeIdField)
     .filter((field): field is SessionNativeVendorResumeIdFieldV1 => field !== null),
 );
-
-const SessionOwnerWorkspaceV1Schema = lazyZodSchema(() => z.strictObject({
-  path: z.optional(OptionalOwnerStringSchema),
-  host: z.optional(OptionalOwnerStringSchema),
-  version: z.optional(OptionalOwnerStringSchema),
-  name: z.optional(OptionalOwnerStringSchema),
-  os: z.optional(OptionalOwnerStringSchema),
-  machineId: z.optional(OptionalOwnerIdentifierSchema),
-  profileId: z.optional(OptionalOwnerIdentifierSchema),
-  homeDir: z.optional(OptionalOwnerStringSchema),
-  happyHomeDir: z.optional(OptionalOwnerStringSchema),
-  happyLibDir: z.optional(OptionalOwnerStringSchema),
-  happyToolsDir: z.optional(OptionalOwnerStringSchema),
-  flavor: z.optional(OptionalOwnerIdentifierSchema),
-  projectId: z.optional(OptionalOwnerIdentifierSchema),
-  workspaceId: z.optional(OptionalOwnerIdentifierSchema),
-  workspaceLocationId: z.optional(OptionalOwnerIdentifierSchema),
-  workspaceCheckoutId: z.optional(OptionalOwnerIdentifierSchema),
-  /** Last observed actual checkout branch; absent is unavailable and null is detached. */
-  branch: z.optional(OptionalOwnerStringSchema),
-  sessionWorkspaceLocationV1: z.optional(SessionWorkspaceLocationV1Schema),
-  sessionDirectoryV1: z.optional(SessionDirectoryV1Schema),
-}));
 
 export const SessionOwnerRuntimeDescriptorV1Schema = lazyZodSchema(() => z.strictObject({
   v: z.literal(1),
@@ -1461,24 +1440,6 @@ const SessionOwnerHandoffV1Schema = lazyZodSchema(() => z.strictObject({
     v: z.literal(1),
     agentId: BoundedIdentifierSchema,
   })),
-}));
-
-const SessionOwnerCursorsV1Schema = lazyZodSchema(() => z.strictObject({
-  externalSessionAttentionV1: z.optional(z.strictObject({
-    v: z.literal(1),
-    observedProgressToken: z.optional(z.string().check(z.maxLength(20_000))),
-    viewedProgressToken: z.optional(z.string().check(z.maxLength(20_000))),
-    observedAtMs: z.optional(TimestampSchema),
-    viewedAtMs: z.optional(TimestampSchema),
-  })),
-  readStateV1: z.optional(z.strictObject({
-    v: z.literal(1),
-    sessionSeq: z.number().check(z.int(), z.nonnegative()),
-    pendingActivityAt: TimestampSchema,
-    updatedAt: TimestampSchema,
-  })),
-  discardedCommittedMessageLocalIds: z.optional(z.array(z.string().check(z.maxLength(2_000))).check(z.maxLength(20_000))),
-  locallyConsumedUserMessageSeqsV1: z.optional(z.array(z.number().check(z.int(), z.nonnegative())).check(z.maxLength(20_000))),
 }));
 
 /**

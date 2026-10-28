@@ -12,13 +12,12 @@ import * as persistence from '@/persistence';
 import { configuration } from '@/configuration';
 import { V2SessionByIdResponseSchema } from '@happier-dev/protocol/sessions/control/contract';
 import { AccountEncryptionCurrentnessResponseSchema } from '@happier-dev/protocol/account/encryptionMode';
-import { SessionListQueryResponseV1Schema } from '@happier-dev/protocol/sessions/listing/response';
 import { projectSessionAccessCapabilitiesV1 } from '@happier-dev/protocol/sessions/access/sessionEffectiveAccessV1';
 import { readCarrierMutation } from '@/api/artifacts/accountArtifactStore.testkit';
 import { createCliActionDeps } from './createCliActionDeps';
 import { createCliActionExecutor } from './createCliActionExecutor';
 import { createAccountServerActionDeps } from '@/api/accountServerActionDeps';
-import { createSessionRecordFixture } from '@/testkit/backends/sessionFixtures';
+import { createSessionRecordFixture, createCompactSessionListRowFixture, createCompactSessionListQueryResponseFixture, createSessionReadBatchResponseFixture } from '@/testkit/backends/sessionFixtures';
 import { createDaemonApprovalExecutionOriginCurrentnessFromCredentials } from '@/daemon/externalActions/daemonExternalActionTargetResolver';
 import { cmdSessionActionsExecute } from '@/cli/commands/session/actions/execute';
 import { captureConsoleJsonOutput } from '@/testkit/logger/captureOutput';
@@ -457,12 +456,13 @@ describe('Account Artifact Actions through the real CLI host composition', () =>
       if (new URL(url).pathname === `/v2/sessions/${selectedSessionId}`) return { status: 200,
         data: selectedSession };
       if (new URL(url).pathname === '/v2/sessions' || new URL(url).pathname === '/v2/sessions/active') return { status: 200,
-        data: { sessions: [selectedSession.session], nextCursor: null, hasNext: false } };
+        data: { sessions: [createCompactSessionListRowFixture(selectedSession.session)], nextCursor: null, hasNext: false } };
       if (url.endsWith(`/v1/artifacts/${homeArtifactId}`)) return { status: 200, data: row() };
       throw new Error(`unexpected_get:${url}`);
     });
     http.post.mockImplementation(async (url: string, wire: Record<string, unknown> | Buffer) => {
-      if (new URL(url).pathname === '/v2/sessions/query') return { status: 200, data: SessionListQueryResponseV1Schema.parse({
+      if (new URL(url).pathname === '/v2/sessions/read-batch') return { status: 200, data: createSessionReadBatchResponseFixture({ request: wire, sessions: [selectedSession.session] }) };
+      if (new URL(url).pathname === '/v2/sessions/query') return { status: 200, data: createCompactSessionListQueryResponseFixture({
         sessions: [{ ...selectedSession.session, responsibleAccountId: null, responsibleAccount: null,
           effectiveAccess: { v: 1, level: 'owner', sources: [{ kind: 'owner' }],
             capabilities: projectSessionAccessCapabilitiesV1({ owner: true, grants: [] }) },

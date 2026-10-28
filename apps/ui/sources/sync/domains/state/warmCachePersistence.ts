@@ -12,6 +12,16 @@ import { RuntimeDescriptorV1Schema } from '@happier-dev/protocol/sessions/metada
 import { SessionAccessAccountSummaryV1Schema } from '@happier-dev/protocol/sessions/access/sessionAccessPrincipalV1';
 import { SessionEffectiveAccessV1Schema } from '@happier-dev/protocol/sessions/access/sessionEffectiveAccessV1';
 import { SessionViewerProjectionV1Schema } from '@happier-dev/protocol/sessions/personal/viewer';
+import { SessionWorkspaceLocationV1Schema } from '@happier-dev/protocol/sessions/metadata/sessionWorkspaceLocationV1';
+import { SessionOwnerCompatibilityViewV1Schema } from '@happier-dev/protocol/sessions/metadata/sessionMetadataSchemasV1';
+import { SessionAgentActivityHeadlineV1Schema } from '@happier-dev/protocol/sessions/work/agentActivity/agentActivityHeadlineV1';
+import { SessionWorkflowActivityHeadlineV1Schema } from '@happier-dev/protocol/sessions/work/workflow/sessionWorkflowActivityHeadlineV1';
+import { SessionWorkDisplayV1Schema } from '@happier-dev/protocol/sessions/work/state/sessionWorkStatePrimary';
+import { SessionGuardNoticeStateV1Schema } from '@happier-dev/protocol/machines/guard/sessionGuardStateV1';
+import { SessionTerminalControlServiceabilityV1Schema } from '@happier-dev/protocol/sessions/metadata/terminalMetadata';
+import { ExternalAgentObservationSnapshotV1Schema } from '@happier-dev/protocol/sessions/external/externalAgentObservationV1';
+import { SessionUsageLimitRecoveryDisplayV1Schema } from '@happier-dev/protocol/sessions/state/valueSchemas/usageLimitRecovery';
+import { SessionOwnerDisplayV1Schema } from '@happier-dev/protocol';
 import { PendingActivationAuthorizationV1Schema } from '@happier-dev/protocol/sessions/pending/pendingActivationAuthorizationV1';
 import { PluginUiTargetedContributionsV1Schema, type PluginUiTargetedContributionsV1 } from '@happier-dev/protocol/plugins/ui';
 import { z } from 'zod/mini';
@@ -328,6 +338,13 @@ const EMPTY_PLUGIN_UI_PROJECTION_WARM_CACHE_ENTRIES = EMPTY_WARM_CACHE_ENTRIES a
 
 export const SessionListCacheEntryV1Schema = z.object({
     sessionId: z.string().check(z.minLength(1)),
+    // Optional for retained caches: only a freshly admitted compact row can match this
+    // nonsecret display derivation. It never restores full Session/document readiness.
+    displayProof: z.optional(z.object({
+        admissionFingerprint: z.string().check(z.regex(/^[a-f0-9]{64}$/)),
+        metadataVersion: z.number().check(z.int(), z.nonnegative()),
+    })),
+    ownerAccountId: z.optional(z.string()),
     seq: z.optional(z.number().check(z.int(), z.nonnegative())),
     metadataLayoutVersion: z.optional(z.number().check(z.int(), z.nonnegative())),
     metadataVersion: z.number().check(z.int(), z.nonnegative()),
@@ -370,7 +387,21 @@ export const SessionListCacheEntryV1Schema = z.object({
     responsibleAccount: zMini.optional(zMini.nullable(SessionAccessAccountSummaryV1Schema)),
     name: z.optional(z.string()),
     summaryText: z.optional(z.nullable(z.string())),
+    agentActivityHeadline: zMini.optional(zMini.nullable(SessionAgentActivityHeadlineV1Schema)),
+    workDisplay: zMini.optional(zMini.nullable(SessionWorkDisplayV1Schema)),
+    workflowHeadline: zMini.optional(zMini.nullable(SessionWorkflowActivityHeadlineV1Schema)),
+    guardState: zMini.optional(zMini.nullable(SessionGuardNoticeStateV1Schema)),
+    forkV1: SessionOwnerDisplayV1Schema.shape.forkV1,
+    lifecycleState: z.optional(z.string()),
+    sessionUsageLimitRecoveryV1: zMini.optional(zMini.nullable(SessionUsageLimitRecoveryDisplayV1Schema)),
+    externalAgentObservationV1: zMini.optional(zMini.nullable(ExternalAgentObservationSnapshotV1Schema)),
+    readStateV1: zMini.optional(zMini.nullable(SessionOwnerCompatibilityViewV1Schema.shape.readStateV1)),
+    terminalControlServiceabilityV1: zMini.optional(zMini.nullable(SessionTerminalControlServiceabilityV1Schema)),
     path: z.string(),
+    branch: z.optional(z.nullable(z.string())),
+    projectId: z.optional(z.nullable(z.string())),
+    workspaceId: z.optional(z.nullable(z.string())),
+    sessionWorkspaceLocationV1: zMini.optional(zMini.nullable(SessionWorkspaceLocationV1Schema)),
     homeDir: z.optional(z.nullable(z.string())),
     host: z.optional(z.nullable(z.string())),
     machineId: z.optional(z.nullable(z.string())),

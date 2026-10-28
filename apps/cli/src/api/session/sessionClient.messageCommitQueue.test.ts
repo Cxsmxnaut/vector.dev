@@ -157,7 +157,7 @@ describe('ApiSessionClient message commit queue', () => {
       id: 'update-1',
       createdAt: Date.now(),
       body: {
-        t: 'new-message',
+        t: 'new-message', delivery: 'full' as const,
         sid: 's1',
         message: {
           id: 'msg-echo-1',

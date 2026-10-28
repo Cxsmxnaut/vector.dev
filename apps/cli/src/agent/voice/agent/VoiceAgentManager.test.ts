@@ -302,7 +302,7 @@ async function createAccountVoiceFollowTransportFixture(options: Readonly<{
     await vi.waitFor(() => expect(socket.getHandler('update')).toBeTypeOf('function'));
     await vi.waitFor(() => expect(session.getServerFeaturesSnapshot()?.status).toBe('ready'));
     socket.trigger('update', { id: 'committed-voice-user', createdAt: Date.now(), body: {
-      t: 'new-message', sid: sessionId, message: {
+      t: 'new-message', delivery: 'full' as const, sid: sessionId, message: {
         id: 'voice-user-message', seq: options.userMessageSeq, localId: options.localId, messageRole: 'user',
         content: { t: 'plain', v: { role: 'user', content: { type: 'text', text: 'what changed?' }, meta: { sentFrom: 'cli' } } },
       },

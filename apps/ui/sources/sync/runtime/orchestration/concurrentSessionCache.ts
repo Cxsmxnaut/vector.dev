@@ -1,5 +1,6 @@
 import { resolveHomeDisplayLabel } from '@/components/settings/server/homeDisplayName';
 import { attachManagedSessionHumanPresenceSocket } from '@/sync/domains/session/humanPresence/attachManagedSessionHumanPresenceSocket';
+import { attachManagedSessionConsumptionSocket } from '@/sync/runtime/attachManagedSessionConsumptionSocket';
 import { invalidateHomeAccountReadJoins, publishHomeAccountChange } from './homeAccountChange';
 import { PROVIDER_ACCOUNT_USAGE_ACCOUNT_CHANGE_ENTITY_ID_V1 } from '@happier-dev/protocol/changes';
 import { EphemeralUpdateSchema, UpdateContainerSchema } from '@happier-dev/protocol/updates';
@@ -18,8 +19,12 @@ import { AccountEncryptionMaterialUnavailableError } from '@/auth/encryption/cre
 import { fetchAndApplyMachines, type MachineDataKeyCacheEntry } from '@/sync/engine/machines/syncMachines';
 import { fetchAccountEncryptionMode } from '@/sync/api/account/apiAccountEncryptionMode';
 import { fetchAndApplySessions } from '@/sync/engine/sessions/sessionSnapshot';
+import { ensureSessionDisplayProjectionsForRead } from '@/sync/runtime/orchestration/serverScopedRpc/readSessionSnapshotForAuthority';
 import { fetchAndApplySessionById } from '@/sync/engine/sessions/sessionById';
 import { buildPendingChangedSessionPatch } from '@/sync/engine/socket/pendingChangedSessionPatch';
+import { buildCacheOnlyDurableMessageProjectionPatch } from '@/sync/engine/socket/durableMessageProjection';
+import type { ApiUpdateContainer } from '@/sync/api/types/apiTypes';
+import { captureSessionListRetirementFence, wasSessionRetiredSinceFence } from '@/sync/store/domains/sessions';
 import { readSessionDetailAccessProjectionVersion } from '@/sync/api/session/sessionDetailAccessProjection';
 import { getScopedSessionByIdEncryption } from './serverScopedRpc/fetchSessionByIdWithServerScope';
 import { getSyncSingleton } from '@/sync/runtime/getSyncSingleton';
@@ -77,18 +82,16 @@ import {
 import {
     type ManagedConnectionState,
     type ManagedConnectionTransport,
-    type TransportDisconnectEvent,
+    type ManagedConnectionSupervisor,
 } from '@happier-dev/connection-supervisor';
 import type { ClientEncryptionRequirement, HomeConnectionDescriptorV1 } from '@happier-dev/protocol';
 import {
-    reportServerAuthFailed,
-    reportServerUnreachable,
     acquireServerReachabilitySupervisor,
     invalidateServerReachabilitySupervisor,
     subscribeServerReachabilityNetworkAllowed,
     subscribeServerReachabilityState,
 } from '@/sync/runtime/connectivity/serverReachabilitySupervisorPool';
-import { isAuthenticationResponseStatus } from '@/sync/runtime/connectivity/authErrors';
+import { createSocketConnectionSupervisor } from '@/sync/runtime/connectivity/createSocketConnectionSupervisor';
 import { createServerFetchAtEndpoint } from '@/sync/http/client';
 import { resolveAuthCredentialsScopeKey } from '@/auth/storage/resolveAuthCredentialsScopeKey';
 import { bindAccountEncryptionObservation, matchesAccountEncryptionObservationCredentials, readAccountEncryptionObservationBinding, type AccountEncryptionObservationBinding } from '@/sync/http/accountEncryptionObservationBinding';
@@ -134,6 +137,7 @@ import {
 import type { OrdinarySessionListLifecycle } from '@/sync/domains/session/listing/ordinarySessionListHomeState';
 import { computeNextSessionSeqFromUpdate } from '@/sync/domains/session/sequence/realtimeSessionSeq';
 import { invalidateSessionListQueryHome } from '@/sync/domains/session/listing/sessionListQueryInvalidation';
+import { resolveSessionLiveConsumption } from '@/sync/runtime/sessionLiveConsumption';
 
 type ConcurrentTarget = Readonly<{
     id: string;
@@ -164,6 +168,7 @@ type ManagedConcurrentServer = {
     credentials: AuthCredentials;
     socket: ConcurrentServerSocket | null;
     socketTransport: ManagedConnectionTransport | null;
+    socketSupervisor: ManagedConnectionSupervisor | null;
     accountEncryptionObservation: ReturnType<typeof createSocketAccountEncryptionObservation> | null;
     reachabilityUnsubscribe: (() => void) | null;
     reachabilityRelease: (() => Promise<void>) | null;
@@ -319,13 +324,14 @@ function readConcurrentSelectionSettings(): ConcurrentSelectionSettings {
 function createServerRequest(
     entry: ManagedConcurrentServer,
     observeResponse: (response: Response) => void,
-    signal: AbortSignal,
+    signal?: AbortSignal,
 ): (path: string, init?: RequestInit) => Promise<Response> {
     const request = createServerFetchAtEndpoint({
         endpointUrl: entry.serverUrl,
         ...(entry.irohLease ? { runtimeOrigin: entry.irohLease.runtimeOrigin } : {}),
         ...(entry.irohLease?.homeCarrier ? { homeCarrier: entry.irohLease.homeCarrier } : {}),
         credentials: entry.credentials,
+        superviseReachability: true,
         accountEncryptionObservation: entry.accountEncryptionObservation?.binding,
         serverId: entry.id,
         signal,
@@ -731,13 +737,10 @@ async function refreshServerSnapshot(
 ): Promise<void> {
     const startedAt = Date.now();
     const capturedReadTransport = createCapturedServerReadTransport({ serverId: entry.id, profile: entry, credentials: entry.credentials,
-        accountEncryptionObservation: entry.accountEncryptionObservation?.binding });
+        accountEncryptionObservation: entry.accountEncryptionObservation?.binding, superviseReachability: true });
     let responseBytes = 0;
     const encryption = await getOrCreateEncryption(entry);
     const observeResponse = (response: Response) => {
-        if (isAuthenticationResponseStatus(response.status)) {
-            reportServerAuthFailed(entry.serverUrl, response.status, undefined, entry.credentials.token);
-        }
         const contentLength = Number(response.headers.get('content-length'));
         if (Number.isFinite(contentLength) && contentLength > 0) {
             responseBytes += contentLength;
@@ -918,6 +921,10 @@ async function refreshServerSnapshot(
         });
         noteConcurrentSessionListObserved(entry);
 
+        await ensureSessionDisplayProjectionsForRead({ serverId: entry.id, credentials: entry.credentials,
+            request: (path, init) => request(path, init), prefetched: result.prefetchedFullSessionReads,
+            signal, isCurrent: shouldContinue });
+
         if (!didApplySessionListRenderables) {
             const previousRows = storage.getState().sessionListRowsByServerId?.[entry.id] ?? {};
             const nextRenderables = fallbackSessions.map((session) => (
@@ -996,6 +1003,13 @@ export function readConcurrentOrdinarySessionListLifecycle(
 export async function loadNextConcurrentOrdinarySessionListPage(serverIdRaw: string): Promise<void> {
     const entry = getManagedServer(serverIdRaw);
     if (!entry) return;
+    const pending = entry.refreshInFlight;
+    const requestedContinuation = resolveOrdinarySessionListContinuation(entry.sessionListFrontier);
+    if (pending) await pending;
+    if (getManagedServer(serverIdRaw) !== entry) return;
+    const currentContinuation = resolveOrdinarySessionListContinuation(entry.sessionListFrontier);
+    if (pending && requestedContinuation && (requestedContinuation.kind !== currentContinuation?.kind
+        || requestedContinuation.cursor !== currentContinuation?.cursor)) return;
     if (entry.refreshInFlight) return entry.refreshInFlight;
     if (!resolveOrdinarySessionListContinuation(entry.sessionListFrontier)) return;
     await runRefresh(entry, 'other', 'continue');
@@ -1083,17 +1097,13 @@ export async function fetchConcurrentSessionListQueryPage(
         });
     }
     const encryption = await getOrCreateEncryption(entry);
-    const request = createServerRequest(entry, (response) => {
-        if (isAuthenticationResponseStatus(response.status)) {
-            reportServerAuthFailed(entry.serverUrl, response.status, undefined, entry.credentials.token);
-        }
-    }, page.signal);
+    const request = createServerRequest(entry, () => {}, page.signal);
     const shouldContinue = () => (
         !page.signal.aborted
         && managedServers.get(entry.id) === entry
         && entry.reachabilityState.phase === 'online'
     );
-    return fetchAndApplySessions({
+    const result = await fetchAndApplySessions({
         clientEncryptionRequirement: resolveEntryClientEncryptionRequirement(entry),
         serverId,
         source: page.source,
@@ -1137,6 +1147,10 @@ export async function fetchConcurrentSessionListQueryPage(
         applySessions: () => {},
         log: { log: () => {} },
     });
+    await ensureSessionDisplayProjectionsForRead({ serverId, credentials: entry.credentials, request,
+        prefetched: result.prefetchedFullSessionReads, signal: page.signal, isCurrent: shouldContinue });
+    const { prefetchedFullSessionReads: _consumedFullReads, ...publishedResult } = result;
+    return publishedResult;
 }
 
 /**
@@ -1290,6 +1304,8 @@ async function disposeManagedServer(entry: ManagedConcurrentServer): Promise<voi
     }
     const transport = entry.socketTransport;
     entry.socketTransport = null;
+    const socketSupervisor = entry.socketSupervisor;
+    entry.socketSupervisor = null;
     const irohLease = entry.irohLease;
     entry.irohLease = null;
     if (managedServers.get(entry.id) === entry) {
@@ -1302,8 +1318,7 @@ async function disposeManagedServer(entry: ManagedConcurrentServer): Promise<voi
     invalidateCachedTransferRoutesForServer({ serverId: entry.id });
     await Promise.allSettled([
         reachabilityRelease?.(),
-        transport?.disconnect({ intentional: true }),
-        transport?.destroy(),
+        socketSupervisor ? socketSupervisor.stop() : transport?.destroy(),
         irohLease?.release(),
     ].filter((pending): pending is Promise<void> => Boolean(pending)));
 }
@@ -1345,6 +1360,7 @@ function createManagedServer(
         credentials,
         socket: null,
         socketTransport: null,
+        socketSupervisor: null,
         accountEncryptionObservation: null,
         reachabilityUnsubscribe: null,
         reachabilityRelease: null,
@@ -1392,6 +1408,74 @@ function createManagedServer(
     return entry;
 }
 
+function applyConcurrentDurableMessageProjection(
+    entry: ManagedConcurrentServer,
+    update: ApiUpdateContainer,
+    renderable: SessionListRenderableSession,
+): void {
+    if (update.body.t !== 'new-message' && update.body.t !== 'message-updated') return;
+    storage.getState().applyServerScopedSessionListRowPatches(entry.id, [{
+        sessionId: update.body.sid,
+        patch: buildCacheOnlyDurableMessageProjectionPatch({
+            renderable,
+            updateData: update,
+            rawMessage: update.body.message,
+            messageSeq: update.body.message.seq,
+        }),
+    }]);
+}
+
+async function refreshConcurrentDurableMessageRow(
+    entry: ManagedConcurrentServer,
+    socket: ConcurrentServerSocket,
+    update: ApiUpdateContainer,
+): Promise<void> {
+    if (update.body.t !== 'new-message' && update.body.t !== 'message-updated') return;
+    const sessionId = update.body.sid;
+    const retirementFence = captureSessionListRetirementFence();
+    const credentials = entry.credentials;
+    const shouldContinue = () => isManagedServerActive(entry)
+        && entry.socket === socket && entry.credentials === credentials
+        && entry.reachabilityState.phase === 'online'
+        && !wasSessionRetiredSinceFence(retirementFence, entry.id, sessionId);
+    const encryption = await getOrCreateEncryption(entry);
+    if (!shouldContinue()) return;
+    const result = await fetchAndApplySessionById({
+        sessionId,
+        serverId: entry.id,
+        contentDemand: 'list-projection',
+        credentials,
+        encryption: getScopedSessionByIdEncryption(encryption),
+        sessionDataKeys: entry.sessionDataKeys,
+        sessionDataKeyEnvelopes: entry.sessionDataKeyEnvelopes,
+        request: createServerRequest(entry, () => {}),
+        // The canonical Session-parts owner shares concurrent exact reads and
+        // batches distinct ids; the socket keeps no second pending-read map.
+        readTransport: createCapturedServerReadTransport({ serverId: entry.id, profile: entry, credentials,
+            accountEncryptionObservation: entry.accountEncryptionObservation?.binding, superviseReachability: true }),
+        clientEncryptionRequirement: resolveEntryClientEncryptionRequirement(entry),
+        accessProjectionVersion: readSessionDetailAccessProjectionVersion(entry.id),
+        includeTurnsProjection: false,
+        isCurrent: shouldContinue,
+        getCurrentSessionListRenderable: id => storage.getState().sessionListRowsByServerId[entry.id]?.[id],
+        applySessions: () => {},
+        log: { log: () => {} },
+    });
+    if (!shouldContinue()) return;
+    if (!result.ok) {
+        if (result.errorCode === 'not_found') {
+            retireConcurrentSession(entry, sessionId);
+            return;
+        }
+        throw new Error(`Concurrent Session observation read failed: ${result.errorCode ?? 'unknown'}`);
+    }
+    const current = storage.getState().sessionListRowsByServerId[entry.id]?.[sessionId];
+    const renderable = current ?? result.sessionListRenderable;
+    if (!renderable) throw new Error('Concurrent Session observation read returned no row');
+    if (!current) storage.getState().applyServerScopedSessionListRows(entry.id, [renderable], { source: 'rowOnly', mode: 'append' });
+    applyConcurrentDurableMessageProjection(entry, update, renderable);
+}
+
 async function connectManagedServer(
     entry: ManagedConcurrentServer,
     irohLease: ResolvedServerScopedTransport,
@@ -1405,6 +1489,7 @@ async function connectManagedServer(
         if (!isManagedServerActive(entry)) return;
         const previousPhase = entry.reachabilityState.phase;
         entry.reachabilityState = state;
+        if (state.phase !== 'online') void entry.socketSupervisor?.stop();
 
         if (state.phase === 'auth_failed') {
             updateConcurrentSessionListCache({ serverId: entry.id, entry: null });
@@ -1414,7 +1499,6 @@ async function connectManagedServer(
                 machines: null,
                 status: 'signedOut',
             });
-            void entry.socketTransport?.disconnect({ intentional: true });
             return;
         }
 
@@ -1432,7 +1516,6 @@ async function connectManagedServer(
                 entry,
                 phase: isInitialConnection ? 'loading' : 'offline',
             });
-            void entry.socketTransport?.disconnect({ intentional: true });
             return;
         }
 
@@ -1442,194 +1525,243 @@ async function connectManagedServer(
             schedulePushTokenReconciliation();
         }
 
-        if (!entry.socketTransport) {
-            const { socket, transport } = createConcurrentServerSocketTransport({
-                serverUrl: normalizedServerUrl,
-                token: credentials.token,
-                ...(entry.irohLease
-                    ? { runtimeOrigin: entry.irohLease.runtimeOrigin, carrier: entry.irohLease.carrier }
-                    : {}),
-                ...(entry.irohLease?.homeCarrier ? { homeCarrier: entry.irohLease.homeCarrier } : {}),
-            });
-            entry.socket = socket;
-            entry.socketTransport = transport;
-            const statusDemandTransport = registerExternalSessionStatusDemandTransport(
-                entry.id,
-                (event, payload) => {
-                    if (socket.connected) {
-                        socket.emit(event, payload);
-                    }
-                },
-            );
-            let ingressAccountId: string | null = null;
-            try {
-                ingressAccountId = parseToken(credentials.token);
-            } catch {
-                // Authentication/reachability owns invalid credentials. Action ingress fails closed.
-            }
-            const accountEncryptionObservation = ingressAccountId ? createSocketAccountEncryptionObservation({
-                credentials, serverId: entry.id,
-                endpointUrl: entry.serverUrl,
-                runtimeOrigin: entry.irohLease?.runtimeOrigin ?? entry.serverUrl,
-                homeCarrierEndpointId: entry.irohLease?.homeCarrier?.endpointId ?? null,
-                request: createServerFetchAtEndpoint({ endpointUrl: entry.serverUrl, serverId: entry.id, credentials,
-                    ...(entry.irohLease ? { runtimeOrigin: entry.irohLease.runtimeOrigin } : {}),
+        if (!entry.socketSupervisor) {
+            const createTransport = () => {
+                for (const detach of entry.detachSocketTransportListeners.splice(0)) detach();
+                entry.accountEncryptionObservation?.dispose();
+                const { socket, transport } = createConcurrentServerSocketTransport({
+                    serverUrl: normalizedServerUrl,
+                    token: credentials.token,
+                    ...(entry.irohLease
+                        ? { runtimeOrigin: entry.irohLease.runtimeOrigin, carrier: entry.irohLease.carrier }
+                        : {}),
                     ...(entry.irohLease?.homeCarrier ? { homeCarrier: entry.irohLease.homeCarrier } : {}),
-                }),
-                isCurrent: () => isManagedServerActive(entry) && entry.socket === socket && entry.credentials === credentials,
-            }) : null;
-            entry.accountEncryptionObservation = accountEncryptionObservation;
-            socket.on('update', (raw: unknown) => {
-                if (!isManagedServerActive(entry) || entry.socket !== socket) return;
-                accountEncryptionObservation?.update(raw);
-                if (isAccountChangeUpdate(raw)) {
-                    schedulePushTokenReconciliation();
-                    publishHomeAccountChange(entry.id);
-                }
-                const impact = classifyConcurrentSessionCacheUpdate(raw);
-                if (impact === null) {
-                    return;
-                }
-                if (impact === 'snapshot') {
-                    const update = UpdateContainerSchema.safeParse(raw);
-                    if (update.success && update.data.body.t === 'pending-changed') {
-                        const body = update.data.body;
-                        const session = storage.getState().sessions[body.sid];
-                        // The secondary transport owns only its Home. Reuse the same
-                        // pending projection as the focused socket for an open Session;
-                        // its lightweight list refresh does not hydrate that store row.
-                        if (session && areServerProfileIdentifiersEquivalent(session.serverId, entry.id)) {
-                            storage.getState().applySessions([{ ...session, ...buildPendingChangedSessionPatch(body) }]);
+                });
+                entry.socket = socket;
+                entry.socketTransport = transport;
+                const statusDemandTransport = registerExternalSessionStatusDemandTransport(
+                    entry.id,
+                    (event, payload) => {
+                        if (socket.connected) {
+                            socket.emit(event, payload);
                         }
-                    }
+                    },
+                );
+                let ingressAccountId: string | null = null;
+                try {
+                    ingressAccountId = parseToken(credentials.token);
+                } catch {
+                    // Authentication/reachability owns invalid credentials. Action ingress fails closed.
                 }
-                if (impact === 'delete' || impact === 'archive') {
-                    const update = UpdateContainerSchema.safeParse(raw);
-                    if (update.success && (update.data.body.t === 'delete-session'
-                        || update.data.body.t === 'session-share-revoked')) {
-                        // The shared retirement owner removes every membership for
-                        // this exact Home and fences an older page still in flight.
-                        const sessionId = update.data.body.t === 'delete-session'
-                            ? update.data.body.sid
-                            : update.data.body.sessionId;
-                        retireConcurrentSession(entry, sessionId);
+                const accountEncryptionObservation = ingressAccountId ? createSocketAccountEncryptionObservation({
+                    credentials, serverId: entry.id,
+                    endpointUrl: entry.serverUrl,
+                    runtimeOrigin: entry.irohLease?.runtimeOrigin ?? entry.serverUrl,
+                    homeCarrierEndpointId: entry.irohLease?.homeCarrier?.endpointId ?? null,
+                    request: createServerFetchAtEndpoint({ endpointUrl: entry.serverUrl, serverId: entry.id, credentials,
+                        ...(entry.irohLease ? { runtimeOrigin: entry.irohLease.runtimeOrigin } : {}),
+                        ...(entry.irohLease?.homeCarrier ? { homeCarrier: entry.irohLease.homeCarrier } : {}),
+                    }),
+                    isCurrent: () => isManagedServerActive(entry) && entry.socket === socket && entry.credentials === credentials,
+                }) : null;
+                entry.accountEncryptionObservation = accountEncryptionObservation;
+                const captureSessionRealtimeScope = () => {
+                    const encryption = entry.encryption;
+                    const cipherLifetime = captureEncryptionGenerationCurrentness(encryption, { accountId: ingressAccountId ?? undefined, serverId: entry.id });
+                    return { serverId: entry.id, encryption, credentials,
+                        isCurrent: () => isManagedServerActive(entry) && entry.socket === socket && entry.credentials === credentials
+                            && entry.encryption === encryption && cipherLifetime.isCurrent(),
+                    };
+                };
+                socket.on('update', (raw: unknown) => {
+                    if (!isManagedServerActive(entry) || entry.socket !== socket) return;
+                    accountEncryptionObservation?.update(raw);
+                    if (isAccountChangeUpdate(raw)) {
+                        schedulePushTokenReconciliation();
+                        publishHomeAccountChange(entry.id);
+                    }
+                    const impact = classifyConcurrentSessionCacheUpdate(raw);
+                    if (impact === null) {
                         return;
                     }
-                    if (update.success && update.data.body.t === 'update-session'
-                        && update.data.body.archivedAt !== undefined) {
-                        const body = update.data.body;
-                        const currentRow = storage.getState().sessionListRowsByServerId[entry.id]?.[body.id];
-                        if (currentRow) {
-                            storage.getState().applyServerScopedSessionListRowPatches(entry.id, [{
-                                sessionId: body.id,
-                                patch: {
-                                    archivedAt: body.archivedAt,
-                                    updatedAt: update.data.createdAt,
-                                    seq: computeNextSessionSeqFromUpdate({
-                                        currentSessionSeq: currentRow.seq ?? 0,
-                                        updateType: 'update-session',
-                                        containerSeq: update.data.seq,
-                                        messageSeq: undefined,
-                                    }),
-                                },
-                            }]);
-                            fireAndForget(invalidateSessionListQueryHome(entry.id), {
-                                tag: 'concurrentSessionCache.archive.query',
-                            });
-                            return;
+                    if (impact === 'message') {
+                        const update = UpdateContainerSchema.safeParse(raw);
+                        if (update.success && (update.data.body.t === 'new-message' || update.data.body.t === 'message-updated')) {
+                            fireAndForget(getSyncSingleton().consumeSessionRealtimeUpdateForHome({
+                                ...captureSessionRealtimeScope(), update: update.data,
+                            }), { tag: 'concurrentSessionCache.sessionRealtime' });
+                            const sessionId = update.data.body.sid;
+                            const renderable = storage.getState().sessionListRowsByServerId[entry.id]?.[sessionId];
+                            if (renderable) {
+                                applyConcurrentDurableMessageProjection(entry, update.data, renderable);
+                            } else {
+                                fireAndForget(refreshConcurrentDurableMessageRow(entry, socket, update.data), {
+                                    tag: 'concurrentSessionCache.durableMessageRow',
+                                });
+                            }
+                        }
+                        return;
+                    }
+                    if (impact === 'snapshot') {
+                        const update = UpdateContainerSchema.safeParse(raw);
+                        if (update.success && update.data.body.t === 'pending-changed') {
+                            const body = update.data.body;
+                            const session = storage.getState().sessions[body.sid];
+                            // The secondary transport owns only its Home. Reuse the same
+                            // pending projection as the focused socket for an open Session;
+                            // its lightweight list refresh does not hydrate that store row.
+                            if (session && areServerProfileIdentifiersEquivalent(session.serverId, entry.id)) {
+                                storage.getState().applySessions([{ ...session, ...buildPendingChangedSessionPatch(body) }]);
+                            }
                         }
                     }
-                }
-                queueRefresh(entry, 'socket', impact === 'machines' ? 'machines' : 'refresh');
-            });
-            socket.on('ephemeral', (raw: unknown) => {
-                if (!isManagedServerActive(entry) || entry.socket !== socket) return;
-                const usage = EphemeralUpdateSchema.safeParse(raw);
-                if (usage.success && usage.data.type === 'machine-activity' && ingressAccountId) {
-                    const scope = { serverId: entry.id, accountId: ingressAccountId };
-                    const update = usage.data;
-                    const observe = captureMachinePresenceObservation(scope);
-                    storage.getState().applyMachineActivityUpdates([
-                        { id: update.id, active: update.active, activeAt: update.activeAt },
-                    ], { sourceServerId: entry.id });
-                    observe([update.id]);
-                    if (update.active === true && update.reconnected === true) {
-                        clearMachineRequestReachabilityForMachine(scope, update.id);
+                    if (impact === 'delete' || impact === 'archive') {
+                        const update = UpdateContainerSchema.safeParse(raw);
+                        if (update.success && (update.data.body.t === 'delete-session'
+                            || update.data.body.t === 'session-share-revoked')) {
+                            // The shared retirement owner removes every membership for
+                            // this exact Home and fences an older page still in flight.
+                            const sessionId = update.data.body.t === 'delete-session'
+                                ? update.data.body.sid
+                                : update.data.body.sessionId;
+                            retireConcurrentSession(entry, sessionId);
+                            return;
+                        }
+                        if (update.success && update.data.body.t === 'update-session'
+                            && update.data.body.archivedAt !== undefined) {
+                            const body = update.data.body;
+                            const currentRow = storage.getState().sessionListRowsByServerId[entry.id]?.[body.id];
+                            if (currentRow) {
+                                storage.getState().applyServerScopedSessionListRowPatches(entry.id, [{
+                                    sessionId: body.id,
+                                    patch: {
+                                        archivedAt: body.archivedAt,
+                                        updatedAt: update.data.createdAt,
+                                        seq: computeNextSessionSeqFromUpdate({
+                                            currentSessionSeq: currentRow.seq ?? 0,
+                                            updateType: 'update-session',
+                                            containerSeq: update.data.seq,
+                                            messageSeq: undefined,
+                                        }),
+                                    },
+                                }]);
+                                fireAndForget(invalidateSessionListQueryHome(entry.id), {
+                                    tag: 'concurrentSessionCache.archive.query',
+                                });
+                                return;
+                            }
+                        }
                     }
-                }
-                if (usage.success && (usage.data.type === 'usage' || usage.data.type === 'usage-sources-invalidated')) {
-                    publishHomeAccountChange(entry.id, [PROVIDER_ACCOUNT_USAGE_ACCOUNT_CHANGE_ENTITY_ID_V1]);
-                    return;
-                }
-                statusDemandTransport.observeEphemeral(raw);
-                if (raw && typeof raw === 'object' && 'type' in raw && raw.type === 'execution-run-updated') {
-                    notifyExecutionRunActivityFromUpdate(entry.id, raw);
-                    return;
-                }
-                const update = normalizeActionOperationEphemeralIngress(raw);
-                const encryption = entry.encryption;
-                if (!update || !ingressAccountId) return;
-                const accountId = ingressAccountId;
-                const carrier = entry.irohLease;
-                const cipherLifetime = captureEncryptionGenerationCurrentness(encryption, { accountId, serverId: entry.id });
-                const isCurrent = () => isManagedServerActive(entry) && entry.credentials === credentials
-                    && entry.encryption === encryption && entry.irohLease === carrier && cipherLifetime.isCurrent();
-                const request = createServerFetchAtEndpoint({ endpointUrl: entry.serverUrl, serverId: entry.id, credentials,
-                    accountEncryptionObservation: entry.accountEncryptionObservation?.binding,
-                    ...(carrier ? { runtimeOrigin: carrier.runtimeOrigin } : {}),
-                    ...(carrier?.homeCarrier ? { homeCarrier: carrier.homeCarrier } : {}),
+                    queueRefresh(entry, 'socket', impact === 'machines' ? 'machines' : 'refresh');
                 });
-                fireAndForget((async () => {
-                    const mode = (await fetchAccountEncryptionMode(credentials, { request, usage: 'identity' })).mode;
-                    if (!isCurrent()) return;
-                    await consumeActionOperationSnapshotPush({ update, accountId, accountEncryptionMode: mode,
-                        sourceServerId: entry.id,
-                        ...(encryption ? { openSnapshot: (ciphertext: string) => encryption.openActionOperationSnapshotRaw(ciphertext) } : {}),
-                        readSnapshot: operationId => getActionOperation({ operationId, machineId: update.machineId,
-                            serverId: entry.id, accountId, requireCurrentDomainFacts: true }),
-                        shouldContinue: isCurrent,
-                        onSnapshot: operation => actionOperationPresentationCoordinator.observe(operation),
+                socket.on('ephemeral', (raw: unknown) => {
+                    if (!isManagedServerActive(entry) || entry.socket !== socket) return;
+                    const usage = EphemeralUpdateSchema.safeParse(raw);
+                    if (usage.success && (usage.data.type === 'transcript-stream-segment' || usage.data.type === 'transcript-stream-segment-delta')) {
+                        fireAndForget(getSyncSingleton().consumeSessionRealtimeEphemeralForHome({
+                            ...captureSessionRealtimeScope(), update: usage.data,
+                        }), { tag: 'concurrentSessionCache.sessionStream' });
+                        return;
+                    }
+                    if (usage.success && usage.data.type === 'machine-activity' && ingressAccountId) {
+                        const scope = { serverId: entry.id, accountId: ingressAccountId };
+                        const update = usage.data;
+                        const observe = captureMachinePresenceObservation(scope);
+                        storage.getState().applyMachineActivityUpdates([
+                            { id: update.id, active: update.active, activeAt: update.activeAt },
+                        ], { sourceServerId: entry.id });
+                        observe([update.id]);
+                        if (update.active === true && update.reconnected === true) {
+                            clearMachineRequestReachabilityForMachine(scope, update.id);
+                        }
+                    }
+                    if (usage.success && (usage.data.type === 'usage' || usage.data.type === 'usage-sources-invalidated')) {
+                        publishHomeAccountChange(entry.id, [PROVIDER_ACCOUNT_USAGE_ACCOUNT_CHANGE_ENTITY_ID_V1]);
+                        return;
+                    }
+                    statusDemandTransport.observeEphemeral(raw);
+                    if (raw && typeof raw === 'object' && 'type' in raw && raw.type === 'execution-run-updated') {
+                        notifyExecutionRunActivityFromUpdate(entry.id, raw);
+                        return;
+                    }
+                    const update = normalizeActionOperationEphemeralIngress(raw);
+                    const encryption = entry.encryption;
+                    if (!update || !ingressAccountId) return;
+                    const accountId = ingressAccountId;
+                    const carrier = entry.irohLease;
+                    const cipherLifetime = captureEncryptionGenerationCurrentness(encryption, { accountId, serverId: entry.id });
+                    const isCurrent = () => isManagedServerActive(entry) && entry.credentials === credentials
+                        && entry.encryption === encryption && entry.irohLease === carrier && cipherLifetime.isCurrent();
+                    const request = createServerFetchAtEndpoint({ endpointUrl: entry.serverUrl, serverId: entry.id, credentials,
+                        accountEncryptionObservation: entry.accountEncryptionObservation?.binding,
+                        ...(carrier ? { runtimeOrigin: carrier.runtimeOrigin } : {}),
+                        ...(carrier?.homeCarrier ? { homeCarrier: carrier.homeCarrier } : {}),
                     });
-                })(), { tag: 'concurrentSessionCache.actionOperationEphemeral' });
+                    fireAndForget((async () => {
+                        const mode = (await fetchAccountEncryptionMode(credentials, { request, usage: 'identity' })).mode;
+                        if (!isCurrent()) return;
+                        await consumeActionOperationSnapshotPush({ update, accountId, accountEncryptionMode: mode,
+                            sourceServerId: entry.id,
+                            ...(encryption ? { openSnapshot: (ciphertext: string) => encryption.openActionOperationSnapshotRaw(ciphertext) } : {}),
+                            readSnapshot: operationId => getActionOperation({ operationId, machineId: update.machineId,
+                                serverId: entry.id, accountId, requireCurrentDomainFacts: true }),
+                            shouldContinue: isCurrent,
+                            onSnapshot: operation => actionOperationPresentationCoordinator.observe(operation),
+                        });
+                    })(), { tag: 'concurrentSessionCache.actionOperationEphemeral' });
+                });
+
+                entry.detachSocketTransportListeners = [
+                    attachManagedSessionHumanPresenceSocket({
+                        serverId: entry.id, token: credentials.token, socket, transport,
+                    }),
+                    attachManagedSessionConsumptionSocket({ serverId: entry.id, socket, transport,
+                        onLiveConsumptionAdmitted: sessionIds => {
+                            const isCurrent = () => isManagedServerActive(entry) && entry.socket === socket && entry.credentials === credentials;
+                            if (!isCurrent()) return;
+                            getSyncSingleton().onSessionLiveConsumptionAdmittedForHome(entry.id, sessionIds, isCurrent);
+                        },
+                    }),
+                    transport.onConnected(() => {
+                        if (!isManagedServerActive(entry) || entry.socket !== socket) return;
+                        accountEncryptionObservation?.connected();
+                        if (ingressAccountId) clearMachineRequestReachabilityForScope({ serverId: entry.id, accountId: ingressAccountId });
+                        notifyExecutionRunActivityReconnect(entry.id);
+                        statusDemandTransport.resend();
+                        // This content-free secondary transport has no changes
+                        // cursor. Connecting may have missed writes since a reader's
+                        // initial snapshot (including before the first connect), so
+                        // invalidate this Home's reconstructible Account projections.
+                        publishHomeAccountChange(entry.id, undefined, { source: 'connected' });
+                        queueRefresh(entry);
+                    }),
+                    transport.onDisconnected(() => {
+                        if (!isManagedServerActive(entry) || entry.socket !== socket) return;
+                        if (ingressAccountId) withdrawMachinePresenceForScope({ serverId: entry.id, accountId: ingressAccountId });
+                        accountEncryptionObservation?.disconnected();
+                    }),
+                    transport.onError(() => {
+                        if (!isManagedServerActive(entry) || entry.socket !== socket) return;
+                        if (ingressAccountId) withdrawMachinePresenceForScope({ serverId: entry.id, accountId: ingressAccountId });
+                        accountEncryptionObservation?.disconnected();
+                    }),
+                    () => statusDemandTransport.dispose(),
+                ];
+                return transport;
+            };
+            // Keep initial construction synchronous so the existing cache
+            // reconciliation catch can retire a partially constructed entry.
+            // start() consumes this transport immediately, before awaiting its dial.
+            let initialTransport: ManagedConnectionTransport | null = createTransport();
+            entry.socketSupervisor = createSocketConnectionSupervisor({
+                createTransport: () => {
+                    const transport = initialTransport;
+                    initialTransport = null;
+                    return transport ?? createTransport();
+                },
             });
-
-            entry.detachSocketTransportListeners = [
-                attachManagedSessionHumanPresenceSocket({
-                    serverId: entry.id, token: credentials.token, socket, transport,
-                }),
-                transport.onConnected(() => {
-                    if (!isManagedServerActive(entry) || entry.socket !== socket) return;
-                    accountEncryptionObservation?.connected();
-                    if (ingressAccountId) clearMachineRequestReachabilityForScope({ serverId: entry.id, accountId: ingressAccountId });
-                    notifyExecutionRunActivityReconnect(entry.id);
-                    statusDemandTransport.resend();
-                    // This content-free secondary transport has no changes
-                    // cursor. Connecting may have missed writes since a reader's
-                    // initial snapshot (including before the first connect), so
-                    // invalidate this Home's reconstructible Account projections.
-                    publishHomeAccountChange(entry.id, undefined, { source: 'connected' });
-                    queueRefresh(entry);
-                }),
-                transport.onDisconnected((event: TransportDisconnectEvent) => {
-                    if (!isManagedServerActive(entry) || entry.socket !== socket) return;
-                    if (ingressAccountId) withdrawMachinePresenceForScope({ serverId: entry.id, accountId: ingressAccountId });
-                    accountEncryptionObservation?.disconnected();
-                    if (event.intentional) return;
-                    reportServerUnreachable(normalizedServerUrl, event.error ?? new Error(event.reason ?? 'socket disconnect'), credentials.token);
-                }),
-                transport.onError((error: unknown) => {
-                    if (!isManagedServerActive(entry) || entry.socket !== socket) return;
-                    if (ingressAccountId) withdrawMachinePresenceForScope({ serverId: entry.id, accountId: ingressAccountId });
-                    accountEncryptionObservation?.disconnected();
-                    reportServerUnreachable(normalizedServerUrl, error, credentials.token);
-                }),
-                () => statusDemandTransport.dispose(),
-            ];
         }
-
-        if (entry.socketTransport.isConnected() !== true) {
-            void entry.socketTransport.connect();
-        }
+        fireAndForget(entry.socketSupervisor.start(), { tag: 'concurrentSessionCache.socket' });
     }, credentials.token);
 
     await acquireManagedServerReachability(entry);
@@ -1856,15 +1988,15 @@ function pauseManagedServersForNetworkDisallowed(): void {
             clearTimeout(entry.refreshTimer);
             entry.refreshTimer = null;
         }
-        void entry.socketTransport?.disconnect({ intentional: true });
+        void entry.socketSupervisor?.stop();
     }
 }
 
 function resumeManagedServersForNetworkAllowed(): void {
     for (const entry of managedServers.values()) {
         void acquireManagedServerReachability(entry).catch(() => undefined);
-        if (entry.reachabilityState.phase === 'online' && entry.socketTransport?.isConnected() !== true) {
-            void entry.socketTransport?.connect();
+        if (entry.reachabilityState.phase === 'online') {
+            fireAndForget(entry.socketSupervisor?.start() ?? Promise.resolve(), { tag: 'concurrentSessionCache.socket.resume' });
         }
         queueRefresh(entry);
     }

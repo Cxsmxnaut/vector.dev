@@ -4564,8 +4564,8 @@ export function createCliActionDeps(params: Readonly<{
             const reports: { sessionId: string; ownerAccountId: string }[] = [];
             let cursor: string | undefined;
             do {
-              const { fetchSessionsQueryPage } = await import("@/session/transport/http/sessionsHttp");
-              const read = () => fetchSessionsQueryPage({ token: params.credentials!.token,
+              const { fetchSessionListQueryPage } = await import("@/session/transport/http/sessionsHttp");
+              const read = () => fetchSessionListQueryPage({ token: params.credentials!.token,
                 query: { v: 1, storage, includeInactive: true, scope: 'all_accessible', attention: 'any', audiences: [], tagIds: [],
                   underSessionId: leadSessionId, ...(cursor ? { cursor } : {}) },
                 ...(context.signal ? { signal: context.signal } : {}),

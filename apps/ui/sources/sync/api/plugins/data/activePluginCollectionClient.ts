@@ -295,7 +295,7 @@ export async function readPluginCollectionHttpResponse(input: Readonly<{
     const transport = input.authority.readTransport;
     const requestInit = (signal = input.init.signal) => withAccountStoredContentCompatibilityRequestDeclaration(
         { ...input.init, signal }, PLUGIN_DATA_ACCOUNT_STORED_CONTENT_COMPATIBILITY_DECLARATION);
-    if (!transport) return await consume(await input.authority.request(input.path, requestInit()));
+    if (!transport) return await consume(await input.authority.request(input.path, requestInit(), { recoveryRead: 'unbounded' }));
     const transportKey = transport.key;
     const headers = [...new Headers(input.init.headers)].sort(([left], [right]) => left.localeCompare(right));
     const body: unknown = input.init.body === undefined ? null : JSON.parse(input.init.body);
@@ -415,7 +415,7 @@ export async function prepareCollectionOperation(
     try {
         authority = await captureServerRequestAuthorityForServerAccountScope({
             scope: lifetime.scope,
-            activeRequest: (path, init) => apiSocket.request(path, init),
+            activeRequest: (path, init, options) => apiSocket.request(path, init, options),
         });
         const capturedAuthority = authority;
         const currentnessAfterAuthority = isScopeAndServerCurrent(lifetime, serverSnapshot);

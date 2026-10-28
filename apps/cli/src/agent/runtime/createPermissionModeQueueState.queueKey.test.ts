@@ -60,7 +60,7 @@ describe('createPermissionModeQueueState (queue key)', () => {
     for (const [index, accountId] of ['bob', 'carol'].entries()) {
       const update = {
         id: `update-${index}`, seq: index + 1, createdAt: 1,
-        body: { t: 'new-message', sid: 'bot', message: {
+        body: { t: 'new-message', delivery: 'full' as const, sid: 'bot', message: {
           id: `message-${index}`, seq: index + 1, localId: `request-${index}`, messageRole: 'user',
           content: { t: 'plain', v: { role: 'user', content: { type: 'text', text: accountId } } },
           inputAdmissionReceipt: { v: 1, issuer: 'authenticatedAccount', actorAccountId: accountId, sessionRelationship: 'sharedEditor' },

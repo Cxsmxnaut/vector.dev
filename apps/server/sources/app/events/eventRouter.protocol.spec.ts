@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { UpdateContainerSchema } from "@happier-dev/protocol/updates";
+import { sealSessionOwnerDisplayEnvelopeV1 } from '@happier-dev/protocol';
 import { createPlainSessionOwnerMetadataEnvelopeV1, encodeSessionOwnerMetadataEnvelopeV1 } from '@happier-dev/protocol/sessions/metadata/sessionMetadataSchemasV1';
 import { publishSessionCurrentViewUpdates } from '@/app/session/metadata/publishSessionCurrentViewUpdates';
 import {
@@ -303,6 +304,14 @@ describe("eventRouter payloads (protocol container)", () => {
     });
 
     it("buildSessionMetadataRecipientUpdate serializes only the strict recipient tuple", () => {
+        const ownerDisplay = sealSessionOwnerDisplayEnvelopeV1({
+            accountMode: 'e2ee', display: { v: 1, name: 'Display-only private name' },
+            material: { type: 'dataKey', machineKey: new Uint8Array(32).fill(7) },
+            randomBytes: length => new Uint8Array(length).fill(4),
+        });
+        if (!ownerDisplay.ok || ownerDisplay.envelope.t !== 'encrypted') throw new Error('Canonical owner-display sealing failed');
+        const displayProjectionV1 = { v: 1 as const, sourceMetadataVersion: 5, metadataLayoutVersion: 1 as const,
+            shared: { t: 'encrypted' as const, c: 'opaque-shared-display' }, owner: ownerDisplay.envelope };
         const ownerPayload = buildSessionMetadataRecipientUpdate(
             "s1",
             104,
@@ -311,6 +320,7 @@ describe("eventRouter payloads (protocol container)", () => {
                 metadata: "shared-safe",
                 metadataVersion: 5,
                 metadataLayoutVersion: 1,
+                displayProjectionV1,
                 ownerMetadata: {
                     t: "encrypted",
                     c: "oRoBAgMEBQYHCAkKCwwNDg8QERITFBUWFxh8aC0+8+YDECLScN6uQTItPyWVR7XbQA==",
@@ -350,6 +360,11 @@ describe("eventRouter payloads (protocol container)", () => {
             agentState: { value: null, version: 9 },
         });
         expect(sharedPayload.body).not.toHaveProperty("ownerMetadata");
+        // Socket consumers already receive these full admitted documents. The
+        // cold-read sidecar is intentionally not another Socket egress surface.
+        expect(ownerPayload.body).not.toHaveProperty('displayProjectionV1');
+        expect(sharedPayload.body).not.toHaveProperty('displayProjectionV1');
+        expect(JSON.stringify(ownerPayload)).not.toContain(ownerDisplay.envelope.c);
     });
 
     it("buildSessionMetadataRecipientUpdate rejects a partial owner projection", () => {

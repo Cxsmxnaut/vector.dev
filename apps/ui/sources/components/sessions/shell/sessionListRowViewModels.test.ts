@@ -404,9 +404,9 @@ describe('buildSessionListRowViewModels', () => {
         const first = buildSessionListRowViewModels({ ...input,
             rowRenderableByKey: new Map(listItems.map((item, index) => [rowKey(item), sessions[index]!])),
         });
-        const updatedSession: SessionListRenderableSession = { ...sessions[100]!, workState: {
-            v: 1, backendId: 'codex', updatedAt: 900,
-            items: [{ id: 'current', kind: 'task', origin: 'happier', status: 'paused', title: 'Review migration', updatedAt: 900 }],
+        const updatedSession: SessionListRenderableSession = { ...sessions[100]!, workDisplay: {
+            v: 1, hasActiveGoal: false,
+            primaryItem: { id: 'current', kind: 'task', status: 'paused', title: 'Review migration' },
         } };
         const second = buildSessionListRowViewModels({ ...input,
             rowRenderableByKey: new Map(listItems.map((item, index) => [rowKey(item), index === 100 ? updatedSession : sessions[index]!])),

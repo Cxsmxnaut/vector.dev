@@ -11,9 +11,8 @@ import { prepareSessionPromptStackInputs } from '@/agent/prompting/coding/sessio
 import { createSessionProjectPromptStackPreparation } from '@/agent/prompting/coding/sessionProjectPromptStack';
 import { withCliPromptLibraryArtifactReader } from '@/agent/prompts/library/resolveCliPromptStackSystemAppendBlocks';
 import { readRequesterAccountEncryptionCurrentness } from '@/api/client/accountEncryptionCurrentnessObservation';
-import { fetchSessionById, type RawSessionRecord } from '@/session/transport/http/sessionsHttp';
+import { fetchSessionById, fetchSessionsPage, type RawSessionRecord } from '@/session/transport/http/sessionsHttp';
 import { readSessionOwnerLocality, tryDecryptSessionOwnerMetadata, tryDecryptSessionOwnerMetadataView } from '@/session/transport/encryption/sessionEncryptionContext';
-import { fetchSessionInventoryPage } from '@/daemon/sessions/sessionInventoryVisibility';
 import type { StoredCredentials } from '@/persistence';
 import { resolveAccountSettingsScopeKey } from '@/settings/accountSettings/accountSettingsScopeKey';
 import { getActiveAccountSettingsSnapshotLifetimeToken, isActiveAccountSettingsSnapshotLifetimeCurrent } from '@/settings/accountSettings/activeAccountSettingsSnapshot';
@@ -98,11 +97,12 @@ export async function syncMemoryDocuments(params: Readonly<{
         let cursor: string | undefined;
         const seen = new Set<string>();
         for (;;) {
-          const page = await fetchSessionInventoryPage({ token: params.credentials.token, scope, cursor,
+          const page = await fetchSessionsPage({ token: params.credentials.token, cursor,
+            ...(scope === 'archived' ? { archivedOnly: true } : { activeOnly: false }),
             limit: SESSION_LIST_PAGE_MAX_LIMIT, signal: params.signal });
           if (page.metadataUpgradeRequiredCount) throw new Error('session_inventory_incomplete');
-          // The authenticated page already carries the complete metadata tuple.
-          // Keep this admission's records instead of re-fetching every Session.
+          // Admission needs full metadata; the shared facade batches document demand
+          // for each compact page instead of fetching individual Session details.
           for (const session of page.sessions) sessions.set(session.id, session);
           if (!page.hasNext) break;
           if (!page.nextCursor || seen.has(page.nextCursor)) throw new Error('session_inventory_incomplete');

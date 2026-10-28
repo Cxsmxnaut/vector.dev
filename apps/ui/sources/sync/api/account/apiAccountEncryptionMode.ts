@@ -499,7 +499,14 @@ async function readSharedAccountEncryptionMode(
     return await accountEncryptionModeReads.run(cacheKey, async () => {
         const value = await backoffForever(async () => {
             assertCurrent();
-            return await run();
+            try {
+                return await run();
+            } catch (error) {
+                // HTTP may settle retirement before another retry enters this
+                // owner. Keep the Account-mode retirement contract in either case.
+                assertCurrent();
+                throw error;
+            }
         });
         assertCurrent();
         return value;

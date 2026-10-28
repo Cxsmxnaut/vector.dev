@@ -52,6 +52,14 @@ import { DaemonMcpServersDetectResponseSchema } from '@happier-dev/protocol/mcp/
 import { prepareWarmCacheEncryptionKey } from './warmCacheEncryptionKey';
 import * as warmCache from './warmCachePersistence';
 import { suspendServerProfilePersistenceForDemo, resumeServerProfilePersistenceForDemo } from '@/sync/domains/server/serverProfiles';
+import { projectSessionDisplayV1, SessionOwnerMetadataV1Schema, SessionUsageLimitRecoveryV1Schema,
+    sealSessionOwnerDisplayEnvelopeV1, openSessionOwnerDisplayEnvelopeV1 } from '@happier-dev/protocol';
+import { createSessionFixture } from '@/dev/testkit/fixtures/sessionFixtures';
+import { buildSessionListRenderableFromSession } from '@/sync/domains/session/listing/sessionListRenderable';
+import { SESSION_LIST_DOCUMENT_ADMISSION, admitOpenedSessionListDisplayProjection,
+    hasCurrentSessionListDisplayMetadata } from '@/sync/domains/session/sessionDocumentAdmission';
+import { SESSION_OWNER_METADATA_PROJECTION } from '@/sync/domains/session/readSessionOwnerMetadataView';
+import { buildSessionListCacheEntryFromRenderable, readSessionListWarmCacheDisplay } from './warmCacheAdapters';
 
 describe('warmCachePersistence', () => {
     beforeEach(async () => {
@@ -62,6 +70,70 @@ describe('warmCachePersistence', () => {
         set.mockClear();
         deleteKey.mockClear();
         clearWarmCacheAccountScope();
+    });
+
+    it.each(['recovery', 'retained fork'] as const)('reloads proved sidecar %s display without full-document authority', (leaf) => {
+        const ownerMetadata = SessionOwnerMetadataV1Schema.parse({ v: 1, workspace: { name: 'Sidecar title', path: '/repo' },
+            ...(leaf === 'recovery' ? { runtime: { sessionUsageLimitRecoveryV1: {
+                v: 1, status: 'waiting', issueFingerprint: 'issue', armedAtMs: 2, resetAtMs: 20, nextCheckAtMs: 20,
+                attemptCount: 1, maxAttempts: 3, lastProbeError: null,
+                selectedAuth: { kind: 'profile', serviceId: 'anthropic', profileId: 'private-profile' },
+            } } } : { history: { forkV1: { v: 1, parentSessionId: 'parent', parentCutoffSeqInclusive: 1,
+                createdAtMs: 2, strategy: 'retained-provider-strategy', requestId: 'private-request' } } }),
+        });
+        const semantic = projectSessionDisplayV1({ sharedMetadata: { v: 1 }, ownerMetadata });
+        const sealed = sealSessionOwnerDisplayEnvelopeV1({ accountMode: 'plain', display: semantic.owner! });
+        if (!sealed.ok) throw new Error(sealed.reason);
+        const opened = openSessionOwnerDisplayEnvelopeV1({ accountMode: 'plain', envelope: sealed.envelope });
+        if (!opened.ok) throw new Error(opened.reason);
+        const descriptor = { scope: 'same-home-account', encryptionMode: 'plain' as const,
+            metadataLayoutVersion: 1, dataEncryptionKey: null, metadataAudience: 'owner' as const };
+        const row = buildSessionListRenderableFromSession({ ...createSessionFixture({ id: 'sidecar', metadata: null,
+            metadataLayoutVersion: 1, metadataVersion: 3, agentState: null,
+            encryptionMode: 'plain', encryptedContentAvailability: 'ready' }),
+            metadataUndecided: true,
+            [SESSION_LIST_DOCUMENT_ADMISSION]: admitOpenedSessionListDisplayProjection(descriptor, 3),
+        }, undefined, undefined, undefined, { shared: semantic.shared, owner: opened.display });
+        saveSessionListWarmCacheEntries('sidecar-home', leaf, { sidecar: buildSessionListCacheEntryFromRenderable(row) });
+        const key = `session-list-warm-cache-v1:sidecar-home:${leaf}`;
+        const persisted = store.get(key)!;
+        expect(persisted).not.toContain('private-profile');
+        expect(persisted).not.toContain('private-request');
+        // Different bytes force the genuine cold parser rather than the unchanged-byte memory shortcut.
+        store.set(key, JSON.stringify(JSON.parse(persisted), null, 2));
+        const loaded = loadSessionListWarmCacheEntries('sidecar-home', leaf).sidecar;
+        expect(loaded).toBeDefined();
+        const restored = readSessionListWarmCacheDisplay(loaded, descriptor, { id: 'sidecar', metadataVersion: 3 });
+        expect(restored?.metadata?.name).toBe('Sidecar title');
+        expect(restored?.metadata?.sessionUsageLimitRecoveryV1).toEqual(opened.display.sessionUsageLimitRecoveryV1);
+        expect(restored?.forkV1).toEqual(opened.display.forkV1);
+        expect(restored && hasCurrentSessionListDisplayMetadata(restored)).toBe(true);
+        expect(restored?.[SESSION_LIST_DOCUMENT_ADMISSION]?.openedAgentStateVersion).toBeUndefined();
+        expect(restored?.[SESSION_OWNER_METADATA_PROJECTION]).toBeUndefined();
+        expect(restored).not.toHaveProperty('agentState');
+        expect(restored?.agentTargetKey).toBeUndefined();
+        expect(SessionUsageLimitRecoveryV1Schema.safeParse(restored?.metadata?.sessionUsageLimitRecoveryV1).success).toBe(false);
+        expect(readSessionListWarmCacheDisplay(loaded, { ...descriptor, scope: 'different-account' },
+            { id: 'sidecar', metadataVersion: 3 })).toBeUndefined();
+        const stale = readSessionListWarmCacheDisplay(loaded, descriptor, { id: 'sidecar', metadataVersion: 4 });
+        expect(stale?.metadataVersion).toBe(3);
+        expect(stale && hasCurrentSessionListDisplayMetadata({ ...stale, metadataVersion: 4 })).toBe(false);
+    });
+
+    it('projects legacy full recovery to display without persisting selected-auth identity', () => {
+        const recovery = SessionUsageLimitRecoveryV1Schema.parse({ v: 1, status: 'waiting', issueFingerprint: 'legacy-issue',
+            armedAtMs: 2, resetAtMs: 20, nextCheckAtMs: 20, attemptCount: 1, maxAttempts: 3, lastProbeError: null,
+            selectedAuth: { kind: 'profile', serviceId: 'anthropic', profileId: 'private-profile' } });
+        const row = buildSessionListRenderableFromSession(createSessionFixture({ id: 'legacy-recovery',
+            metadata: { path: '/repo', host: 'home', sessionUsageLimitRecoveryV1: recovery } }));
+        const entry = buildSessionListCacheEntryFromRenderable(row);
+        saveSessionListWarmCacheEntries('legacy-home', 'legacy-account', { 'legacy-recovery': entry });
+        const key = 'session-list-warm-cache-v1:legacy-home:legacy-account';
+        expect(store.get(key)).not.toContain('private-profile');
+        const compact = JSON.parse(store.get(key)!)['legacy-recovery'].sessionUsageLimitRecoveryV1;
+        expect(compact).toHaveProperty('authSelectionKind', 'profile');
+        expect(compact).not.toHaveProperty('selectedAuth');
+        expect(SessionUsageLimitRecoveryV1Schema.safeParse(compact).success).toBe(false);
     });
 
     it.each(['QuotaExceededError', 'SecurityError'])('keeps the latest warm value in memory when a write raises %s', (name) => {

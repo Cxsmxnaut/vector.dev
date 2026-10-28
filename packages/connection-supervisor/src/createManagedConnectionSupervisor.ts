@@ -419,6 +419,11 @@ export function createManagedConnectionSupervisor(
     },
     reportProbeResult,
     captureProbeReportScope,
+    resetRetryBackoff(): void {
+      if (isStopped || state.phase !== 'online') return;
+      reconnectAttempt = 0;
+      if (state.attempt !== 0) publish({ ...state, attempt: 0 });
+    },
     getState(): ManagedConnectionState {
       return state;
     },

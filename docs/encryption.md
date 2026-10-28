@@ -1926,6 +1926,12 @@ server persistence layer.
   `{ t:'encrypted', c:<account-scoped ciphertext> }` for E2EE ownership. The plain
   branch requires no Account key; the encrypted branch requires real compatible
   material.
+- In 0.3 development, a layout-1 metadata-only mutation retains the exact stored
+  Agent-state bytes, and the server leaves `agentStateVersion` unchanged when
+  those bytes did not change. Both expected tuple versions remain CAS checks.
+  This prevents unrelated publisher metadata from invalidating an in-flight
+  question original. Real Agent-state changes still advance their version;
+  layout-0 owner migration retains its separate transition contract.
 - In 0.3 development, scoped bulk Session reads can share the exact batch's
   `createOperationAccountCurrentnessSource` through
   `readSessionSnapshotForAuthority`. Each Session still validates its stored
@@ -4189,6 +4195,80 @@ require a current caller declaration. Release readiness remains gated by mixed-v
 proof and the remaining integration/live checks, not by an operator activation mode or
 legacy socket drainage.
 
+The canonical 0.3 compact list carries document descriptors rather than these full
+documents. Its shared `agentStateDocument: 'redacted'` records the tombstone;
+`'omitted'` means an owner document was not requested and never authorizes clearing
+it. Neither case is encoded as a fake empty document. Full detail and read-batch
+snapshots continue to apply the recipient projection above. See the compact-list
+contract in [API](api.md#live-session-client-03-development-source).
+
+The 0.3 development cold-display extension stores one nullable
+`displayProjectionV1` beside the tuple. Protocol's single semantic projector
+derives a recipient-safe shared leaf and an optional owner-private leaf, rather
+than copying metadata or a UI row wholesale. Shared display uses the existing
+Session content cipher; owner display uses the existing Account cipher with
+the distinct `session_owner_display` purpose (kind 51). Account mode and Session
+mode are checked independently. Both payloads declare their audience and
+purpose. Owner display has the same binding semantics as existing owner
+metadata: Account purpose separation, without Session-ID binding. Shared
+display uses the Session content key that the client already generates before
+create. Both leaves can therefore be prepared before the existing atomic
+create, without reserving an ID or changing its interface. This claims the
+existing owner-metadata privacy contract, not stronger Session binding.
+The outer sidecar links to the metadata layout/revision;
+it has no independent counter. Tuple updates commit it in the same CAS. A
+shared editor cannot submit an owner leaf; the Server can retain the existing
+owner ciphertext only when the prior display and captured owner tuple still
+prove it unchanged. Revision is deliberately not encrypted into each leaf, so
+this retention does not require shared editors to open owner content.
+
+Only the existing owner-recipient decision may return owner display.
+Collaborator, public-link and Session-runtime projections omit that leaf
+structurally. Existing full-metadata socket updates need no duplicate sidecar
+delivery: readers derive the same semantic display from admitted full content.
+Display opening never establishes full-document readiness or authorizes a
+mutation, role, request or Agent target. Missing or invalid display falls back
+to the existing scoped full reader. Fresh Server admission rechecks an owner
+display's mode against the already-read current Account mode, withdrawing an
+incompatible owner leaf without rereading documents or replacing captured
+shared display. UI owner-content opening also matches the actual credential
+material snapshot to the current Account key fingerprint, using the same
+credentials-material owner as Account storage and metadata writes. A fresh
+fingerprint alone cannot prove that old material opened current content.
+Fresh-create adapters and tuple updates use that same semantic projector.
+An ordinary tuple mutation withdraws the display sidecar with a warning if its
+projection or sealing fails. An explicit `ensureDisplayProjection` still fails
+when it cannot produce the required leaves.
+CLI create likewise logs a default-on, content-free warning and submits a null
+display sidecar when display projection or sealing fails. Full shared/owner
+metadata validation and sealing remain outside this fallback and still fail
+the create rather than publishing an incomplete authoritative tuple.
+Missing or unopenable display after an authorized owner full read is repaired
+through the existing tuple writer's explicit `ensureDisplayProjection` intent,
+never a row mount or separate summary writer. The writer preserves unchanged
+full ciphertext, refreshes a conflict from the winner and does not treat an
+ordinary semantic no-op as proof that a missing display exists. Unavailable
+owner material or a refused write leaves the full read usable and maintenance
+deferred. Read-only, shared and Session-key-scoped readers do not gain Account
+write authority.
+
+Ordinary UI full reads return after publication and run display maintenance
+asynchronously through that same tuple writer. Maintenance holds its own scoped
+Home authority until the operation settles; failure is logged and leaves the
+readable full Session intact. Explicit gathered-list maintenance still awaits its
+CAS within the existing operation concurrency budget. CLI owner status retains
+its explicit awaited maintenance.
+
+Ordinary owner sync retains the existing privacy-upgrade discovery lifecycle,
+including archived/offscreen rows. It gathers full snapshots through read-batch
+after publishing list readiness, reuses operation-local fetched parts and keeps
+the existing maintenance concurrency budget. Failure remains pending for the
+next ordinary sync rather than starting a hot retry loop. Recipient-envelope
+rewrap with the same Session key preserves display ciphertext; Account-content
+mode transitions carry the target owner leaf through their existing atomic
+transition. These describe development source; source/composed validation and
+the combined managed-runtime live gate are separate from released availability.
+
 Current development role snapshots remain owner-private throughout this path.
 The metadata writer accepts the canonical `work.sessionRolesV1` produced by the
 role owner, seals it inside the Account-owned work category, and restores that
@@ -4352,9 +4432,15 @@ the current recipient-privacy owner refuses that shape with
 proof that an unupgraded 0.2-created link can reopen. The owner's ordinary initial
 0.3 sync discovers pending shared layout-0 Sessions, including archived/offscreen
 Sessions, and delegates their exact-source upgrade to the existing metadata tuple
-writer. Until that succeeds, the viewer shows that the link is being updated by
-its owner. Public readers never bypass the privacy projection to restore
-whole-metadata disclosure. This upgrade path is development source, not a claim
+writer. Discovery is Account-scoped demand: initial acquisition, recovery,
+explicit refresh and real sharing/access changes request it; unrelated list
+refreshes, agent-state updates and known message-only changes do not. Unknown
+legacy change hints remain conservative. Concurrent demand joins one operation,
+and a sharing change arriving during it retains a follow-up. Membership changes
+that introduce a reader also wake a pending legacy Session's owner through the
+existing share-change publication. Until the upgrade succeeds, the viewer shows
+that the link is being updated by its owner. Public readers never bypass the
+privacy projection to restore whole-metadata disclosure. This upgrade path is development source, not a claim
 that a retained deployment or composed live journey has been validated.
 
 In **development-only, unreleased 0.3**, `storedContentPublicShareOrigin.ts` owns
@@ -4797,6 +4883,25 @@ The device-local warm cache keeps the row's `encryptionMode` and last settled av
 (enums only, beside the decrypted row metadata it already holds), so a cold reload shows an
 own readable Session as readable; an unsettled row persists nothing, and hydration
 re-derives the fact.
+In 0.3 development source, a successfully opened display can also persist a compact
+display proof: a nonsecret fingerprint of its Home, credential, Account-currentness,
+Session-key, mode, layout and recipient admission, plus its actual opened metadata
+revision. A fresh compact list row must match that admission before reusing the display.
+Last-known display at an older revision remains visible while the batch reader obtains
+the newer revision; its opened revision stays unchanged until that read succeeds.
+An observed remote revision cannot promote retained owner metadata from an older
+revision; any held owner-admission witness must agree. Entries without a matching
+proof hydrate through the existing batch reader. The cache retains compact work and
+activity presentation, not full metadata, Agent state, request addresses or owner
+continuation authority. Its display proof never establishes full-Session readiness;
+mutations and controls still demand the authoritative full snapshot.
+Cold-display cache leaves follow the same compact projection: usage recovery
+keeps display state and authentication-selection kind, not profile or connected
+Account identifiers; fork context keeps only its admitted presentation fields.
+Memory-only request identity and Agent target remain absent from persisted
+display. A rendered consumer that needs these private full-document facts must
+request them through the existing scoped readers rather than infer authority
+from a display leaf.
 Plain Sessions and Plain Accounts require no recipient-key collection: it settles
 `not_required` before any recipient key work and the editor renders no encryption row.
 An unavailable Account-owned layout-1 envelope can still lock a plain Session's
@@ -4958,12 +5063,26 @@ Approved amendment `PLAINTEXT-ACCOUNTS-2026-07-30.7` adds one request-size-bound
 `sessions: assert_empty | migrate` directive to the existing Account transition.
 Each migration item covers exactly one active or archived layout-1 Session and
 carries `sessionId`, expected layout `1`, exact metadata and Agent-state versions,
-the exact expected owner envelope, and the exact target owner envelope. The server
+the exact expected owner envelope, and the exact target owner envelope. The 0.3
+development display extension also accepts optional target `ownerDisplay`, sealed
+under the target Account mode from the already-open full owner document. It uses
+the same owner-display semantic projector and needs no Session key or invented
+shared document. The existing canonical request/signature includes this leaf.
+The server
 uses Account-first lock order and the existing Session tuple CAS/projector, changes
-only the owner envelope plus canonical versions/cursors, completes every Session
+only the owner envelope and its display leaf plus canonical versions/cursors,
+completes every Session
 rewrite before the final Account mutation, and rolls the whole transition back on
 conflict. It does not re-encrypt Session transcripts or change Session mode, keys,
 sharing, lifecycle, or archive state.
+
+That same update preserves validated current shared display bytes and outer
+linkage, replacing the owner leaf or removing it when no producer was supplied.
+An unavailable whole sidecar remains unavailable rather than blocking readable
+full-content migration or its exact replay. Valid current display still requires
+the exact target owner leaf on replay; malformed target envelopes or incompatible
+target Account modes are refused. This is development source, not live release
+certification.
 
 The Session directive has no separate item-count ceiling. The existing canonical
 8 MiB Account-migration request boundary limits the real transport payload, while

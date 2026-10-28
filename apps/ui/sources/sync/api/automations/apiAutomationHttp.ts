@@ -41,6 +41,7 @@ export function captureNativeAutomationRequestContext(credentials?: AuthCredenti
 
 export async function readAutomationApiJson(path: string, init: RequestInit, options: ServerFetchOptions,
     context: AutomationRequestContext | undefined, fallback: ServerFetch, credentials?: AuthCredentials): Promise<unknown> {
+    options = { recoveryRead: 'unbounded', ...options };
     context ??= captureNativeAutomationRequestContext(credentials);
     context?.assertCurrent?.();
     if (!context?.readTransport) {

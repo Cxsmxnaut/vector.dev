@@ -7,6 +7,7 @@ import type { DeepIndexDbHandle } from './deepIndex/deepIndexDb';
 import type { MemoryDocumentSearchScope } from './syncMemoryDocuments';
 import type { RawSessionRecord } from '@/session/transport/http/sessionsHttp';
 import { ArtifactReadHeadersBatchInputV1Schema, ArtifactReadHeadersBatchResponseV1Schema } from '@happier-dev/protocol/artifacts/artifactAccessV1';
+import { createCompactSessionListRowFixture, createSessionReadBatchResponseFixture } from '@/testkit/backends/sessionFixtures';
 
 type LegacySessionProjection = Readonly<Pick<RawSessionRecord, 'metadata' | 'share'>
   & Partial<Pick<RawSessionRecord, 'projectKey' | 'ownerAccountId' | 'encryptionMode'>>>;
@@ -160,7 +161,7 @@ async function withCurrentDocumentFixture(run: (fixture: Readonly<{
       if (inventoryState === 'paged' && !new URL(String(url)).searchParams.has('cursor')) {
         return { status: 200, data: { sessions: [], nextCursor: 'next-page', hasNext: true } };
       }
-      return { status: 200, data: { sessions: Array.from({ length: sessionCount }, (_, i) => ({ ...sessionRecord(i),
+      return { status: 200, data: { sessions: Array.from({ length: sessionCount }, (_, i) => createCompactSessionListRowFixture({ ...sessionRecord(i),
         id: i === 0 ? 'remote-session' : `remote-session-${i}`,
         ...(path.endsWith('/archived') ? { archivedAt: 1 } : {}),
         })), nextCursor: null, hasNext: false,
@@ -197,6 +198,10 @@ async function withCurrentDocumentFixture(run: (fixture: Readonly<{
   vi.spyOn(axios, 'post').mockImplementation(async (url, body) => {
     const path = new URL(String(url)).pathname;
     httpPaths.push(`POST ${path}`);
+    if (path === '/v2/sessions/read-batch') return { status: 200, data: createSessionReadBatchResponseFixture({
+      request: body, sessions: Array.from({ length: sessionCount }, (_, i) => ({ ...sessionRecord(i),
+        id: i === 0 ? 'remote-session' : `remote-session-${i}` })),
+    }) };
     if (path === '/v1/artifacts/read') {
       const input = ArtifactReadHeadersBatchInputV1Schema.parse(body);
       return { status: 200, data: ArtifactReadHeadersBatchResponseV1Schema.parse({ projection: 'headers', items: input.artifactIds.map(artifactId => {
@@ -422,7 +427,7 @@ it('qualifies global Project documents using the owning Session Machine and work
   }, 'daemon-machine');
 });
 
-it('admits global documents from the fresh paginated Session records without a second detail transport', async () => {
+it('admits global documents from compact paginated Sessions using batched documents without singleton reads', async () => {
   await withCurrentDocumentFixture(async ({ prepare, db, setSessionDetailUnavailable, setInventoryState }) => {
     setSessionDetailUnavailable(true);
     setInventoryState('paged');
@@ -476,6 +481,12 @@ it('reads shared prompt and Project inventories once per fresh global admission,
     const projectRequests = () => vi.mocked(axios.post).mock.calls.filter(([url]) =>
       new URL(String(url)).pathname === '/v1/account/project-rows/list').length;
     const beforeProjects = projectRequests();
+    const documentBatches = () => vi.mocked(axios.post).mock.calls.filter(([url]) =>
+      new URL(String(url)).pathname === '/v2/sessions/read-batch').length;
+    const beforeBatches = documentBatches();
+    const singletonReads = () => vi.mocked(axios.get).mock.calls.filter(([url]) =>
+      /^\/v2\/sessions\/remote-session(?:-\d+)?$/.test(new URL(String(url)).pathname)).length;
+    const beforeSingletons = singletonReads();
     const admitted = await prepare();
     expect(admitted.state).toBe('ready');
     expect(db.searchDocuments({ query: 'quartz', eligibleDocuments: admitted.eligibleDocuments, maxResults: 10 })
@@ -484,6 +495,8 @@ it('reads shared prompt and Project inventories once per fresh global admission,
     // Every admission is fresh, while its Sessions share that admitted Account inventory.
     expect(requests() - before).toBe(1);
     expect(projectRequests() - beforeProjects).toBe(1);
+    expect(documentBatches() - beforeBatches).toBe(1);
+    expect(singletonReads() - beforeSingletons).toBe(0);
     const afterProjects = projectRequests();
     expect((await prepare({ includeArchivedSessions: true })).state).toBe('ready');
     expect(projectRequests() - afterProjects).toBe(1);

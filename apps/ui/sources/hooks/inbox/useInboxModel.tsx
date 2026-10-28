@@ -38,6 +38,7 @@ import { readSessionWorkStalled } from '@/components/work/status/sessionWorkStat
 import { buildSessionOrganizationSessionKey } from '@/sync/domains/session/organization/keys';
 import { storage } from '@/sync/domains/state/storageStore';
 import type { Session } from '@/sync/domains/state/storageTypes';
+import { readSessionListRowForServerId } from '@/sync/domains/session/listing/sessionListRowStateLookup';
 import type { SessionAttentionStanding } from '@happier-dev/protocol';
 import type { AutomationDefinitionRun } from '@/sync/domains/automations/automationTypes';
 import { createWorkflowRunRoute } from '@/sync/domains/workflows/workflowRunRoute';
@@ -112,7 +113,7 @@ export type InboxModel = Readonly<{
     automationAttention: WorkflowAttentionSource;
     automationAttentionItems: readonly AutomationInboxItem[];
     /** Settle: `session.attention.set {standing:false}` + `session.read_state.set read`. */
-    settle: (session: Session) => Promise<void>;
+    settle: (session: Pick<Session, 'id' | 'serverId'>) => Promise<void>;
     /** Snooze (`remindAt`) or clear it (`null`) through `session.attention.set`. */
     setReminder: (session: Session, remindAt: number | null) => Promise<void>;
 }>;
@@ -234,6 +235,9 @@ function useCreateInboxModel(): InboxModel {
     );
 
     const sessionsById = source.sessionsById;
+    const resolveInboxSession = React.useCallback((sessionId: string) =>
+        readSessionListRowForServerId(source.sessionListRowsByServerId, profileScope?.serverId, sessionId)
+        ?? sessionsById[sessionId], [source.sessionListRowsByServerId, profileScope?.serverId, sessionsById]);
     const stalledSessions = React.useMemo(() => {
         const nowMs = Date.now();
         const stalled = Object.values(sessionsById).filter((session) => isStalledWorker(session, nowMs));
@@ -259,12 +263,12 @@ function useCreateInboxModel(): InboxModel {
         stalledSessions,
         landings: [],
         snoozed,
-        resolveSession: (sessionId) => sessionsById[sessionId],
+        resolveSession: resolveInboxSession,
         resolveOriginRunId: readAwarenessOriginRunId,
         }, previousWorkGroups.current);
         previousWorkGroups.current = next;
         return next;
-    }, [automationAttention.serverId, automationRuns, openApprovals, sessionPresentation.sessionsNeedingAttention, sessionsById, snoozed, stalledSessions, workflowRuns]);
+    }, [automationAttention.serverId, automationRuns, openApprovals, sessionPresentation.sessionsNeedingAttention, resolveInboxSession, snoozed, stalledSessions, workflowRuns]);
     const previousItems = React.useRef<readonly InboxItem[]>([]);
     const items = React.useMemo(() => {
         const next = buildInboxItems({ workGroups, sessionPresentation, workflowServerId: workflowAttention.serverId,
@@ -421,7 +425,7 @@ function useCreateInboxModel(): InboxModel {
         } catch { Modal.alert(t('common.error'), t('errors.unknownError')); }
     }, [accountNotices, markRead, targetBySessionAddress, updateNotice, discussionAttention.markOpened, executionRuns.markOpened, profileScope]);
 
-    const settle = React.useCallback(async (session: Session) => {
+    const settle = React.useCallback(async (session: Pick<Session, 'id' | 'serverId'>) => {
         const serverId = session.serverId ?? null;
         try {
             await runInboxAction('session.attention.set', { sessionId: session.id, standing: false }, serverId);

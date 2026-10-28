@@ -41,7 +41,10 @@ import {
 } from '@/sync/ops/sessionMachineTarget';
 import { readSessionDisplayTitleField } from '@/sync/state/selectors';
 import { readSessionOwnerMetadataView } from '@/sync/domains/session/readSessionOwnerMetadataView';
-import { readSessionListRenderableOwnerMetadataView, readSessionListRenderableSharedMetadata } from '@/sync/domains/session/listing/sessionListRenderableSessionProjection';
+import { readSessionListRenderableOwnerMetadataView, readSessionListRenderableSharedMetadata,
+    readSessionListPresentationRuntime, readSessionListPresentationPendingFlags, readSessionListPresentationPendingObservedAt,
+    readSessionListPresentationDisplay,
+    type SessionListPresentationSource } from '@/sync/domains/session/listing/sessionListRenderableSessionProjection';
 import { readSessionListRowForServerId } from '@/sync/domains/session/listing/sessionListRowStateLookup';
 import { t } from '@/text';
 import { formatWithCachedDateTimeFormatter } from '@/utils/datetime/cachedIntlFormatters';
@@ -108,6 +111,7 @@ type SessionStatusColors = Readonly<{
 }>;
 export type SessionWorkingTextMode = 'animated' | 'static';
 type GetSessionStatusOptions = Readonly<{
+    presentationSource?: SessionListPresentationSource;
     archiving?: boolean;
     includeTitle?: boolean;
     /** Work rows already carry an age, while Session-list rows can retain Last seen. */
@@ -429,8 +433,10 @@ export function presentSessionAwarenessStateV1(
 }
 
 export function getSessionStatus(session: SessionStatusSource, nowMs: number = Date.now(), options?: GetSessionStatusOptionsInput): SessionStatus {
-    session = readSessionRuntimeObservation(session);
     const resolvedOptions = resolveGetSessionStatusOptions(options);
+    const source = resolvedOptions.presentationSource;
+    if (!source) session = readSessionRuntimeObservation(session);
+    const pending = source ? readSessionListPresentationPendingFlags(source) : null;
     const { statusColors = DEFAULT_SESSION_STATUS_COLORS } = resolvedOptions;
     const awareness = projectUiSessionAwareness(session, nowMs, {
         ...resolvedOptions,
@@ -439,14 +445,15 @@ export function getSessionStatus(session: SessionStatusSource, nowMs: number = D
         pendingRequestObservedAt: latestPendingRequestObservedAt(session),
     });
     const connected = awareness.runtime !== 'offline' && awareness.runtime !== 'unknown';
-    const archiving = resolvedOptions.archiving ?? ('archiving' in session && session.archiving === true);
+    const archiving = resolvedOptions.archiving ?? (('archiving' in session && session.archiving === true)
+        || Boolean(source?.baseSession && 'archiving' in source.baseSession && source.baseSession.archiving === true));
     const contentReadable = isSessionAwarenessContentReadableV1(awareness.encryption);
     const canAnimate = awareness.freshness === 'live' && contentReadable;
     const facts = { ...awareness, viewer: session.viewer, archiving };
     const status = readSessionAwarenessWorkStatusV1({ awareness: facts });
     const presented = presentSessionAwarenessStateV1(status.state, {
         freshness: awareness.freshness,
-        lastSeenAtMs: session.activeAt,
+        lastSeenAtMs: source ? readSessionRuntimeObservation(readSessionListPresentationRuntime(source)).activeAt : session.activeAt,
         disconnectedTextMode: resolvedOptions.disconnectedTextMode,
     });
     const color = status.tone === 'danger' ? statusColors.error
@@ -638,9 +645,11 @@ export function getSessionAvatarId(session: SessionDisplayNameSource, serverId?:
  * The carried card's state line for a Session (DnD lab C2: "Working · happier · devbox"): its state when
  * that is news, then where it works. An idle, reachable Session's state stays quiet, as in its row.
  */
-export function getSessionCarriedLine(session: SessionStatusSource, serverId?: string | null): string | null {
-    const status = getSessionStatus(session);
-    return [status.shouldShowStatus ? status.statusText : null, getSessionWorkContext(session, serverId)].filter(Boolean).join(' · ') || null;
+export function getSessionCarriedLine(session: SessionStatusSource, serverId?: string | null,
+    source?: SessionListPresentationSource): string | null {
+    const status = getSessionStatus(session, undefined, { presentationSource: source });
+    return [status.shouldShowStatus ? status.statusText : null,
+        getSessionWorkContext(source ? readSessionListPresentationDisplay(source) : session, serverId)].filter(Boolean).join(' · ') || null;
 }
 
 /** Display-only identity behind Work bylines and Session reference rows. */
@@ -679,7 +688,7 @@ export function getSessionWorkContext(session: SessionDisplayNameSource, serverI
 }
 
 /** Returns the session path for the subtitle on existing path-oriented surfaces. */
-export function getSessionSubtitle(session: SessionStatusSource, serverId?: string | null): string {
+export function getSessionSubtitle(session: SessionDisplayNameSource, serverId?: string | null): string {
     const ownerMetadata = readDisplayOwnerMetadata(session);
     if (readSessionDirectoryKind(ownerMetadata) === 'managed') {
         // Where a no-folder session runs is its machine; its private folder is not a place to show.

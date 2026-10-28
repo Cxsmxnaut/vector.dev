@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest';
 import { SessionListQueryResponseV1Schema } from '@happier-dev/protocol/sessions/listing/response';
+import { createCompactSessionListRowFixture } from '../harness/sessionReadBatchHttpBoundary';
 import { projectSessionOwnerCompatibilityViewV1 } from '@happier-dev/protocol/sessions/metadata/sessionMetadataSchemasV1';
 import { createLockedEncryptedSessionByIdResponseFixture, createPlainSessionByIdResponseFixture, createPlainSessionCurrentProjectionRecordFixture, createSessionDataKeyFixture, createSessionFixture, createSessionOwnerViewerFixture } from './sessionFixtures';
 
@@ -57,7 +58,7 @@ it('keeps an owner without a read row quiet and derives unread only from an expl
     expect(unread.readState).toEqual({ state: 'tracking', lastViewedSessionSeq: 2, unreadSince: 3 });
     expect(unread.attention.reasons).toContain('unread');
     const page = SessionListQueryResponseV1Schema.parse({ sessions: [{
-        ...createPlainSessionCurrentProjectionRecordFixture({ seq: session.seq }), viewer: unread,
+        ...createCompactSessionListRowFixture(createPlainSessionCurrentProjectionRecordFixture({ seq: session.seq })), viewer: unread,
     }], nextCursor: null, hasNext: false, attentionNextCursor: null, attentionHasNext: false });
     expect(page.sessions[0]?.viewer).toEqual(unread);
 });

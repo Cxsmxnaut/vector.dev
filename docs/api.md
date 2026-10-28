@@ -1187,10 +1187,11 @@ stored-content declaration. Availability comes from
 `effectiveAccess.capabilities`; answering Agent questions uses Send authority.
 
 In 0.3 development, `POST /v2/sessions/read-batch` accepts
-`{sessionIds, accessProjectionVersion?: 1, includeSnapshot?: boolean, includeMessages?: boolean}`, defaulting
+`{sessionIds, accessProjectionVersion?: 1, includeSnapshot?: boolean, includeTurns?: boolean, includeMessages?: boolean, underSessionId?: string}`, defaulting
 to snapshots enabled and messages disabled. Snapshot demand returns each detail
 using the same optional access-projection selection as the single reader, plus
-its turns after successful detail admission. Message demand returns the ordinary first page with
+its turns after successful detail admission. Shell/document readers set
+`includeTurns: false` to omit that independent demand. Message demand returns the ordinary first page with
 `scope=all&roles=user,agent,event` and the message owner's default page size and
 cursors. At least one demand must be enabled; the application HTTP body limit
 owns request size. Snapshot and message demands can be sent separately so slow
@@ -1202,9 +1203,19 @@ missing Sessions retain the same non-disclosing result; component failures do
 not discard other admitted components. Plain/encrypted framing, publication,
 fresh access admission and client opening stay with the existing Session readers.
 Unexpected component failures return `503 session_read_unavailable`; database
-admission failures retain the canonical database error code. This Account-client
-transport does not admit restricted credentials. Existing single readers keep
-their routes. The one-way 0.3 component upgrade boundary requires no 0.2 batch
+admission failures retain the canonical database error code. Ordinary Account
+clients retain their existing access checks. Restricted credentials require a
+verified existing signed snapshot-preparation purpose and captured grants for
+every requested operand; a raw PAT is not sufficient. Those reads explicitly
+request snapshots with turns and messages disabled.
+
+Optional `underSessionId` bounds snapshot-only demand to the current readable
+managed subtree. Every requested ID must be admitted both at capture and before
+publication. A Session-runtime principal must bind that root to its own Session;
+its returned snapshots contain the shared View projection, never owner-private
+metadata or viewer facts. This does not grant descendant exact-detail access or
+transcript access. Existing single readers keep their routes. The one-way 0.3
+component upgrade boundary requires no 0.2 batch
 fallback or negotiation; 0.2-created retained Session data remains readable.
 This batches HTTP transport; storage snapshots and database work remain per
 Session, with queuing owned by the existing database pool and snapshot reader.
@@ -1219,6 +1230,50 @@ delay beyond its dispatch microtask. Invalidation separates successor joins
 without cancelling incumbents. Reservations retain neither settled results nor
 authorization: each borrower still owns currentness, fresh-witness and opening
 checks, and only the final physical-read borrower leaving cancels acquisition.
+
+Current 0.3 Session list routes return the separate compact
+`V2SessionListRow` contract. `documents: 'omitted'` means the metadata,
+owner-metadata and Agent-state documents are absent; the list query does not
+select those large columns. Rows retain the admitted scalar projections,
+document revisions, metadata layout, storage mode and viewer key envelope.
+`metadataAudience` identifies the admitted owner/shared projection;
+`agentStateDocument: 'redacted'` preserves the shared recipient's authoritative
+Agent-state tombstone without confusing it with an omitted owner document.
+Detail, lookup-by-tag and snapshot-batch reads retain the full record contract.
+
+The 0.3 development cold-display extension adds nullable `displayProjectionV1` on
+that same Session row: `{v: 1, sourceMetadataVersion, metadataLayoutVersion: 1,
+shared, owner?}`. The shared leaf uses the Session's explicit content mode; the
+optional owner leaf independently uses the owner's Account content mode. Only
+the existing owner-recipient projection returns the owner leaf. Public links,
+collaborators and Session-runtime principals receive shared display only, even
+when another part of their existing read authority is broader. A missing,
+stale, mode-incompatible or unopenable display requires the existing authorized
+full-read fallback, not an empty document. Owner display uses Account purpose
+separation without Session-ID binding, matching existing owner metadata; shared
+display uses the Session key generated before create. The create interface and
+ID allocation are unchanged. Fresh-create adapters use the same semantic
+projector as tuple updates. After an authorized owner full read, missing display
+is repaired through that tuple writer's `ensureDisplayProjection` intent and
+existing CAS; refusal preserves the readable full result. CLI status activates
+this only for the existing admitted present-user host invocation with the same
+captured read/content token; signed, custom, automation and Session/RPC readers
+do not borrow broader Account write authority. Ordinary owner sync
+gathers retained upgrade IDs after list readiness, reusing full parts already
+fetched by that operation. This is development source, not released availability
+or completed live acceptance.
+
+An observed list revision is not proof that a client has opened that document.
+Warm reuse also requires the same Home, Account/credential, mode, key and
+audience. Readers gather changed or missing demanded snapshots into the existing
+read-batch transport with turns and messages disabled. A compact refresh never
+replaces a full document with an empty value or advances its stored revision.
+This is the canonical all-component 0.3 wire contract; historical layout-0 data
+continues through the existing full readers and metadata privacy upgrade.
+The full-detail HTTP boundary validates the current Protocol record directly;
+it does not normalize older component wire shapes into current authority.
+Historical stored metadata and Agent-state strings still use their existing
+post-read plain/E2EE codecs.
 
 Automatic transport selects `action` for an E2EE Session without a content
 credential, and otherwise selects a session-scoped viewer socket. Failure to

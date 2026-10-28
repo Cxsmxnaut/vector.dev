@@ -15,7 +15,7 @@ import { RpcHandlerManager } from '@/api/rpc/RpcHandlerManager';
 import { createHappierMcpServer } from '@/mcp/createHappierMcpServer';
 import { createCliActionExecutor } from '@/session/actions/createCliActionExecutor';
 import { resolveCliAgentStartContextV1 } from '@/session/actions/resolveCliAgentStartContextV1';
-import { createAccountEncryptionCurrentnessFixture, createSessionNotificationContextFixture } from '@/testkit/backends/sessionFixtures';
+import { createAccountEncryptionCurrentnessFixture, createSessionNotificationContextFixture, createCompactSessionListRowFixture, createSessionReadBatchResponseFixture } from '@/testkit/backends/sessionFixtures';
 import { AgentRuntimeDaemonServiceRequestV1Schema } from '@/agent/runtime/session/process/agentRuntimeDaemonServiceProtocol';
 import { hashProcessCommand } from '@/daemon/sessionRegistry';
 import { hashPrivateBearer } from '@/daemon/privateBearerFile';
@@ -98,6 +98,7 @@ it.each(['session.status.get', 'session.messages.recent.get', 'session.stop', 's
   });
   vi.spyOn(axios, 'post').mockImplementation(async (url, body) => {
     const pathname = new URL(String(url)).pathname;
+    if (pathname === '/v2/sessions/read-batch') return { status: 200, data: createSessionReadBatchResponseFixture({ request: body, sessions: [sessionId, ...children].map(row) }) };
     if ([sessionId, ...children].some(id => pathname === `/v2/sessions/${id}/archive` || pathname === `/v2/sessions/${id}/unarchive`)) {
       return { status: 200, data: { success: true, archivedAt: pathname.endsWith('/unarchive') ? null : 123 } };
     }
@@ -106,7 +107,7 @@ it.each(['session.status.get', 'session.messages.recent.get', 'session.stop', 's
     const query = SessionListQueryV1Schema.parse(body);
     expect(query.underSessionId).toBe(sessionId);
     const response = SessionListQueryResponseV1Schema.safeParse({
-      sessions: query.storage === 'active' ? [...members].map(row) : [],
+      sessions: query.storage === 'active' ? [...members].map(id => createCompactSessionListRowFixture(row(id))) : [],
       nextCursor: null, hasNext: false, attentionNextCursor: null, attentionHasNext: false,
     });
     if (!response.success) {

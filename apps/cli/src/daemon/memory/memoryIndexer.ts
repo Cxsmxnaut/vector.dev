@@ -27,6 +27,7 @@ import {
   collectRetainedSessionInventoryVisibility,
   fetchSessionInventoryPage,
 } from '@/daemon/sessions/sessionInventoryVisibility';
+import { fetchSessionsPage } from '@/session/transport/http/sessionsHttp';
 import { syncMemoryHintsForSessionsOnce } from './syncMemoryHintsForSessionsOnce';
 import { logServerEndpointFailure } from '@/api/client/serverEndpointFailureLog';
 import { syncDeepIndexForSessionsOnce } from './deepIndex/syncDeepIndexForSessionsOnce';
@@ -375,10 +376,11 @@ export async function createMemoryIndexer(params: Readonly<{
     limit: number;
     signal?: AbortSignal;
   }>): Promise<MemoryInventoryPage> => {
-    return await fetchSessionInventoryPage({
+    // Eligibility reads owner-private Machine locality, so it explicitly needs full documents.
+    return await fetchSessionsPage({
       token: params.credentials.token,
       ...(args.cursor === undefined ? {} : { cursor: args.cursor }),
-      scope: args.scope,
+      ...(args.scope === 'archived' ? { archivedOnly: true } : { activeOnly: false }),
       limit: args.limit,
       ...(args.signal ? { signal: args.signal } : {}),
     });
@@ -618,7 +620,7 @@ export async function createMemoryIndexer(params: Readonly<{
 
     const archived = await collectRetainedSessionInventoryVisibility({
       retainedSessionIds: [...indexed], scopes: ['archived'], signal,
-      fetchInventoryPage: args => fetchMemoryInventoryPage({ ...args,
+      fetchInventoryPage: args => fetchSessionInventoryPage({ ...args, token: params.credentials.token,
         limit: settings.worker.sessionListPageLimit }),
     });
     signal?.throwIfAborted();

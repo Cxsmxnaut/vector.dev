@@ -823,7 +823,7 @@ describe('ApiSessionClient pending queue materialization', () => {
             seq: 1,
             createdAt: Date.now(),
             body: {
-                t: 'new-message',
+                t: 'new-message', delivery: 'full' as const,
                 sid: mockSession.id,
                 message: {
                     id: 'msg-2',
@@ -1493,7 +1493,7 @@ describe('ApiSessionClient pending queue materialization', () => {
                 seq: 2,
                 createdAt: Date.now(),
                 body: {
-                    t: 'new-message',
+                    t: 'new-message', delivery: 'full' as const,
                     sid: session.id,
                     message: {
                         id: 'msg-2',
@@ -1508,7 +1508,7 @@ describe('ApiSessionClient pending queue materialization', () => {
                 seq: 3,
                 createdAt: Date.now(),
                 body: {
-                    t: 'new-message',
+                    t: 'new-message', delivery: 'full' as const,
                     sid: session.id,
                     message: {
                         id: 'msg-3',

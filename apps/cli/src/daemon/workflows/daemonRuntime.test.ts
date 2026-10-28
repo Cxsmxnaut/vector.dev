@@ -11,7 +11,7 @@ import { SOCKET_RPC_EVENTS } from '@happier-dev/protocol/socketRpc';
 import { bindApiSessionSocketMock, createApiSessionSocketStub } from '@/testkit/backends/apiSessionSocketHarness';
 import { publishServerHttpRuntimeOrigin } from '@/api/client/serverHttpBaseUrl';
 import { configuration } from '@/configuration';
-import { createSessionNotificationContextFixture, createSessionRecordFixture } from '@/testkit/backends/sessionFixtures';
+import { createSessionNotificationContextFixture, createSessionRecordFixture, createCompactSessionListRowFixture } from '@/testkit/backends/sessionFixtures';
 import { buildSessionCreationCorrespondence } from '@/session/shared/sessionCreationCorrespondence';
 import { deriveWorkflowSessionInputLocalIdV2 } from '@happier-dev/protocol/sessions/messages/sessionInputAdmission';
 import { SessionMessageReplyCapabilityV1Schema, SessionMessageReplyReadResultV1Schema } from '@happier-dev/protocol/sessions/messages/sessionMessageReplyV1';
@@ -40,7 +40,6 @@ import { createResolvedContributionRegistry } from '@/plugins/projection/registr
 import { publishSessionControlsMetadataBestEffort } from '@/agent/runtime/controls/publishSessionControlsMetadataBestEffort';
 import type { Metadata } from '@/api/types';
 import { createTestMetadata } from '@/testkit/backends/sessionMetadata';
-import { SessionListQueryResponseV1Schema } from '@happier-dev/protocol/sessions/listing/response';
 import { createAuthoredAdmittedPluginRuntimeFixture } from '@/plugins/testkit/admittedRuntime';
 import { createPluginManifestV2Fixture } from '@/plugins/testkit/manifestV2Fixture';
 import { createCliApprovalsArtifactStore } from '@/session/actions/approvals/artifactStore';
@@ -60,8 +59,6 @@ vi.mock('@/daemon/controlServer', () => ({ startDaemonControlServer: async () =>
 const mocks = vi.hoisted(() => ({
   fetchSessionById: vi.fn(),
   lookupSessionsByTags: vi.fn<typeof import('@/session/transport/http/sessionsHttp')['lookupSessionsByTags']>(),
-  fetchSessionsPage: vi.fn<typeof import('@/session/transport/http/sessionsHttp')['fetchSessionsPage']>(),
-  fetchSessionsQueryPage: vi.fn<typeof import('@/session/transport/http/sessionsHttp')['fetchSessionsQueryPage']>(),
   fetchAccountEncryptionCurrentness: vi.fn(),
   callSessionRpc: vi.fn(),
   io: vi.fn(),
@@ -73,8 +70,6 @@ vi.mock('@/session/transport/http/sessionsHttp', async (importOriginal) => ({
   ...await importOriginal<typeof import('@/session/transport/http/sessionsHttp')>(),
   fetchSessionById: mocks.fetchSessionById,
   lookupSessionsByTags: mocks.lookupSessionsByTags,
-  fetchSessionsPage: mocks.fetchSessionsPage,
-  fetchSessionsQueryPage: mocks.fetchSessionsQueryPage,
 }));
 vi.mock('@/api/client/connectedServiceCredentialApi', async (importOriginal) => ({
   ...await importOriginal<typeof import('@/api/client/connectedServiceCredentialApi')>(),
@@ -971,10 +966,14 @@ describe('workflow actual Session reuse metadata', () => {
     });
     mocks.fetchSessionById.mockResolvedValue(session);
     mocks.lookupSessionsByTags.mockImplementation(async ({ tags }) => ({ state: 'available', tags, sessions: [] }));
-    mocks.fetchSessionsPage.mockResolvedValue({ sessions: [], nextCursor: null, hasNext: false });
-    mocks.fetchSessionsQueryPage.mockResolvedValue({ sessions: [], nextCursor: null, hasNext: false,
-      attentionNextCursor: null, attentionHasNext: false });
+    vi.spyOn(axios, 'get').mockImplementation(async url => {
+      const path = new URL(String(url)).pathname;
+      if (path === '/v2/sessions' || path === '/v2/sessions/archived') return { status: 200,
+        data: { sessions: [], nextCursor: null, hasNext: false } };
+      throw new Error(`Unexpected Session lookup read: ${path}`);
+    });
   });
+  afterEach(() => { vi.restoreAllMocks(); });
 
   it('uses the authorized owner cwd and rejects another Machine before preparation', async () => {
     await expect(resolveWorkflowSessionConversation({ credentials, sessionId, machineId: 'machine-1' }))
@@ -1208,10 +1207,13 @@ describe('workflow actual Session reuse metadata', () => {
     expect(refused).toMatchObject([{ reason }]);
   });
   it('reports authenticated reuse reader check session_identity_mismatch for a prefix that resolves to another exact id', async () => {
-    const page = { sessions: [createSessionNotificationContextFixture(sessionId)], nextCursor: null, hasNext: false,
-      attentionNextCursor: null, attentionHasNext: false };
-    mocks.fetchSessionsPage.mockResolvedValue(page);
-    mocks.fetchSessionsQueryPage.mockResolvedValue(SessionListQueryResponseV1Schema.parse(page));
+    vi.mocked(axios.get).mockImplementation(async url => {
+      const path = new URL(String(url)).pathname;
+      if (path === '/v2/sessions' || path === '/v2/sessions/archived') return { status: 200,
+        data: { sessions: path.endsWith('/archived') ? [] : [createCompactSessionListRowFixture(createSessionNotificationContextFixture(sessionId))],
+          nextCursor: null, hasNext: false } };
+      throw new Error(`Unexpected Session lookup read: ${path}`);
+    });
     const refused: unknown[] = [];
     await expect(resolveWorkflowSessionConversation({ credentials, sessionId: 'c123', machineId: 'machine-1',
       onUnavailable: (details) => { refused.push(details); } })).resolves.toBeNull();

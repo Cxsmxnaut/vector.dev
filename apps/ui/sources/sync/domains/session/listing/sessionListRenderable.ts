@@ -4,6 +4,7 @@ import { readSessionManagerSessionIdV1 } from '@happier-dev/protocol/sessions/fo
 import { readSessionExplicitStopV1FromMetadata } from '@happier-dev/protocol/sessions/metadata/sessionExplicitStopV1';
 import { readSessionAnswersWorkerQuestionsV1 } from '@happier-dev/protocol/prompts/roles/sessionRolesSnapshot';
 import { readSessionDirectoryKind } from '@happier-dev/protocol/sessions/metadata/directory';
+import type { SessionWorkspaceLocationV1 } from '@happier-dev/protocol/sessions/metadata/sessionWorkspaceLocationV1';
 import type { SessionBotV1 } from '@happier-dev/protocol/sessions/identity/sessionBotV1';
 import {
     hasUnreadActivityForSessionViewer,
@@ -13,7 +14,10 @@ import {
 import type { Session } from '@/sync/domains/state/storageTypes';
 import type { AgentState, Metadata } from '@happier-dev/session-core/state';
 import { StoredSessionSharedMetadataV1Schema } from '@happier-dev/protocol/sessions/metadata/sessionMetadataSchemasV1';
-import { readSessionWorkStateV1FromMetadata, type SessionWorkStateV1 } from '@happier-dev/protocol/sessions/work/state/sessionWorkStateV1';
+import { projectSessionDisplayV1, SessionSharedMetadataV1Schema,
+    type SessionSemanticDisplayV1, type SessionUsageLimitRecoveryDisplayV1 } from '@happier-dev/protocol';
+import { readSessionWorkStateV1FromMetadata } from '@happier-dev/protocol/sessions/work/state/sessionWorkStateV1';
+import { projectSessionWorkDisplayV1, type SessionWorkDisplayV1 } from '@happier-dev/protocol/sessions/work/state/sessionWorkStatePrimary';
 import { parseSessionAgentActivityHeadlineV1, type SessionAgentActivityHeadlineV1 } from '@happier-dev/protocol/sessions/work/agentActivity/agentActivityHeadlineV1';
 import { SessionWorkflowActivityHeadlineV1Schema, type SessionWorkflowActivityHeadlineV1 } from '@happier-dev/protocol/sessions/work/workflow/sessionWorkflowActivityHeadlineV1';
 import { SessionGuardStateV1StoredSchema } from '@happier-dev/protocol/machines/guard/sessionGuardStateV1';
@@ -52,11 +56,15 @@ import {
 import { resolveSessionProjectGroupingKeyParts } from './sessionListProjectGroupingKeys';
 import { readSessionPresentationCompletedRequests } from '../presentation/readSessionPresentationCompletedRequests';
 import { readSessionPresentationAgentId } from '../presentation/readSessionPresentationAgentId';
+import { resolveAgentExecutionTargetFromSessionMetadata } from '@happier-dev/agents';
+import { buildBackendTargetKeyV2, type BackendTargetKeyV2 } from '@happier-dev/protocol/backends/targets/backendTargetRefV2';
 import {
     areSessionListRenderableExternalSessionIdentitiesEqual,
     areSessionListRenderableMetadataComparisonsEqual,
+    areSessionListWorkspaceLocationsEqual,
     readSessionListRenderableMetadataComparison,
     readSessionListRenderableMetadataComparisonFromRenderable,
+    readSessionListRenderableMetadataComparisonFromDisplay,
     type SessionListRenderableExternalSessionIdentity,
 } from './sessionListRenderableMetadataComparison';
 import { deriveSessionListMeaningfulActivityAt } from './deriveSessionListActivity';
@@ -66,15 +74,22 @@ import {
 } from '../attention/runtimePresentation';
 import { readSessionOwnerMetadataView, SESSION_OWNER_METADATA_PROJECTION } from '../readSessionOwnerMetadataView';
 import { readSessionDisplayTitleField } from '@/sync/state/selectors';
+import { SESSION_LIST_DOCUMENT_ADMISSION, areSessionListDocumentAdmissionsEqual,
+    type SessionListDocumentAdmission } from '../sessionDocumentAdmission';
+export { SESSION_LIST_DOCUMENT_ADMISSION, areSessionListDocumentAdmissionsEqual,
+    type SessionListDocumentAdmission } from '../sessionDocumentAdmission';
 
 export { derivePendingRequestFlagsFromAgentState } from '@/sync/domains/session/pending/listPendingSessionRequests';
 
 export interface SessionListRenderableMetadata {
-    sessionUsageLimitRecoveryV1?: SessionUsageLimitRecoveryV1 | null;
+    sessionUsageLimitRecoveryV1?: SessionUsageLimitRecoveryV1 | SessionUsageLimitRecoveryDisplayV1 | null;
     /** Process lifecycle fact, retained for the shared status presenter. */
     lifecycleState?: string;
     projectId?: string | null;
     workspaceId?: string | null;
+    sessionWorkspaceLocationV1?: SessionWorkspaceLocationV1 | null;
+    /** Owner-private last observed branch: missing is unavailable, null is detached. */
+    branch?: string | null;
     bot?: SessionBotV1;
     name?: string;
     summaryText?: string | null;
@@ -125,8 +140,11 @@ export function readSessionListGuardState(raw: unknown): SessionListGuardState |
 }
 
 export interface SessionListRenderableSession {
+    [SESSION_LIST_DOCUMENT_ADMISSION]?: SessionListDocumentAdmission;
     [SESSION_OWNER_METADATA_PROJECTION]?: Session[typeof SESSION_OWNER_METADATA_PROJECTION];
-    forkV1?: Metadata['forkV1'];
+    forkV1?: NonNullable<SessionSemanticDisplayV1['owner']>['forkV1'];
+    /** Admitted canonical Agent target; memory only, never a wire or warm-cache field. */
+    agentTargetKey?: BackendTargetKeyV2 | null;
     /**
      * Owner-readable compact Agent roster. This is deliberately a parsed
      * projection rather than raw owner metadata so the concurrently cached,
@@ -134,7 +152,7 @@ export interface SessionListRenderableSession {
      * activity when equal Session ids exist on different Homes.
      */
     agentActivityHeadline?: SessionAgentActivityHeadlineV1 | null;
-    workState?: SessionWorkStateV1 | null;
+    workDisplay?: SessionWorkDisplayV1 | null;
     workflowHeadline?: SessionWorkflowActivityHeadlineV1 | null;
     /** The guard's word for this row (plan 50 G3-2): a stop is coming, or the guard stopped it. */
     guardState?: SessionListGuardState | null;
@@ -489,13 +507,17 @@ function shouldPreserveSessionListRenderablePendingBlockedCount(
  * opened no key: its Session carries no decrypted projection, so an owner view is undecided rather
  * than unavailable, and the projection the previous row holds for the same layout is kept.
  */
-export type SessionListRenderableSource = Session & Readonly<{ metadataUndecided?: true }>;
+export type SessionListRenderableSource = Session & Readonly<{
+    metadataUndecided?: true;
+    [SESSION_LIST_DOCUMENT_ADMISSION]?: SessionListDocumentAdmission;
+}>;
 
 export function buildSessionListRenderableFromSession(
     session: SessionListRenderableSource,
     previous?: SessionListRenderableSession,
     messages?: ReadonlyArray<Message>,
     transcriptAggregate?: TranscriptRenderableAggregate | null,
+    openedDisplay?: SessionSemanticDisplayV1,
 ): SessionListRenderableSession {
     // Single derivation path: the transcript folds live in the aggregate.
     // Hot callers (store streaming refresh) pass an incrementally-maintained
@@ -513,13 +535,21 @@ export function buildSessionListRenderableFromSession(
     const statesCache: TranscriptRequestStatesCache = aggregate ? { states: aggregate.requestStates } : {};
     const renderableSourceMetadata = readSessionListRenderableSourceMetadata(session);
     const ownerProjection = isSessionListRenderableOwnerProjection(session);
+    const strictShared = readSessionMetadataLayoutVersion(session.metadataLayoutVersion) === 1
+        ? SessionSharedMetadataV1Schema.safeParse(session.metadata) : null;
+    const ownerWitness = session[SESSION_OWNER_METADATA_PROJECTION];
+    const display = openedDisplay ?? (strictShared?.success && (!ownerProjection
+        || ownerWitness?.admittedMetadataVersion === session.metadataVersion)
+        ? projectSessionDisplayV1({ sharedMetadata: strictShared.data,
+            ...(ownerProjection && ownerWitness ? { ownerMetadata: ownerWitness.ownerMetadata } : {}) })
+        : undefined);
     const metadataUndecided = session.metadataUndecided === true;
     const layout1OwnerMetadataUnavailable =
         ownerProjection
         && !metadataUndecided
-        && renderableSourceMetadata == null;
+        && renderableSourceMetadata == null && display === undefined;
     const preserveMetadata =
-        !layout1OwnerMetadataUnavailable
+        display === undefined && !layout1OwnerMetadataUnavailable
         // A settled layout-1 lock retains only the store's safe title, not old metadata fields.
         && (readSessionMetadataLayoutVersion(session.metadataLayoutVersion) !== 1 || metadataUndecided)
         && (renderableSourceMetadata == null || (ownerProjection && metadataUndecided))
@@ -528,6 +558,8 @@ export function buildSessionListRenderableFromSession(
             === readSessionMetadataLayoutVersion(previous.metadataLayoutVersion);
     const preservePendingFlags = shouldPreserveSessionListRenderablePendingFlags(session, previous);
     const hasPendingEvidence = preservePendingFlags
+        || (metadataUndecided && typeof previous?.hasPendingPermissionRequests === 'boolean'
+            && typeof previous.hasPendingUserActionRequests === 'boolean')
         || (
             typeof session.pendingPermissionRequestCount === 'number'
             && typeof session.pendingUserActionRequestCount === 'number'
@@ -555,7 +587,8 @@ export function buildSessionListRenderableFromSession(
     const previousMetadata: ReturnType<typeof readSessionListRenderableMetadataComparisonFromRenderable> = previous?.metadata
         ? readSessionListRenderableMetadataComparisonFromRenderable(previous.metadata)
         : null;
-    const currentMetadata = readSessionListRenderableMetadataComparison(renderableSourceMetadata, previousMetadata);
+    const currentMetadata = display ? readSessionListRenderableMetadataComparisonFromDisplay(display, previousMetadata)
+        : readSessionListRenderableMetadataComparison(renderableSourceMetadata, previousMetadata);
     // An undecided Session can still carry proved owner visibility. Preserve readable
     // row details until shared content is demanded, while applying current owner identity/visibility.
     const nextMetadata: ReturnType<typeof readSessionListRenderableMetadataComparisonFromRenderable> = preserveMetadata
@@ -566,7 +599,7 @@ export function buildSessionListRenderableFromSession(
     const titleFallbackMessages = aggregate
         ? (aggregate.firstUserTextMessage ? [aggregate.firstUserTextMessage] : [])
         : messages;
-    const lockedDisplayTitle = session.metadataLayoutVersion === 1
+    const lockedDisplayTitle = display === undefined && session.metadataLayoutVersion === 1
         && session.metadata === null
         && isSessionAccessRecipient(session.access, session.accessLevel)
         ? readSessionDisplayTitleField({ lockedDisplayTitle: session.lockedDisplayTitle }).value
@@ -611,23 +644,42 @@ export function buildSessionListRenderableFromSession(
     // it is the protocol's forward-compatible entry filter, so one newer entry
     // cannot erase every otherwise readable row from a concurrent Home list.
     const agentActivityHeadline = parseSessionAgentActivityHeadlineV1(
-        renderableSourceMetadata?.sessionAgentActivityHeadlineV1,
+        display ? display.owner?.sessionAgentActivityHeadlineV1 : renderableSourceMetadata?.sessionAgentActivityHeadlineV1,
     );
-    const parsedWorkflow = SessionWorkflowActivityHeadlineV1Schema.safeParse(renderableSourceMetadata?.sessionWorkflowActivityHeadlineV1);
-    const workState = renderableSourceMetadata ? readSessionWorkStateV1FromMetadata(renderableSourceMetadata) : null;
+    const parsedWorkflow = SessionWorkflowActivityHeadlineV1Schema.safeParse(display
+        ? display.owner?.sessionWorkflowActivityHeadlineV1 : renderableSourceMetadata?.sessionWorkflowActivityHeadlineV1);
+    const workDisplay = display ? display.owner?.workDisplay ?? null : projectSessionWorkDisplayV1(renderableSourceMetadata
+        ? session.workDisplay !== undefined ? session.workDisplay : readSessionWorkStateV1FromMetadata(renderableSourceMetadata)
+        : null);
     const workflowHeadline = parsedWorkflow.success ? parsedWorkflow.data : null;
-    const guardState = readSessionListGuardState(renderableSourceMetadata?.sessionGuardStateV1);
+    const guardState = readSessionListGuardState(display ? display.shared.sessionGuardStateV1 : renderableSourceMetadata?.sessionGuardStateV1);
     const workerQuestionHandling = readSessionMetadataLayoutVersion(session.metadataLayoutVersion) === 0 || ownerProjection
         ? metadataUndecided || preserveMetadata
             ? previous?.workerQuestionHandling ?? null
             : readSessionWorkerQuestionHandlingProjection(readSessionOwnerMetadataView(session))
         : null;
+    const agentTarget = !preserveMetadata && renderableSourceMetadata
+        ? resolveAgentExecutionTargetFromSessionMetadata(renderableSourceMetadata,
+            typeof renderableSourceMetadata.flavor === 'string' ? renderableSourceMetadata.flavor : null)
+        : null;
+    // A display does not contain the private recipe that can override public Agent identity.
+    const previousTargetCurrent = previous?.metadataVersion === session.metadataVersion
+        && areSessionListDocumentAdmissionsEqual(previous?.[SESSION_LIST_DOCUMENT_ADMISSION], session[SESSION_LIST_DOCUMENT_ADMISSION])
+        && (session[SESSION_LIST_DOCUMENT_ADMISSION]?.observedMetadataVersion ?? session.metadataVersion) <= session.metadataVersion;
+    const agentTargetKey = (session[SESSION_LIST_DOCUMENT_ADMISSION]?.observedMetadataVersion ?? session.metadataVersion) > session.metadataVersion
+        ? undefined
+        : metadataUndecided || preserveMetadata
+            ? previousTargetCurrent ? previous?.agentTargetKey : undefined
+            : agentTarget ? buildBackendTargetKeyV2(agentTarget) : null;
     const next: SessionListRenderableSession = {
-        forkV1: renderableSourceMetadata?.forkV1,
+        ...(session[SESSION_LIST_DOCUMENT_ADMISSION]
+            ? { [SESSION_LIST_DOCUMENT_ADMISSION]: session[SESSION_LIST_DOCUMENT_ADMISSION] } : {}),
+        forkV1: display ? display.owner?.forkV1 : renderableSourceMetadata?.forkV1,
+        agentTargetKey,
         agentActivityHeadline: JSON.stringify(previous?.agentActivityHeadline ?? null) === JSON.stringify(agentActivityHeadline)
             ? previous?.agentActivityHeadline ?? null
             : agentActivityHeadline,
-        workState: JSON.stringify(previous?.workState ?? null) === JSON.stringify(workState) ? previous?.workState ?? null : workState,
+        workDisplay: JSON.stringify(previous?.workDisplay ?? null) === JSON.stringify(workDisplay) ? previous?.workDisplay ?? null : workDisplay,
         workflowHeadline: JSON.stringify(previous?.workflowHeadline ?? null) === JSON.stringify(workflowHeadline) ? previous?.workflowHeadline ?? null : workflowHeadline,
         guardState: JSON.stringify(previous?.guardState ?? null) === JSON.stringify(guardState) ? previous?.guardState ?? null : guardState,
         workerQuestionHandling:
@@ -727,7 +779,7 @@ export function buildSessionListRenderableFromSession(
         // before its Session key or shared metadata is demanded.
         metadataUnavailable: ownerProjection
             ? metadataUndecided
-                ? preserveMetadata || renderableSourceMetadata != null ? false : undefined
+                ? display || preserveMetadata || renderableSourceMetadata != null ? false : undefined
                 : layout1OwnerMetadataUnavailable
             : undefined,
     };
@@ -823,6 +875,12 @@ export function preserveSessionListRenderableStaleFields(
     previous: SessionListRenderableSession | undefined,
     next: SessionListRenderableSession,
 ): SessionListRenderableSession {
+    // A compact refresh may observe a different key/audience before its documents open.
+    // Last-known-good content cannot cross that custody boundary during store reconciliation.
+    if (next[SESSION_LIST_DOCUMENT_ADMISSION]
+        && !areSessionListDocumentAdmissionsEqual(previous?.[SESSION_LIST_DOCUMENT_ADMISSION], next[SESSION_LIST_DOCUMENT_ADMISSION])) {
+        previous = undefined;
+    }
     next = preserveSessionListRenderablePendingFlags(previous, reconcileSessionLifecycleProjection(previous, next));
     // A projection pass re-derives every renderable, so an unchanged session still arrives as a
     // fresh object. Handing that object on defeats identity all the way up the session list: the row
@@ -913,6 +971,10 @@ export function preserveSessionListRenderableStaleFields(
 
     return {
         ...next,
+        agentTargetKey: preserveMetadata && previous.metadataVersion >= next.metadataVersion
+            && areSessionListDocumentAdmissionsEqual(previous[SESSION_LIST_DOCUMENT_ADMISSION], next[SESSION_LIST_DOCUMENT_ADMISSION])
+            && (next[SESSION_LIST_DOCUMENT_ADMISSION]?.observedMetadataVersion ?? next.metadataVersion) <= previous.metadataVersion
+            ? previous.agentTargetKey : next.agentTargetKey,
         // This compact roster is derived from the same owner-metadata read as
         // the display projection. A transient unavailable read must not erase
         // a previously authenticated Home-qualified headline and make only a
@@ -948,13 +1010,19 @@ export function areSessionListRenderablesEqual(
     next: SessionListRenderableSession,
 ): boolean {
     if (!previous) return false;
+    if (!areSessionListDocumentAdmissionsEqual(previous[SESSION_LIST_DOCUMENT_ADMISSION], next[SESSION_LIST_DOCUMENT_ADMISSION])) return false;
+    if (previous[SESSION_LIST_DOCUMENT_ADMISSION]?.openedMetadataVersion !== next[SESSION_LIST_DOCUMENT_ADMISSION]?.openedMetadataVersion) return false;
+    if (previous[SESSION_LIST_DOCUMENT_ADMISSION]?.openedAgentStateVersion !== next[SESSION_LIST_DOCUMENT_ADMISSION]?.openedAgentStateVersion) return false;
+    if (previous[SESSION_LIST_DOCUMENT_ADMISSION]?.observedMetadataVersion !== next[SESSION_LIST_DOCUMENT_ADMISSION]?.observedMetadataVersion) return false;
+    if (previous[SESSION_LIST_DOCUMENT_ADMISSION]?.observedAgentStateVersion !== next[SESSION_LIST_DOCUMENT_ADMISSION]?.observedAgentStateVersion) return false;
     if ((previous[SESSION_OWNER_METADATA_PROJECTION] ?? null) !== (next[SESSION_OWNER_METADATA_PROJECTION] ?? null)) return false;
     if (previous.viewer !== next.viewer && JSON.stringify(previous.viewer ?? null) !== JSON.stringify(next.viewer ?? null)) return false;
     if (previous.encryptionMode !== next.encryptionMode) return false;
     if (previous.encryptedContentAvailability !== next.encryptedContentAvailability) return false;
     if ((previous.lockedDisplayTitle ?? null) !== (next.lockedDisplayTitle ?? null)) return false;
+    if (previous.agentTargetKey !== next.agentTargetKey) return false;
     if (JSON.stringify(previous.forkV1 ?? null) !== JSON.stringify(next.forkV1 ?? null)) return false;
-    if (previous.workState !== next.workState && JSON.stringify(previous.workState ?? null) !== JSON.stringify(next.workState ?? null)) return false;
+    if (previous.workDisplay !== next.workDisplay && JSON.stringify(previous.workDisplay ?? null) !== JSON.stringify(next.workDisplay ?? null)) return false;
     if (previous.workflowHeadline !== next.workflowHeadline && JSON.stringify(previous.workflowHeadline ?? null) !== JSON.stringify(next.workflowHeadline ?? null)) return false;
     if (JSON.stringify(previous.guardState ?? null) !== JSON.stringify(next.guardState ?? null)) return false;
     if (previous.workerQuestionHandling?.answersWorkerQuestions !== next.workerQuestionHandling?.answersWorkerQuestions
@@ -1065,6 +1133,7 @@ export function didSessionListRenderableStructuralFieldsChange(
     const nextMeta = next.metadata;
     if (String(prevMeta?.machineId ?? '') !== String(nextMeta?.machineId ?? '')) return true;
     if (String(prevMeta?.path ?? '') !== String(nextMeta?.path ?? '')) return true;
+    if (!areSessionListWorkspaceLocationsEqual(prevMeta?.sessionWorkspaceLocationV1, nextMeta?.sessionWorkspaceLocationV1)) return true;
     if (String(prevMeta?.homeDir ?? '') !== String(nextMeta?.homeDir ?? '')) return true;
     if (!areSessionListRenderableExternalSessionIdentitiesEqual(
         prevMeta?.externalSessionV1,
@@ -1081,6 +1150,9 @@ export function didSessionListRenderableProjectGroupingFieldsChange(
     next: SessionListRenderableSession,
 ): boolean {
     if (!previous) return true;
+    if ((previous.metadata?.workspaceId ?? null) !== (next.metadata?.workspaceId ?? null)
+        || (previous.metadata?.projectId ?? null) !== (next.metadata?.projectId ?? null)) return true;
+    if (!areSessionListWorkspaceLocationsEqual(previous.metadata?.sessionWorkspaceLocationV1, next.metadata?.sessionWorkspaceLocationV1)) return true;
     const prevMeta = previous.metadata;
     const nextMeta = next.metadata;
     const prevParts = resolveSessionProjectGroupingKeyParts(prevMeta ?? null);
@@ -1230,7 +1302,7 @@ export function isSessionListRenderableWarmCacheProgressOnlyChange(
     if ((previous.lockedDisplayTitle ?? null) !== (next.lockedDisplayTitle ?? null)) return false;
     if (JSON.stringify(previous.agentActivityHeadline ?? null) !== JSON.stringify(next.agentActivityHeadline ?? null)) return false;
     if (JSON.stringify(previous.forkV1 ?? null) !== JSON.stringify(next.forkV1 ?? null)) return false;
-    if (previous.workState !== next.workState) return false;
+    if (previous.workDisplay !== next.workDisplay) return false;
     if (previous.workflowHeadline !== next.workflowHeadline) return false;
     if (JSON.stringify(previous.guardState ?? null) !== JSON.stringify(next.guardState ?? null)) return false;
     if (!areSessionListRenderableMetadataComparisonsEqual(

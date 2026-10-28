@@ -27,6 +27,9 @@ import { NOTIFICATION_CHANNELS_ROUTE_V1, NotificationChannelCatalogReadResponseV
 import { CONNECTED_PRESENTATION_ROWS_ROUTE_V1, CONNECTED_ACKNOWLEDGEMENTS_ROWS_ROUTE_V1,
     ConnectedPresentationRowReadResponseV1Schema, ConnectedAcknowledgementsRowReadResponseV1Schema } from '@happier-dev/protocol/connect/connectedAccountPresentationRowsV1';
 import { AccountSettingsV2HistoryListResponseSchema } from '@happier-dev/protocol/account/settings/accountSettingsApiV2';
+import type { FetchedMachineRow } from '@/sync/engine/machines/syncMachines';
+import { AutomationDefinitionListResponseSchema } from '@happier-dev/protocol/automations/automationApiV3';
+import { FeedResponseSchema } from '@/sync/domains/social/feedTypes';
 
 
 /** Explicit empty-Account fixtures only; callers resolve the Home and apply their overrides first. */
@@ -34,6 +37,9 @@ export function createEmptyAccountBootstrapHttpResponse(path: string, init?: Req
     const pathname = path.split('?')[0];
     const method = (init?.method ?? 'GET').toUpperCase();
     if (method === 'GET') {
+        if (pathname === '/v1/machines') return Response.json([] satisfies FetchedMachineRow[]);
+        if (pathname === '/v3/automations') return Response.json(AutomationDefinitionListResponseSchema.parse({ automations: [], nextCursor: null }));
+        if (pathname === '/v1/feed') return Response.json(FeedResponseSchema.parse({ items: [], hasMore: false }));
         if (pathname === AUTHORING_MEMORY_ROUTE_V1) return Response.json(AuthoringMemoryListResponseV1Schema.parse({ rows: [] }));
         if (pathname === '/v2/sessions' || pathname === '/v2/sessions/active') {
             return Response.json(V2SessionListResponseSchema.parse({

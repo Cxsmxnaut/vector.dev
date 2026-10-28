@@ -38,6 +38,7 @@ describe('socketParse', () => {
             createdAt: 1000,
             body: {
                 t: 'new-message',
+                delivery: 'full' as const,
                 sid: 's1',
                 message: {
                     id: 'm1',
@@ -85,6 +86,7 @@ describe('socketParse', () => {
     it('returns null for a non-container non-sharing update body', () => {
         const res = parseUpdateContainer({
             t: 'new-message',
+            delivery: 'full' as const,
             sid: 's1',
             message: { id: 'm1' },
         });

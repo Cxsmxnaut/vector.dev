@@ -524,12 +524,14 @@ export async function publishLocalVoiceTranscriptMessage(input: Readonly<{
     const createdAt = Date.now();
     const update = UpdateContainerSchema.parse({
         id: `update-${input.id}`, seq, createdAt,
-        body: { t: 'new-message', sid: input.sessionId, message: {
+        body: { t: 'new-message', delivery: 'full', sid: input.sessionId, message: {
             id: input.id, seq, localId: input.localId, messageRole: input.messageRole, createdAt, updatedAt: createdAt,
             content: input.content,
         } },
     });
-    if (update.body.t !== 'new-message') throw new Error('Expected incoming Voice transcript message');
+    if (update.body.t !== 'new-message' || update.body.delivery !== 'full') {
+        throw new Error('Expected incoming full Voice transcript message');
+    }
     localVoiceRemoteMessages.set(remoteKey, [...messages, update.body.message]);
     await publishLocalVoiceSocketUpdate(update);
     if (input.messageRole === 'agent') {

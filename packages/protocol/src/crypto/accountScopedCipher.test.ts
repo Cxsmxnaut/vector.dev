@@ -46,6 +46,20 @@ function deterministicRandomBytesFactory(): (length: number) => Uint8Array {
   };
 }
 
+it('keeps Session owner display in its own authenticated Account ciphertext domain', () => {
+  const material = { type: 'dataKey' as const, machineKey: new Uint8Array(32).fill(9) };
+  const payload = { v: 1, audience: 'owner', purpose: 'session_owner_display',
+    display: { v: 1, name: 'Private workspace' } };
+  const ciphertext = sealAccountScopedBlobCiphertext({ kind: 'session_owner_display', material, payload,
+    randomBytes: deterministicRandomBytesFactory() });
+  expect(openAccountScopedBlobCiphertext({ kind: 'session_owner_display', material, ciphertext })?.value).toEqual(payload);
+  expect(openAccountScopedBlobCiphertext({ kind: 'session_owner_metadata', material, ciphertext })).toBeNull();
+  expect(openAccountScopedBlobCiphertext({ kind: 'account_settings', material, ciphertext })).toBeNull();
+  expect(openAccountScopedBlobCiphertext({ kind: 'session_owner_display', material: {
+    type: 'dataKey', machineKey: new Uint8Array(32).fill(10),
+  }, ciphertext })).toBeNull();
+});
+
 it('keeps remote hosts, notification channels, connected presentation and acknowledgements in distinct ciphertext domains', () => {
   const kinds = [
     'account_remote_host_catalog', 'account_notification_channels',
@@ -128,6 +142,12 @@ const REMOTE_DEV_9B097966_SESSION_DRAFT_PRIVATE_PAYLOAD_VECTOR = {
 } as const;
 
 const FROZEN_CANONICAL_ACCOUNT_SCOPED_VECTORS = [
+  {
+    kind: 'session_owner_display',
+    kindByte: 51,
+    ciphertext: 'oTMhIiMkJSYnKCkqKywtLi8wMTIzNDU2NzjUEAQ/JUrSDO1e4nXJAXq+KaaoZwH07iHH29/3jybm9w2hUsYtBcDihtZUso1uq+qxqqZvmDzAmdvrtLNzRvc=',
+    payload: { slot: 51, source: 'session-owner-display-v1' },
+  },
   {
     kind: 'account_session_follow_rule',
     kindByte: 50,
@@ -619,6 +639,10 @@ const CURRENT_ACCOUNT_SCOPED_KIND_ROLLBACK_DISPOSITIONS = {
   },
   account_session_follow_rule: {
     productionOwner: 'Account-private Follow rule owner',
+    remoteDev165A: 'rollback_blocking',
+  },
+  session_owner_display: {
+    productionOwner: 'Session Account-private owner display envelope',
     remoteDev165A: 'rollback_blocking',
   },
 } as const satisfies Record<AccountScopedBlobKind, AccountScopedKindRollbackDisposition>;
@@ -1156,6 +1180,7 @@ describe('accountScopedCipher', () => {
         33,
         38,
         50,
+        51,
       ],
     );
   });
