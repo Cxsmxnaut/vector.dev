@@ -7,7 +7,7 @@ import { RPC_METHODS } from '@happier-dev/protocol/rpc';
 import { createGitWorkspace, createTestRpcManager, runGit } from './testRpcHarness';
 
 describe('scm rpc change discard (git)', () => {
-    function createGitWorkspace(): string {
+    function createCommittedWorkspace(): string {
         const workspace = createGitWorkspace('happier-scm-discard-git-');
         writeFileSync(join(workspace, 'a.txt'), 'base\n');
         runGit(workspace, ['add', 'a.txt']);
@@ -16,7 +16,7 @@ describe('scm rpc change discard (git)', () => {
     }
 
     it('discards pending modifications to a tracked file', async () => {
-        const workspace = createGitWorkspace();
+        const workspace = createCommittedWorkspace();
         writeFileSync(join(workspace, 'a.txt'), 'changed\n');
 
         const { call } = createTestRpcManager({ workingDirectory: workspace });
@@ -33,7 +33,7 @@ describe('scm rpc change discard (git)', () => {
     });
 
     it('removes untracked files when discarded', async () => {
-        const workspace = createGitWorkspace();
+        const workspace = createCommittedWorkspace();
         writeFileSync(join(workspace, 'b.txt'), 'tmp\n');
 
         const { call } = createTestRpcManager({ workingDirectory: workspace });
