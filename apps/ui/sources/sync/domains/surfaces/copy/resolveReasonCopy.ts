@@ -322,6 +322,15 @@ const STREAM_PLAYER_KEYS = {
 } as const satisfies Record<string, StreamPlayerMessageKey>;
 
 /**
+ * Widget facts that are durable access states rather than start-up ones: an authored definition the
+ * viewer's Account cannot read. They name the widget, never a transient wait.
+ */
+const WIDGET_KEYS = {
+    widget_definition_unavailable: 'projects.widgets.definitionUnavailable',
+    widget_definition_account_mismatch: 'projects.widgets.definitionUnavailable',
+} as const;
+
+/**
  * Plugin runtime load/fallback diagnostics grouped into user-meaningful
  * families. Hosted-web terminal facts that have different recovery guidance
  * remain distinct here; the raw per-code distinction also stays on
@@ -701,8 +710,10 @@ function resolveTitle(kind: ReasonCopyKind): string {
 
 function resolveKnownMessage(kind: ReasonCopyKind, reasonCode: string): string | null {
     switch (kind) {
-        case 'widget':
-            return null;
+        case 'widget': {
+            const key = WIDGET_KEYS[reasonCode as keyof typeof WIDGET_KEYS];
+            return key ? t(key) : null;
+        }
         case 'browserDiagnosticsInteraction': {
             const key = BROWSER_DIAGNOSTICS_INTERACTION_KEYS[reasonCode as keyof typeof BROWSER_DIAGNOSTICS_INTERACTION_KEYS];
             return key ? t(key) : null;
@@ -849,10 +860,12 @@ export function resolvePluginSurfaceStatePresentation(input: Readonly<{
         reason,
         hasSpecificReason: !!reasonCode && resolveKnownMessage(input.reasonKind ?? 'pluginRuntime', reasonCode) !== null,
     });
+    // A widget's own durable fact is one sentence: the generic "unavailable" title would only repeat it.
+    const widgetFactCard = input.reasonKind === 'widget' && !!reasonCode && resolveKnownMessage('widget', reasonCode) !== null;
     const unavailableCard = (): PluginSurfaceStatePresentation['card'] => Object.freeze({
         kind: 'unavailable',
-        title: copy.title ?? reason.title,
-        reason: copy.reason,
+        title: widgetFactCard ? reason.body : copy.title ?? reason.title,
+        ...(widgetFactCard ? {} : { reason: copy.reason }),
         accessibilitySemantics: 'status',
     });
     const loadingCard = (): PluginSurfaceStatePresentation['card'] => Object.freeze({
