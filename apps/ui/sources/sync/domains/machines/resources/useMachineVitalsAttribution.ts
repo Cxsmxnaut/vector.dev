@@ -14,7 +14,7 @@ export type MachineVitalsAttributionState = Readonly<{
 
 /** Overview supplies its existing sample; the process and storage owners supply attribution. */
 export function useMachineVitalsAttribution(input: MachineStorageHookInput & Readonly<{ sample: MachineVitalsSampleV1 | null }>): MachineVitalsAttributionState {
-    const processes = useMachineProcesses({ machineId: input.machineId, serverId: input.serverId, scope: 'happier', view: 'tree', enabled: input.enabled, online: input.online });
+    const processes = useMachineProcesses({ machineId: input.machineId, serverId: input.serverId, scope: 'happier', view: 'owners', enabled: input.enabled, online: input.online });
     const storage = useMachineStorageSummary(input);
     return React.useMemo(() => {
         const totals = processes.answer?.totals;
