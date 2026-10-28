@@ -6426,6 +6426,8 @@ export const de: TranslationStructure = {
         deleteSessionSubtitle: 'Diese Session dauerhaft entfernen',
         deleteSessionConfirm: 'Session dauerhaft löschen?',
         deleteSessionWarning: 'Das lässt sich nicht rückgängig machen. Alle Nachrichten und Daten dieser Session werden dauerhaft gelöscht.',
+        stopAndDeleteSession: "Stoppen und löschen",
+        stopAndDeleteSessionWarning: "Dadurch wird die Session gestoppt und alle ihre Nachrichten und Daten werden dauerhaft gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.",
         failedToDeleteSession: 'Die Session ließ sich nicht löschen',
         sessionDeleted: 'Session erfolgreich gelöscht',
         renameSession: 'Session umbenennen',

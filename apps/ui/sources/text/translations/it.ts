@@ -7156,6 +7156,8 @@ export const it: TranslationStructure = {
     deleteSessionConfirm: "Eliminare definitivamente la sessione?",
     deleteSessionWarning:
       "Questa azione non può essere annullata. Tutti i messaggi e i dati associati a questa sessione verranno eliminati definitivamente.",
+    stopAndDeleteSession: "Interrompi ed elimina",
+    stopAndDeleteSessionWarning: "Questa azione interromperà la sessione ed eliminerà definitivamente tutti i suoi messaggi e dati. Questa azione non può essere annullata.",
     failedToDeleteSession: "Impossibile eliminare la sessione",
     sessionDeleted: "Sessione eliminata con successo",
     manageSharing: "Gestisci condivisione",

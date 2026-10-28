@@ -6832,6 +6832,8 @@ export const pl: TranslationStructure = {
     deleteSessionConfirm: "Usunąć sesję na stałe?",
     deleteSessionWarning:
       "Ta operacja jest nieodwracalna. Wszystkie wiadomości i dane powiązane z tą sesją zostaną trwale usunięte.",
+    stopAndDeleteSession: "Zatrzymaj i usuń",
+    stopAndDeleteSessionWarning: "Spowoduje to zatrzymanie sesji i trwałe usunięcie wszystkich jej wiadomości i danych. Tej operacji nie można cofnąć.",
     failedToDeleteSession: "Nie udało się usunąć sesji",
     sessionDeleted: "Sesja została pomyślnie usunięta",
     manageSharing: "Zarządzanie udostępnianiem",

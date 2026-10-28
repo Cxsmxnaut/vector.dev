@@ -5782,6 +5782,8 @@ const zhHantOverrides: DeepPartial<TranslationStructure> = {
         deleteSessionSubtitle: '永久刪除此工作階段',
         deleteSessionConfirm: '永久刪除工作階段？',
         deleteSessionWarning: '此操作無法復原。與此工作階段相關的所有訊息和資料將被永久刪除。',
+        stopAndDeleteSession: "停止並刪除",
+        stopAndDeleteSessionWarning: "這將停止工作階段，並永久刪除其所有訊息和資料。此操作無法復原。",
         failedToDeleteSession: '刪除工作階段失敗',
         sessionDeleted: '工作階段刪除成功',
         forkSession: '分支工作階段',

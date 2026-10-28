@@ -6413,6 +6413,8 @@ export const fr: TranslationStructure = {
         deleteSessionSubtitle: 'Supprimer définitivement cette session',
         deleteSessionConfirm: 'Supprimer définitivement la session ?',
         deleteSessionWarning: 'Cette action est irréversible. Tous les messages et toutes les données associés à cette session seront définitivement supprimés.',
+        stopAndDeleteSession: "Arrêter et supprimer",
+        stopAndDeleteSessionWarning: "Cette action arrêtera la session et supprimera définitivement tous ses messages et toutes ses données. Cette action est irréversible.",
         failedToDeleteSession: 'Échec de la suppression de la session',
         sessionDeleted: 'Session supprimée',
         renameSession: 'Renommer la session',

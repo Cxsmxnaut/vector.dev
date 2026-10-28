@@ -6944,6 +6944,8 @@ export const pt: TranslationStructure = {
     deleteSessionConfirm: "Excluir sessão permanentemente?",
     deleteSessionWarning:
       "Esta ação não pode ser desfeita. Todas as mensagens e dados associados a esta sessão serão excluídos permanentemente.",
+    stopAndDeleteSession: "Parar e excluir",
+    stopAndDeleteSessionWarning: "Isso interromperá a sessão e excluirá permanentemente todas as suas mensagens e dados. Esta ação não pode ser desfeita.",
     failedToDeleteSession: "Falha ao excluir sessão",
     sessionDeleted: "Sessão excluída com sucesso",
     manageSharing: "Gerenciar compartilhamento",

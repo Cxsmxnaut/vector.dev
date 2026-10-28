@@ -6440,6 +6440,8 @@ deps: {
         deleteSessionSubtitle: 'Elimina permanentment aquesta sessió',
         deleteSessionConfirm: 'Eliminar la sessió permanentment?',
         deleteSessionWarning: 'Aquesta acció no es pot desfer. Tots els missatges i dades associats amb aquesta sessió s\'eliminaran permanentment.',
+        stopAndDeleteSession: "Atura i elimina",
+        stopAndDeleteSessionWarning: "Això aturarà la sessió i eliminarà permanentment tots els seus missatges i dades. Aquesta acció no es pot desfer.",
         failedToDeleteSession: 'Error en eliminar la sessió',
         sessionDeleted: 'Sessió eliminada amb èxit',
         manageSharing: 'Gestiona l\'accés',
