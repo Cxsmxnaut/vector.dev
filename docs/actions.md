@@ -1784,6 +1784,10 @@ user's concurrently accepted deny override is not erased by a stale candidate.
 Workers copy the effective role set and notes at birth. Explicit
 `session.roles.apply_to_reports` updates same-Account reporting Sessions; a
 reporting relation itself grants no access or authority. The
+public Role/notes edit owner likewise reads only current/requested/edited external
+bodies not already complete in the Session snapshot, retaining its post-await
+authority and monotone workspace-policy checks. List, Apply and full-spawn reads
+still acquire their complete inventory. The
 [`manager relation schema`](../packages/protocol/src/sessions/follow/sessionManagerV1.ts)
 requires the expected current manager, and the relation owner checks input, audience
 and cycles. Reparenting is not a new creation origin or a lower causal work depth.
