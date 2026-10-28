@@ -1,3 +1,4 @@
+import { useThemeProfilesMutable } from '@/sync/domains/state/storage';
 import React from 'react';
 import { Appearance, Platform, View } from 'react-native';
 import { setStatusBarStyle } from 'expo-status-bar';
@@ -102,7 +103,7 @@ export default React.memo(function AppearanceSettingsScreen() {
     const [showChatCodeBlockWrapControls, setShowChatCodeBlockWrapControls] = useSettingMutable('showChatCodeBlockWrapControls');
     const [wrapChatCodeBlocks, setWrapChatCodeBlocks] = useSettingMutable('wrapChatCodeBlocks');
     const [themePreference, setThemePreference] = useLocalSettingMutable('themePreference');
-    const [themeProfiles, setThemeProfiles] = useLocalSettingMutable('themeProfiles');
+    const [themeProfiles, setThemeProfiles] = useThemeProfilesMutable();
     const [uiFontScale, setUiFontScale] = useLocalSettingMutable('uiFontScale');
     const [uiItemDensity, setUiItemDensity] = useLocalSettingMutable('uiItemDensity');
     const [loadingIndicatorStyle, setLoadingIndicatorStyle] = useLocalSettingMutable('loadingIndicatorStyle');

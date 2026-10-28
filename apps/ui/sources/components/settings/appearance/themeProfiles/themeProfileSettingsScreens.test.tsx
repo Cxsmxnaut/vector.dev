@@ -125,6 +125,7 @@ vi.mock('@/sync/domains/state/storage', async (importOriginal) => {
     return createStorageModuleMock({
         importOriginal,
         overrides: {
+            useThemeProfilesMutable: () => mutableSetting('themeProfiles') as ReturnType<typeof import('@/sync/domains/state/storage')['useThemeProfilesMutable']>,
             useLocalSettingMutable: mutableSetting as typeof import('@/sync/domains/state/storage')['useLocalSettingMutable'],
             useLocalSetting: ((key: string) => mutableSetting(key)[0]) as typeof import('@/sync/domains/state/storage')['useLocalSetting'],
         },

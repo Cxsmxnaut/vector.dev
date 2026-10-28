@@ -79,6 +79,7 @@ installSessionSettingsEntryModuleMocks({
             importOriginal,
             overrides: {
                 useSettingMutable: mutableSetting as typeof import('@/sync/domains/state/storage')['useSettingMutable'],
+                useThemeProfilesMutable: () => mutableSetting('themeProfiles') as ReturnType<typeof import('@/sync/domains/state/storage')['useThemeProfilesMutable']>,
                 useLocalSettingMutable: mutableSetting as typeof import('@/sync/domains/state/storage')['useLocalSettingMutable'],
             },
         });
