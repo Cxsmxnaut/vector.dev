@@ -223,6 +223,12 @@ describe('createCliActionDeps workflow boundary', () => {
     const synthesis = accepted.content.materializedLeaves.find(leaf => leaf.blockId === 'synthesis');
     expect(synthesis?.kind).toBe('step');
     if (synthesis?.kind !== 'step') throw new Error('synthesis_step_unavailable');
+    // The origin has Connected authentication but no Launch Profile. Its frozen
+    // selection must survive strict stored-envelope serialization with that field absent.
+    if (!originless) {
+      expect(planner?.selection).not.toHaveProperty('profileId');
+      expect(synthesis.selection).not.toHaveProperty('profileId');
+    }
     if (!originless) expect(synthesis.selection).toMatchObject({
       agentTarget: { kind: 'agent', identity: { pluginId: 'happier.agent.codex', localId: 'codex' } },
       modelSelection: { ref: { modelId: 'parent-model' } }, connectedServices,

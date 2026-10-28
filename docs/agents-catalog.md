@@ -542,6 +542,16 @@ operation lifetime, including preparation and cleanup; the transport budget boun
 This applies equally to installed Agent plugins. A lost reply retains `outcomeUnknown` rather
 than claiming that the native inventory failed or is empty.
 
+In 0.3 development source, Session-caller start admission owns omitted Launch
+Profile and Connected Account inheritance for Session spawn, attached Runs,
+Review/planning/delegation/Voice, Approval reviewer Roles and Workflow leaves.
+The same Agent on the same Machine inherits the authenticated baseline per field,
+even when a caller or Role chooses a model. Explicit source/native/default choices
+retain precedence; incompatible attached inheritance requires a typed child choice.
+This applies to installed Agents through their declared identity and compatibility
+adapters, without Agent-id branches. Each child rematerializes the selected account
+or pool under current credential admission. See [attached child selection](providers.md#attached-child-selection-03-development).
+
 In development source, native execution-run structured-output admission uses that same preflight owner
 with the Run's Connected Account selection and Saved Secret overlay. A retained
 Run probes under its requester Account and plugin occurrence, rather than the

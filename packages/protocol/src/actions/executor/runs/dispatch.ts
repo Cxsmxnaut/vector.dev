@@ -22,8 +22,9 @@ import type { CoreInvocation, PreparedCoreAdmission } from '../coreInvocation.js
 
 export async function dispatchRunsDispatch1(inv: Pick<CoreInvocation, 'actionId' | 'parsed' | 'ctx' | 'deps' | 'data'> & Readonly<{
   dispatchFacts: DispatchFacts;
+  startExecutionRunWithSelection: (sessionId: Parameters<ActionExecutorDeps['executionRunStart']>[0], input: Parameters<ActionExecutorDeps['executionRunStart']>[1], opts: Parameters<ActionExecutorDeps['executionRunStart']>[2], context: ActionExecutorContext) => ReturnType<ActionExecutorDeps['executionRunStart']>;
 }>): Promise<ActionExecuteResult | null> {
-  const { actionId, parsed, ctx, deps, data, dispatchFacts } = inv;
+  const { actionId, parsed, ctx, deps, data, dispatchFacts, startExecutionRunWithSelection } = inv;
 
         if (actionId === 'execution.run.start') {
           const sessionId = resolveExecutionRunScope(parsed.data, ctx);
@@ -148,7 +149,7 @@ export async function dispatchRunsDispatch1(inv: Pick<CoreInvocation, 'actionId'
           if (ctx.agentStartWorkDepth !== undefined) dispatchOpts = { ...dispatchOpts, workDepth: ctx.agentStartWorkDepth, agentStartContext: ctx.agentStartContext, workspaceWrites: ctx.agentStartWorkspaceWrites, sessionAgentSpawnPolicyV1: ctx.sessionAgentSpawnPolicyV1 };
           try {
             dispatchFacts.executionRunStartDispatched = true;
-            rawStartResult = await deps.executionRunStart(sessionId, request, dispatchOpts);
+            rawStartResult = await startExecutionRunWithSelection(sessionId, request, dispatchOpts, ctx);
           } catch (error) {
             const failure = normalizeActionExecutorThrownError(error);
             const details = readFailureEnvelopeDetails(readRecord(error));

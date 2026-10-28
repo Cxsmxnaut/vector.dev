@@ -167,8 +167,9 @@ export async function dispatchReviewDispatch1(inv: Pick<CoreInvocation, 'actionI
 
 export async function dispatchReviewDispatch2(inv: Pick<CoreInvocation, 'actionId' | 'parsed' | 'ctx' | 'data' | 'deps'> & Readonly<{
   executeHostChild: (childId: ActionId, childInput: unknown, childContext: ActionExecutorContext) => Promise<ActionExecuteResult>;
+  startExecutionRunWithSelection: (sessionId: Parameters<ActionExecutorDeps['executionRunStart']>[0], input: Parameters<ActionExecutorDeps['executionRunStart']>[1], opts: Parameters<ActionExecutorDeps['executionRunStart']>[2], context: ActionExecutorContext) => ReturnType<ActionExecutorDeps['executionRunStart']>;
 }>): Promise<ActionExecuteResult | null> {
-  const { actionId, parsed, ctx, executeHostChild, data, deps } = inv;
+  const { actionId, parsed, ctx, executeHostChild, data, deps, startExecutionRunWithSelection } = inv;
 
       if (actionId === 'review.walkthrough' || actionId === 'review.explain_findings') {
         const input = actionId === 'review.walkthrough'
@@ -340,7 +341,9 @@ export async function dispatchReviewDispatch2(inv: Pick<CoreInvocation, 'actionI
               };
             }
             const connectedSelection = connectedSelections.selections.get(engineId)!;
-            return deps.executionRunStart(sessionId, {
+            return startExecutionRunWithSelection(
+              sessionId,
+              {
                 intent: data.intent ?? 'review',
                 ...(typeof data.roleId === 'string' ? { roleId: data.roleId } : {}),
                 ...(typeof data.launchProfileId === 'string' ? { launchProfileId: data.launchProfileId } : {}),
@@ -353,7 +356,7 @@ export async function dispatchReviewDispatch2(inv: Pick<CoreInvocation, 'actionI
                 backendTarget: data.roleId && data.backendTarget ? data.backendTarget : normalizeExecutionBackendTargetValue(engineId),
                 instructions,
                 ...(reviewInput.childSelection ? { childSelection: reviewInput.childSelection }
-                  : data.modelId === undefined && data.modelSelection === undefined && !teamCredentialModel.selection
+                  : sessionId === null && data.modelId === undefined && data.modelSelection === undefined && !teamCredentialModel.selection
                     && connectedSelection.bindings === undefined && connectedSelection.defaultServiceIds.length === 0
                     && !reviewInput.roleId && !reviewInput.launchProfileId && !reviewInput.profileId
                     && (!data.intent || data.intent === 'review') ? { childSelection: 'agentDefault' as const } : {}),
@@ -392,10 +395,12 @@ export async function dispatchReviewDispatch2(inv: Pick<CoreInvocation, 'actionI
                   ...intentInputBase, engineId,
                   ...(continueSingleReview ? { outputs: ['walkthrough'], narrator } : {}),
                 } } : {}),
-              }, {
+              },
+              {
                 ...executionRunDispatchOpts,
                 ...(ctx.agentStartWorkDepth !== undefined ? { workDepth: ctx.agentStartWorkDepth, agentStartContext: ctx.agentStartContext, workspaceWrites: ctx.agentStartWorkspaceWrites, sessionAgentSpawnPolicyV1: ctx.sessionAgentSpawnPolicyV1 } : {}),
-              });
+              }, ctx,
+            );
           },
         });
 

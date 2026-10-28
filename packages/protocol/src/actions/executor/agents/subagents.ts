@@ -14,8 +14,9 @@ import type { ActionExecuteResult } from '../types.js';
 
 
 export async function dispatchAgentsSubagents1(inv: Pick<CoreInvocation, 'actionId' | 'data' | 'parsed' | 'ctx' | 'deps'> & Readonly<{
+  startExecutionRunWithSelection: (sessionId: Parameters<ActionExecutorDeps['executionRunStart']>[0], input: Parameters<ActionExecutorDeps['executionRunStart']>[1], opts: Parameters<ActionExecutorDeps['executionRunStart']>[2], context: ActionExecutorContext) => ReturnType<ActionExecutorDeps['executionRunStart']>;
 }>): Promise<ActionExecuteResult | null> {
-  const { actionId, data, parsed, ctx, deps } = inv;
+  const { actionId, data, parsed, ctx, deps, startExecutionRunWithSelection } = inv;
 
       if (actionId === 'subagents.plan.start' || actionId === 'subagents.delegate.start' || actionId === 'voice_agent.start') {
         const detached = actionId === 'subagents.plan.start' && readRecord(data.target).kind === 'detached';
@@ -118,7 +119,9 @@ export async function dispatchAgentsSubagents1(inv: Pick<CoreInvocation, 'action
               const targetSelection = connectedSelections.selections.get(backendTargetKey)!;
               const connectedServices = targetSelection.bindings;
               const connectedServicesDefaultServiceIds = targetSelection.defaultServiceIds;
-              return deps.executionRunStart(sessionId, {
+              return startExecutionRunWithSelection(
+                sessionId,
+                {
                   intent: data.intent ?? intent,
                   ...(typeof data.roleId === 'string' ? { roleId: data.roleId } : {}),
                   ...(typeof data.launchProfileId === 'string' ? { launchProfileId: data.launchProfileId } : {}),
@@ -170,7 +173,9 @@ export async function dispatchAgentsSubagents1(inv: Pick<CoreInvocation, 'action
                       ? (data.intentInput !== undefined ? { intentInput: data.intentInput } : {})
                       : { intentInput: { ...runIntentInput, backendTargetKey } }
                     : {}),
-                }, { ...executionRunDispatchOpts, ...(ctx.agentStartWorkDepth !== undefined ? { workDepth: ctx.agentStartWorkDepth, agentStartContext: ctx.agentStartContext, workspaceWrites: ctx.agentStartWorkspaceWrites, sessionAgentSpawnPolicyV1: ctx.sessionAgentSpawnPolicyV1 } : {}) });
+                },
+                { ...executionRunDispatchOpts, ...(ctx.agentStartWorkDepth !== undefined ? { workDepth: ctx.agentStartWorkDepth, agentStartContext: ctx.agentStartContext, workspaceWrites: ctx.agentStartWorkspaceWrites, sessionAgentSpawnPolicyV1: ctx.sessionAgentSpawnPolicyV1 } : {}) }, ctx,
+              );
             },
           });
 

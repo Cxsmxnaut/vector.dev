@@ -492,7 +492,7 @@ import {
 } from '../sessions/creation/sessionSpawnNewInputV2.js';
 import {
   admitActionAgentStartV1, isAgentStartActionV1, isAgentStartActionInvocationV1, isActionCallerOwnSessionV1, requiresActionAgentStartDepthV1, resolveActionAgentStartRequestsV1, resolveProfileSkillSeedsAtAdmissionV1,
-  resolveActionAgentStartContextV1, resolveRunStartModelAndConfig, stampAgentStartSelectionV1,
+  resolveActionAgentStartContextV1, resolveRunStartModelAndConfig, stampAgentStartSelectionV1, projectAgentStartSelectionV1,
 } from './executor/agentStartAdmission.js';
 import {
   SessionCreationDirectoryApprovalV1Schema,
@@ -567,6 +567,19 @@ export function createActionExecutor(deps: ActionExecutorDeps): Readonly<{
     currentAccount?: Readonly<{ accountId: string; serverId: string; serverIdentityId: string }>;
   }>) => Promise<ActionExecuteResult>;
 }> {
+  const startExecutionRunWithSelection = (
+    sessionId: Parameters<ActionExecutorDeps['executionRunStart']>[0],
+    input: Parameters<ActionExecutorDeps['executionRunStart']>[1],
+    opts: Parameters<ActionExecutorDeps['executionRunStart']>[2],
+    context: ActionExecutorContext,
+  ) => {
+    const resolved = context.agentStartContext;
+    const machineId = opts?.targetMachineId ?? context.executionRunTargetMachineId;
+    const current = resolved && machineId && machineId !== resolved.baseline.machineId
+      ? { ...resolved, baseline: { machineId: resolved.baseline.machineId, directory: resolved.baseline.directory } } : resolved;
+    return deps.executionRunStart(sessionId, current
+      ? stampAgentStartSelectionV1(input, { workDepth: context.agentStartWorkDepth ?? 0 }, 'execution_run', current) : input, opts);
+  };
   const retireOpenManagedDeleteApprovals = async (input: Readonly<{ homeId: string; managedId: string }>,
     ctx: ActionExecutorContext): Promise<void> => {
     if (!deps.approvalsList || !deps.approvalsGet || !deps.approvalsUpdate) return;
@@ -2487,8 +2500,16 @@ export function createActionExecutor(deps: ActionExecutorDeps): Readonly<{
           const admission = admitActionAgentStartV1(ctx, start, startContext);
           if (!admission.ok) return classifyExecutionRunStartPreDispatchFailure(actionId, admission.error);
           if (start.kind === 'execution_run' || start.kind === 'spawn_new') {
-            const stampedInput = stampAgentStartSelectionV1(managedAgentStart ? readRecord(request.agentStart) : request,
-              admission.stamped, start.kind, startContext!);
+            const startInput = managedAgentStart ? readRecord(request.agentStart) : request;
+            // Fan-out inherits only after each concrete child target and route
+            // are known. Role projection still precedes downstream admission.
+            const stampedInput = start.kind === 'spawn_new'
+              ? stampAgentStartSelectionV1(startInput, admission.stamped, start.kind, startContext!)
+              : admission.stamped.roleId && admission.stamped.engine
+                ? projectAgentStartSelectionV1(startInput, { ...admission.stamped, engine: admission.stamped.engine }, start.kind,
+                    startContext!.caller.kind === 'session' ? startContext!.baseline
+                      : { machineId: startContext!.baseline.machineId, directory: startContext!.baseline.directory })
+                : startInput;
             admittedInput = managedAgentStart ? { ...request, agentStart: stampedInput } : stampedInput;
             if (!managedAgentStart && actionId !== 'execution.run.start' && actionId !== 'session.spawn_new' && admission.stamped.roleId && admission.stamped.engine) {
               admittedInput = { ...readRecord(admittedInput),
@@ -4774,9 +4795,9 @@ export function createActionExecutor(deps: ActionExecutorDeps): Readonly<{
         }
         return completeActionResult(await deps.filesystemActionExecute({ actionId, input: parsed.data, context: ctx }));
       }
-      const dispatchReviewDispatch2Result = await dispatchReviewDispatch2({ actionId, parsed, ctx, executeHostChild, data, deps });
+      const dispatchReviewDispatch2Result = await dispatchReviewDispatch2({ actionId, parsed, ctx, executeHostChild, data, deps, startExecutionRunWithSelection });
       if (dispatchReviewDispatch2Result !== null) return dispatchReviewDispatch2Result;
-      const dispatchAgentsSubagents1Result = await dispatchAgentsSubagents1({ actionId, data, parsed, ctx, deps });
+      const dispatchAgentsSubagents1Result = await dispatchAgentsSubagents1({ actionId, data, parsed, ctx, deps, startExecutionRunWithSelection });
       if (dispatchAgentsSubagents1Result !== null) return dispatchAgentsSubagents1Result;
 
         if (actionId === 'action.spec.search') {
@@ -5112,7 +5133,7 @@ export function createActionExecutor(deps: ActionExecutorDeps): Readonly<{
         }
         const dispatchAgentsSubagents2Result = await dispatchAgentsSubagents2({ actionId, deps, data, ctx, parsed });
         if (dispatchAgentsSubagents2Result !== null) return dispatchAgentsSubagents2Result;
-        const dispatchRunsDispatch1Result = await dispatchRunsDispatch1({ actionId, parsed, ctx, deps, data, dispatchFacts });
+        const dispatchRunsDispatch1Result = await dispatchRunsDispatch1({ actionId, parsed, ctx, deps, data, dispatchFacts, startExecutionRunWithSelection });
         if (dispatchRunsDispatch1Result !== null) return dispatchRunsDispatch1Result;
 
         if (actionId === 'wait') {

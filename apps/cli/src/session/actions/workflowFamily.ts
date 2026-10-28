@@ -435,14 +435,17 @@ export function createCliWorkflowFamily(
                 throw Object.assign(new Error('source_unavailable'), { code: 'source_unavailable' });
               }
               return await resolveWorkflowMaterializer({ ...target, signal: args.context.signal,
-                roleSelection: projectWorkflowConversationRoleSelection(origin) });
+                roleSelection: projectWorkflowConversationRoleSelection(origin, target.machineId) });
             }
             const metadata = await readCurrentSessionMetadata();
-            const baseline = (await resolveActionAgentStartContextV1({ resolveAgentStartContext }, args.context))?.baseline.configuration;
+            const startContext = await resolveActionAgentStartContextV1({ resolveAgentStartContext }, args.context);
+            const baseline = startContext?.baseline.configuration;
+            const sameMachine = startContext?.baseline.machineId === target.machineId;
             return await resolveWorkflowMaterializer({ ...target, signal: args.context.signal,
               roleSelection: {
                 sessionRoles: readSessionRolesV1(metadata) ?? undefined,
-                defaultConnectedServices: baseline?.connectedServices,
+                ...(sameMachine && baseline?.profileId ? { defaultProfileId: baseline.profileId } : {}),
+                defaultConnectedServices: sameMachine ? baseline?.connectedServices : undefined,
                 ...(baseline?.agentTarget ? { defaultEngine: { agentTargetKey: buildBackendTargetKeyV2(baseline.agentTarget),
                   ...(baseline.modelSelection ? { modelId: 'ref' in baseline.modelSelection
                     ? baseline.modelSelection.ref.modelId : baseline.modelSelection.modelId } : {}) } } : {}),

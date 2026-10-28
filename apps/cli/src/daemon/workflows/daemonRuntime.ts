@@ -413,7 +413,7 @@ export function createProductionDaemonWorkflowRuntime(params: Readonly<{
           throw Object.assign(new Error('source_unavailable'), { code: 'source_unavailable' });
         }
         const materialization = await resolveMaterializer({ machineId: input.machineId, directory: claim.directory,
-          ...(origin ? { roleSelection: projectWorkflowConversationRoleSelection(origin) } : {}),
+          ...(origin ? { roleSelection: projectWorkflowConversationRoleSelection(origin, input.machineId) } : {}),
           ...(claim.signal ? { signal: claim.signal } : {}) });
         const current = materialization.agentStartPolicySnapshot;
         return { ...materialization, admitLeaf: async (leaf, facts) => admitAgentStartV1(current.policy,

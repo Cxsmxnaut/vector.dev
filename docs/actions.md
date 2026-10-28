@@ -5294,11 +5294,19 @@ before resuming or starting the Run. An unavailable host start context returns t
 content-free `details.issues` path `host`; Run refusals retain their authoritative
 creation certainty through the existing failure projector.
 
-For an Agent Session's `session.spawn_new`, omitted `connectedServices` inherits
-the parent selection when the resolved child Agent is the same. An explicit
-binding object overrides it; `{v:2,bindingsByServiceId:{}}` selects native
+In 0.3 development source, Session-caller starts inherit an omitted Launch Profile
+and `connectedServices` from the authenticated baseline when the resolved child
+Agent and Machine are the same. This applies to `session.spawn_new`, attached
+execution Runs, Review, planning, delegation, Voice, Approval reviewer Roles and
+Workflow leaves carrying that baseline. A model reference alone does not clear
+Connected authentication. Run `launchProfileId` names the Launch Profile;
+Run `profileId` still names a plugin execution Profile. Explicit bindings,
+native resets and Account-default choices retain precedence. An explicit binding
+object overrides inheritance; `{v:2,bindingsByServiceId:{}}` selects native
 authentication. Root and different-Agent Session starts use Account defaults
-when omitted. `session.status.get` on `self` exposes the authorized Session's
+when omitted; incompatible attached Run inheritance returns the existing typed
+child-choice refusal. Inherited choices are re-admitted before materialization.
+`session.status.get` on `self` exposes the authorized Session's
 content-free `connectedServices` selection for explicit reuse; a missing field
 means unavailable selection evidence, not native authentication. Pool reads and
 inheritance preserve the pool id without pinning its current member.

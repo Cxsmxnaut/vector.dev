@@ -418,9 +418,21 @@ omission. Explicit bindings and explicit native/reset selections win. A leaf
 using another Agent, or a Workflow without an origin Session, retains its own
 explicit choice or that Agent's Account defaults.
 
-An Agent Session's `session.spawn_new` likewise freezes an omitted Connected
-choice from its authenticated Session baseline when the resolved child Agent is
-the same. Root starts and different-Agent Session starts retain Account-default
+Session-caller start admission freezes omitted Launch Profile and Connected
+choices from the authenticated baseline for the same Agent on the same Machine.
+The rule covers Session spawn, attached execution Runs, Review, planning,
+delegation, Voice, Approval reviewer Roles and Workflow leaves carrying a Session
+baseline. Role model stamping and an explicit native Provider model reference
+(`providerConnectionId:null`) do not by themselves clear Connected authentication.
+An explicit Connected selection, native reset, Provider/Team source or child
+Account-default choice retains precedence. Fan-out resolves each child's choices
+after selecting its Agent; it never applies one child's inherited binding to
+another Agent. Inherited account/pool identities are re-admitted against current
+credential authority at start; failure cannot silently select native or an
+Account default. Run `launchProfileId` carries the Launch Profile separately from
+the plugin execution `profileId`.
+
+Root starts and different-Agent Session starts retain Account-default
 resolution. Session status exposes `connectedServices` from the authorized
 owner selection as a validated, content-free binding object; an unavailable or
 malformed owner selection is omitted, never reported as native. Pool choices
