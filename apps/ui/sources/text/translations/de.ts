@@ -12632,6 +12632,9 @@ settingsSession: {
             retry: 'Noch einmal versuchen',
             roleYou: 'Du',
             roleAssistant: 'Assistent',
+            recoveryDescription: 'Bei einigen deiner Nachrichten ließ sich die Zustellung nicht bestätigen. Nichts wird erneut gesendet oder verworfen, bevor du entscheidest.',
+            recoveryTitle: 'Zurückgehaltene Nachrichten prüfen',
+            recoveryOpenFailed: 'Die Voice-Unterhaltung konnte nicht geöffnet werden. Versuche es noch einmal.',
         },
         dictation: {
             title: 'Diktat',

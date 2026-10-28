@@ -12545,6 +12545,9 @@ settingsSession: {
       retry: 'Spróbuj ponownie',
       roleYou: 'Ty',
       roleAssistant: 'Asystent',
+      recoveryDescription: 'Nie udało się potwierdzić dostarczenia części twoich wiadomości. Nic nie zostanie wysłane ponownie ani odrzucone, dopóki nie zdecydujesz.',
+      recoveryTitle: 'Przejrzyj wstrzymane wiadomości',
+      recoveryOpenFailed: 'Nie udało się otworzyć rozmowy głosowej. Spróbuj ponownie.',
     },
     dictation: {
       title: 'Dyktowanie',

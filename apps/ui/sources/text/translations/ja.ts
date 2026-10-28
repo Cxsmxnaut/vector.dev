@@ -13003,6 +13003,9 @@ settingsSession: {
       retry: '再試行',
       roleYou: 'あなた',
       roleAssistant: 'アシスタント',
+      recoveryDescription: '送信した内容の一部は、届いたことを確認できませんでした。あなたが決めるまで、再送も破棄もされません。',
+      recoveryTitle: '保留中のメッセージを確認',
+      recoveryOpenFailed: '音声会話を開けませんでした。もう一度お試しください。',
     },
     dictation: {
       title: '音声入力',

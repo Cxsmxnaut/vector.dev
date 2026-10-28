@@ -12712,6 +12712,9 @@ settingsSession: {
       retry: 'Reintentar',
       roleYou: 'Tú',
       roleAssistant: 'Asistente',
+      recoveryDescription: 'No se pudo confirmar la entrega de algunos de tus mensajes. No se reenvía ni se descarta nada hasta que decidas.',
+      recoveryTitle: 'Revisar mensajes retenidos',
+      recoveryOpenFailed: 'No se pudo abrir la conversación de voz. Inténtalo de nuevo.',
     },
     dictation: {
       title: 'Dictado',

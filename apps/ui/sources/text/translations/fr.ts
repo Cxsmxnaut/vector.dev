@@ -12586,6 +12586,9 @@ settingsSession: {
       retry: 'Réessayer',
       roleYou: 'Toi',
       roleAssistant: 'Assistante',
+      recoveryDescription: 'La remise de certains de tes messages n’a pas pu être confirmée. Rien n’est renvoyé ni supprimé tant que tu n’as pas décidé.',
+      recoveryTitle: 'Examiner les messages retenus',
+      recoveryOpenFailed: 'Impossible d’ouvrir la conversation vocale. Réessaie.',
     },
     dictation: {
       title: 'Dictée',

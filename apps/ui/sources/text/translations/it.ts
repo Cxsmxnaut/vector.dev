@@ -12928,6 +12928,9 @@ settingsSession: {
       retry: 'Riprova',
       roleYou: 'Tu',
       roleAssistant: 'Assistente',
+      recoveryDescription: 'Non è stato possibile confermare la consegna di alcuni tuoi messaggi. Nulla viene reinviato o scartato finché non decidi tu.',
+      recoveryTitle: 'Rivedi i messaggi trattenuti',
+      recoveryOpenFailed: 'Impossibile aprire la conversazione vocale. Riprova.',
     },
     dictation: {
       title: 'Dettatura',

@@ -11832,6 +11832,9 @@ settingsSession: {
             retry: 'Torna-ho a provar',
             roleYou: 'Tu',
             roleAssistant: 'Assistent',
+            recoveryDescription: 'No s’ha pogut confirmar que alguns dels teus missatges s’hagin lliurat. No es tornarà a enviar ni es descartarà res fins que decideixis.',
+            recoveryTitle: 'Revisa els missatges retinguts',
+            recoveryOpenFailed: 'No s’ha pogut obrir la conversa de veu. Torna-ho a provar.',
         },
         dictation: {
             title: 'Dictat',

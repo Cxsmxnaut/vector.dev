@@ -12831,6 +12831,9 @@ settingsSession: {
       retry: 'Tentar novamente',
       roleYou: 'Você',
       roleAssistant: 'Assistente',
+      recoveryDescription: 'Algumas das tuas mensagens não foram confirmadas como entregues. Nada é reenviado nem descartado até decidires.',
+      recoveryTitle: 'Rever mensagens retidas',
+      recoveryOpenFailed: 'Não foi possível abrir a conversa de voz. Tenta novamente.',
     },
     dictation: {
       title: 'Ditado',

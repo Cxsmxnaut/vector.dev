@@ -10479,6 +10479,9 @@ settingsSession: {
             retry: '重試',
             roleYou: '你',
             roleAssistant: '助理',
+            recoveryDescription: '你說的部分內容無法確認已送達。在你決定之前，不會重新傳送或捨棄任何內容。',
+            recoveryTitle: '查看暫存的訊息',
+            recoveryOpenFailed: '無法開啟語音對話。請重試。',
         },
         dictation: {
             title: '聽寫',

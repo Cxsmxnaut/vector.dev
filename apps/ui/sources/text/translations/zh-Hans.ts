@@ -12301,6 +12301,9 @@ settingsSession: {
       retry: '重试',
       roleYou: '你',
       roleAssistant: '助手',
+      recoveryDescription: '你说的部分内容无法确认已送达。在你决定之前，不会重新发送或丢弃任何内容。',
+      recoveryTitle: '查看暂存的消息',
+      recoveryOpenFailed: '无法打开语音对话。请重试。',
     },
     dictation: {
       title: '听写',

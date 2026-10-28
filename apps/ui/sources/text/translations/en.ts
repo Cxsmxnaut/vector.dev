@@ -15201,6 +15201,9 @@ const enSettingsVoice = {
     retry: 'Try again',
     roleYou: 'You',
     roleAssistant: 'Assistant',
+    recoveryDescription: 'Some of what you said couldn’t be confirmed as delivered. Nothing is resent or discarded until you decide.',
+    recoveryTitle: 'Review held messages',
+    recoveryOpenFailed: 'Couldn’t open the Voice conversation. Try again.',
   },
   dictation: {
     title: 'Dictation',

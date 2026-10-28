@@ -19,6 +19,8 @@ import { t } from '@/text';
 import { formatWithCachedDateTimeFormatter } from '@/utils/datetime/cachedIntlFormatters';
 
 import { getDefaultVoiceHistoryConsumer } from './defaultVoiceHistoryConsumer';
+import { useVoiceHistoryPendingRecovery, type VoiceHistoryPendingRecovery } from './useVoiceHistoryPendingRecovery';
+import { useVoiceHomeConversationAddress } from '@/voice/persistence/useVoiceHomeConversationAddress';
 import { useMountedActionExecution } from '@/components/approvals/useMountedActionExecution';
 import { VoiceConversationActionOutputSchemas } from '@happier-dev/protocol/actions/voiceConversationActionFamily';
 import {
@@ -131,6 +133,32 @@ function VoiceHistoryActionMessage(props: Readonly<{ message: string }>) {
     </Text>
   );
 }
+
+/**
+ * Retained Voice input that needs a decision is recovered in the carrier Session's existing
+ * Pending block; History only flags it and opens that Session. It mounts only while this page
+ * is data-active, so the carrier subscription ends with the page.
+ */
+const VoiceHistoryRecoveryGroup = React.memo(function VoiceHistoryRecoveryGroup(props: Readonly<{
+  onOpen: (openAction: VoiceHistoryPendingRecovery['openAction']) => void;
+}>) {
+  const { theme } = useUnistyles();
+  const recovery = useVoiceHistoryPendingRecovery(useVoiceHomeConversationAddress());
+  if (!recovery) return null;
+  return (
+    <ItemGroup description={t('settingsVoice.history.recoveryDescription')}>
+      <Item
+        testID="voice-history-recovery"
+        icon={<Icon name="warning-circle" size={18} color={theme.colors.state.attention.foreground} />}
+        title={t('settingsVoice.history.recoveryTitle')}
+        subtitle={t('workStatus.buckets.needs_you')}
+        subtitleStyle={{ color: theme.colors.state.attention.textForeground }}
+        accessibilityRole="button"
+        onPress={() => props.onOpen(recovery.openAction)}
+      />
+    </ItemGroup>
+  );
+});
 
 const VoiceHistoryScreenBody = React.memo(function VoiceHistoryScreenBody(
   props: VoiceHistoryScreenProps,
@@ -303,6 +331,13 @@ const VoiceHistoryScreenBody = React.memo(function VoiceHistoryScreenBody(
     }
   }, [beginOperation, executeAction, finishOperation, showOperationError]);
 
+  const openRecovery = React.useCallback((openAction: VoiceHistoryPendingRecovery['openAction']) => {
+    setActionMessage(null);
+    void executeAction(openAction.actionId, openAction.input).catch(error => {
+      showOperationError(error, t('settingsVoice.history.recoveryOpenFailed'));
+    });
+  }, [executeAction, showOperationError]);
+
   const loadingOlder = activeOperation === 'load_older';
   const exporting = activeOperation === 'export';
   const clearing = activeOperation === 'clear';
@@ -386,14 +421,19 @@ const VoiceHistoryScreenBody = React.memo(function VoiceHistoryScreenBody(
 
   if (!snapshot.sessionId) {
     return withPageState(
-      <VoiceHistoryStateMessage
-        testID="voice-history-empty"
-        kind="empty"
-        icon="clock"
-        title={t('settingsVoice.history.emptyTitle')}
-        body={t('settingsVoice.history.emptyBody')}
-        actionMessage={actionMessage}
-      />,
+      <>
+        <View style={[styles.header, headerMaxWidthStyle]}>
+          <VoiceHistoryRecoveryGroup onOpen={openRecovery} />
+        </View>
+        <VoiceHistoryStateMessage
+          testID="voice-history-empty"
+          kind="empty"
+          icon="clock"
+          title={t('settingsVoice.history.emptyTitle')}
+          body={t('settingsVoice.history.emptyBody')}
+          actionMessage={actionMessage}
+        />
+      </>,
     );
   }
 
@@ -403,6 +443,7 @@ const VoiceHistoryScreenBody = React.memo(function VoiceHistoryScreenBody(
   const listHeader = (
     <View style={[styles.header, headerMaxWidthStyle]}>
       {pageHeader}
+      <VoiceHistoryRecoveryGroup onOpen={openRecovery} />
       <ItemGroup
         title={t('settingsVoice.history.searchTitle')}
         description={t('settingsVoice.history.searchFooter')}

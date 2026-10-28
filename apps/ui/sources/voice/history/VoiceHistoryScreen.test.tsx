@@ -9,6 +9,7 @@ vi.mock('socket.io-client', async original =>
 
 import {
   createDeferred,
+  createSessionFixture,
   renderScreen as renderHistoryScreen,
   standardCleanup,
 } from '@/dev/testkit';
@@ -856,6 +857,78 @@ describe('VoiceHistoryScreen', () => {
     );
     await flushAsyncState();
     expect(supersededScreen.findByTestId('voice-history-superseded')).not.toBeNull();
+  });
+
+  describe('retained-input recovery entry', () => {
+    const CARRIER_ID = 'voice-carrier-session';
+    const blockedCarrier = (serverId: string, counts: { pendingCount: number; pendingBlockedCount: number }) =>
+      createSessionFixture({
+        id: CARRIER_ID, serverId, active: true, activeAt: Date.now(),
+        ...counts,
+        pendingPermissionRequestCount: 0, pendingUserActionRequestCount: 0,
+        metadata: { ...createSessionFixture().metadata!, name: 'Voice conversation (system)',
+          systemSessionV1: { v: 1, key: 'voice_conversation', hidden: true } },
+      });
+    const seedCarrier = async (counts = { pendingCount: 3, pendingBlockedCount: 3 }) => {
+      const { storage } = await import('@/sync/domains/state/storage');
+      const session = blockedCarrier(account.scope.serverId, counts);
+      await act(async () => storage.setState(state => ({ sessions: { ...state.sessions, [session.id]: session } })));
+      return session;
+    };
+    const dropCarrier = async () => {
+      const { storage } = await import('@/sync/domains/state/storage');
+      await act(async () => storage.setState(state => {
+        const { [CARRIER_ID]: _removed, ...sessions } = state.sessions;
+        return { sessions };
+      }));
+    };
+    afterEach(dropCarrier);
+
+    it('flags retained input above the transcript tools and opens the carrier through the mounted workspace', async () => {
+      await seedCarrier();
+      const { registerMountedWorkspaceAction } = await import('@/components/appShell/workspace/workspaceActionRuntime');
+      const open = vi.fn(async () => ({ ok: true as const }));
+      const unregister = registerMountedWorkspaceAction(open as never);
+      try {
+        const consumer = createVoiceHistoryConsumer(createDeps([voiceMessage({
+          id: 'm1', role: 'user', text: 'Check the deploy', createdAt: 1, source: OPENAI_SOURCE })]));
+        const { VoiceHistoryScreen } = await import('./VoiceHistoryScreen');
+        const screen = await renderScreen(<VoiceHistoryScreen consumer={consumer} saveExportArtifact={vi.fn()} />);
+        await waitForTestEvent(screen.subscribe, () => expect(screen.findByTestId('voice-history-recovery')).not.toBeNull());
+        // A search that matches nothing hides every transcript row, never the recovery entry.
+        await act(async () => { screen.findByTestId('voice-history-search')!.props.onChangeText('zzz-no-match'); });
+        await flushAsyncState();
+        expect(screen.findByTestId('voice-history-no-results')).not.toBeNull();
+        await screen.pressByTestIdAsync('voice-history-recovery');
+        await flushAsyncState();
+        expect(open).toHaveBeenCalledWith(expect.objectContaining({
+          actionId: 'workspace.tabs.open',
+          input: { href: `/session/${CARRIER_ID}?serverId=${account.scope.serverId}` },
+        }));
+      } finally { unregister(); }
+    });
+
+    it('stays visible on an empty History, and leaves when the block is cleared', async () => {
+      const session = await seedCarrier();
+      const consumer = createVoiceHistoryConsumer(createDeps([], { discoverHistorySession: async () => null }));
+      const { VoiceHistoryScreen } = await import('./VoiceHistoryScreen');
+      const screen = await renderScreen(<VoiceHistoryScreen consumer={consumer} saveExportArtifact={vi.fn()} />);
+      await waitForTestEvent(screen.subscribe, () => expect(screen.findByTestId('voice-history-empty')).not.toBeNull());
+      expect(screen.findByTestId('voice-history-recovery')).not.toBeNull();
+      const { storage } = await import('@/sync/domains/state/storage');
+      await act(async () => storage.setState(state => ({ sessions: { ...state.sessions,
+        [session.id]: { ...session, pendingCount: 0, pendingBlockedCount: 0 } } })));
+      expect(screen.findByTestId('voice-history-recovery')).toBeNull();
+    });
+
+    it('is absent when the carrier holds no blocked input', async () => {
+      await seedCarrier({ pendingCount: 0, pendingBlockedCount: 0 });
+      const consumer = createVoiceHistoryConsumer(createDeps([]));
+      const { VoiceHistoryScreen } = await import('./VoiceHistoryScreen');
+      const screen = await renderScreen(<VoiceHistoryScreen consumer={consumer} saveExportArtifact={vi.fn()} />);
+      await waitForTestEvent(screen.subscribe, () => expect(screen.findByTestId('voice-history-export')).not.toBeNull());
+      expect(screen.findByTestId('voice-history-recovery')).toBeNull();
+    });
   });
 
   it('uses ordinary error recovery for a server refusal without exposing its details', async () => {
