@@ -49,6 +49,9 @@ const editorSpy = vi.hoisted(() => ({
     selectionCallbacks: new Set<(state: any) => void>(),
     menuTriggerCallbacks: new Set<(state: any) => void>(),
     linkBubbleCallbacks: new Set<(state: any) => void>(),
+    runMenuCommand: vi.fn(),
+    viewportLayoutCallbacks: new Set<(rect: any) => void>(),
+    measureEditorViewportInWindow: vi.fn(async () => ({ x: 1, y: 2, width: 3, height: 4 })),
 }));
 
 vi.mock('@/components/ui/markdown/editor/MarkdownEditor', async () => {
@@ -70,9 +73,12 @@ vi.mock('@/components/ui/markdown/editor/MarkdownEditor', async () => {
                 editorSpy.menuTriggerCallbacks.add(cb);
                 return () => editorSpy.menuTriggerCallbacks.delete(cb);
             },
-            runMenuCommand: vi.fn(),
-            subscribeEditorViewportLayout: vi.fn(() => () => {}),
-            measureEditorViewportInWindow: vi.fn(async () => null),
+            runMenuCommand: editorSpy.runMenuCommand,
+            subscribeEditorViewportLayout: (cb: (rect: any) => void) => {
+                editorSpy.viewportLayoutCallbacks.add(cb);
+                return () => editorSpy.viewportLayoutCallbacks.delete(cb);
+            },
+            measureEditorViewportInWindow: editorSpy.measureEditorViewportInWindow,
             subscribeLinkBubble: (cb: (state: any) => void) => {
                 editorSpy.linkBubbleCallbacks.add(cb);
                 return () => editorSpy.linkBubbleCallbacks.delete(cb);
@@ -318,6 +324,16 @@ describe('RichMarkdownEditorPanel', () => {
         expect(editorSpy.linkBubbleCallbacks.has(onBubble)).toBe(true);
         unsubscribeBubble();
         expect(editorSpy.linkBubbleCallbacks.has(onBubble)).toBe(false);
+
+        const onViewport = vi.fn();
+        const unsubscribeViewport = controller.subscribeEditorViewportLayout!(onViewport);
+        expect(editorSpy.viewportLayoutCallbacks.has(onViewport)).toBe(true);
+        unsubscribeViewport();
+        expect(editorSpy.viewportLayoutCallbacks.has(onViewport)).toBe(false);
+
+        controller.runMenuCommand!({ kind: 'toggleBold' }, { from: 1, to: 3 });
+        expect(editorSpy.runMenuCommand).toHaveBeenLastCalledWith({ kind: 'toggleBold' }, { from: 1, to: 3 });
+        await expect(controller.measureEditorViewportInWindow!()).resolves.toEqual({ x: 1, y: 2, width: 3, height: 4 });
     });
 
     it('does not drive the slash menu while read-only but keeps the link bubble controller', async () => {

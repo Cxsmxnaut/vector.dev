@@ -23,7 +23,7 @@ function flattenStyle(style: unknown): Record<string, unknown> {
 }
 
 describe('StepTransitionFrame', () => {
-    it('renders the step body on the routine role', async () => {
+    it('keeps the outgoing step mounted while the incoming step enters on the routine role', async () => {
         const { StepTransitionFrame } = await import('./StepTransitionFrame');
         const screen = await renderScreen(
             <StepTransitionFrame transitionKey="one" direction="replace" testID="step-frame">
@@ -38,7 +38,9 @@ describe('StepTransitionFrame', () => {
         );
 
         const routine = slideTransitionTokens.routine.timed;
+        expect(screen.findByTestId('step-one')).not.toBeNull();
         expect(screen.findByTestId('step-two')).not.toBeNull();
+        expect(screen.findByTestId('step-frame-exit-layer')).not.toBeNull();
         expect(flattenStyle(screen.findByTestId('step-frame-current-layer')?.props.style)).toMatchObject({
             transitionDuration: `${routine.durationMs.enter}ms`,
             filter: `blur(${routine.blurPx}px)`,
