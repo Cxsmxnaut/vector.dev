@@ -14,6 +14,8 @@ import { WorkflowActionOutputSchemasV1 } from '@happier-dev/protocol/workflows/a
 import { tryWriteServerEnabledBitInPlace } from '@happier-dev/protocol/features/serverEnabledBit';
 import { createRootLayoutFeaturesResponse } from '@/dev/testkit/fixtures/featureFixtures';
 import { createWorkflowRunSummaryFixture } from '@/dev/testkit/fixtures/workflowRunFixtures';
+import { buildReviewCommentFixture, storePlainReviewCommentFixture } from '@/dev/testkit/fixtures/reviewComments';
+import { listVoiceToolActionSpecs } from '@happier-dev/protocol/actions/actionSpecs';
 
 import {
   AccountSettingsV2UpdateRequestSchema,
@@ -39,6 +41,59 @@ const { createDefaultActionExecutor } = await import('@/sync/ops/actions/default
 describe('Voice Action reference catalog', () => {
   beforeEach(async () => { await home.reset(); });
   afterEach(async () => { await home.reset(); });
+  it('projects every public review-comment operation through the same Voice resolver and handler', () => {
+    const tools = listVoiceToolActionSpecs();
+    const handlers = createVoiceToolHandlers({ resolveSessionId: () => null });
+    for (const id of [
+      'reviews.comments.create', 'reviews.comments.list', 'reviews.comments.get', 'reviews.comments.transition',
+      'reviews.comments.edit', 'reviews.comments.reply', 'reviews.comments.redact', 'reviews.comments.setDisposition',
+      'reviews.comments.attachEvidence', 'reviews.comments.bulkTransition',
+    ] as const) {
+      const spec = getActionSpec(id);
+      const input = JSON.parse(spec.examples?.voice?.argsExample ?? '{}');
+      expect(spec.inputSchema.safeParse(input).success, id).toBe(true);
+      expect(tools.some(tool => tool.id === id), id).toBe(true);
+      const resolved = resolveVoiceActionExecution({ actionId: id, input });
+      expect(resolved?.spec.id, id).toBe(id);
+      expect(handlers[resolved!.toolName], id).toBeTypeOf('function');
+    }
+    expect(resolveVoiceActionExecution({ actionId: 'reviews.comments.claimPublicationDispatch', input: {} })).toBeNull();
+    // PLAN §3.5 intentionally excludes these operations from Voice.
+    for (const id of ['session.roles.apply_to_reports', 'roles.create', 'roles.update', 'roles.delete',
+      'roles.override.set', 'roles.override.reset', 'launch_profiles.publish', 'session.approval_reviewer.set'] as const) {
+      expect(tools.some(tool => tool.id === id), id).toBe(false);
+    }
+  });
+  it('reads a review comment through generic Voice and the real HTTP owner', async () => {
+    const serverId = await home.addHome({ name: 'Review Voice Home', serverUrl: 'https://review-voice.test', accountId: 'alice', currentAccount: true });
+    const row = buildReviewCommentFixture({ accountId: 'alice' });
+    home.answer(serverId, '/v1/reviews/comments/comment-1?stored=true&includeHistory=true', {
+      body: { comment: storePlainReviewCommentFixture(row) },
+    });
+    const handlers = createVoiceToolHandlers({ resolveSessionId: () => 'review-session', currentServerId: serverId });
+    const read = JSON.parse(await handlers.action_execute!({ actionId: 'reviews.comments.get', input: { commentId: row.id } }, { serverId }));
+    expect(read).toMatchObject({ ok: true, result: { comment: { id: row.id, body: row.body } } });
+  });
+  it('applies an empty accepted selection through generic Voice and the real HTTP owner', async () => {
+    const serverId = await home.addHome({ name: 'Review apply Voice Home', serverUrl: 'https://review-apply-voice.test', accountId: 'alice', currentAccount: true });
+    home.answer(serverId, '/v1/reviews/comments?sessionId=review-session&runId=review-1&includeHistory=true&limit=50&stored=true', {
+      body: { items: [], cursor: null },
+    });
+    const handlers = createVoiceToolHandlers({ resolveSessionId: () => 'review-session', currentServerId: serverId });
+    const applied = JSON.parse(await handlers.action_execute!({ actionId: 'review.apply', input: {
+      sessionId: 'review-session', reviews: [{ runId: 'review-1', findings: [] }],
+    } }, { serverId }));
+    expect(applied).toEqual({ ok: true, result: { status: 'unchanged', commentIds: [] } });
+  });
+  it.each(['work.view.select', 'work.recent.show_more', 'work.map.expand'] as const)('routes %s to the Session presentation owner and refuses an unbound client', async kind => {
+    const serverId = await home.addHome({ name: 'Presentation Voice Home', serverUrl: 'https://presentation-voice.test', accountId: 'alice', currentAccount: true });
+    const input = { intent: { kind, ...(kind === 'work.view.select' ? { view: 'map' } : {}) } };
+    expect(getActionSpec('session.presentation.apply').inputSchema.safeParse(input).success).toBe(true);
+    expect(resolveVoiceActionExecution({ actionId: 'session.presentation.apply', input })?.spec.id).toBe('session.presentation.apply');
+    const handlers = createVoiceToolHandlers({ resolveSessionId: () => null, currentServerId: serverId });
+    expect(JSON.parse(await handlers.action_execute!({ actionId: 'session.presentation.apply', input }, { serverId })))
+      .toMatchObject({ ok: false, errorCode: 'session_not_selected' });
+  });
   it.each(['ui', 'voice', 'voice-disabled'] as const)('discovers a displayed Voice preference and settles its approval through %s', async decisionPath => {
     expect(isActionDirectToolExposedOn(getActionSpec('settings.list'), 'agent')).toBe(true);
     const serverId = await home.addHome({ name: 'Global Voice settings', serverUrl: 'https://global-voice-settings.test',
