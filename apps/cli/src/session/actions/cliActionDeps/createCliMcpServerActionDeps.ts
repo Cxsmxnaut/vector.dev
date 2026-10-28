@@ -158,6 +158,7 @@ export function createCliMcpServerActionExecuteV1(params: Readonly<{
           return parsed.data;
         },
       })(request);
-    } catch (cause) { return projectMcpServerActionFailureV1(cause); }
+    } catch (cause) { return projectMcpServerActionFailureV1(cause,
+      request.actionId === 'mcp.servers.signIn.start' ? 'host_admission' : undefined); }
   });
 }

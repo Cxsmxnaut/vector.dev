@@ -37,7 +37,7 @@ export function createCliSessionCapabilitiesActionDeps(params: Readonly<{
     context.signal?.throwIfAborted();
     if (context.serverId && context.serverId !== params.serverId) return null;
     const [{ resolveSessionTransportContext }, { tryDecryptSessionOwnerMetadataView }] = await Promise.all([import("@/session/services/resolveSessionTransportContext"), import("@/session/transport/encryption/sessionEncryptionContext")]);
-    const transport = await withinHome(() => resolveSessionTransportContext({ credentials: params.credentials, idOrPrefix: sessionId,
+    const transport = await withinHome(() => resolveSessionTransportContext({ reason: 'session-action', credentials: params.credentials, idOrPrefix: sessionId,
       resolveAuthorizationHeaders: request => params.resolveAuthorizationHeaders(actionId, context, request), signal: context.signal }));
     if (!transport.ok) {
       if (transport.code === 'session_not_found') return null;
