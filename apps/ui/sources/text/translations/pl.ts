@@ -17365,6 +17365,7 @@ settingsSession: {
         rowsLoadingTitle: "Wczytywanie projektów",
         rowsUnavailableTitle: "Nie udało się wczytać projektów.",
         rowsUnavailableBody: "Nic nie zostało usunięte. Spróbuj ponownie za chwilę.",
+        rowsStaleReason: "Nie udało się odświeżyć projektów.",
         openInvalidTitle: "Ten link nie wskazuje jednego checkoutu.",
         openInvalidBody: "Otwórz projekt z Projektów.",
         backToProjects: "Wróć do Projektów",

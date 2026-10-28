@@ -84,7 +84,7 @@ describe('ProjectsTree (lab p-projects TREE/HIDDEN)', () => {
             { refId: 'p1', machineId: 'devbox', machineName: 'devbox', label: 'main', path: '~/src/plugins', attention: null },
             { refId: 'p2', machineId: 'devbox', machineName: 'devbox', label: 'pi-agent', path: '~/x', attention: null },
         ] }], openRefId: null, expandedKeys: new Set(), collapsedKeys: new Set(['plugins']) });
-        await act(async () => { screen.tree.update(<ProjectsTree rows={collapsed} onToggle={() => {}} onOpenRef={() => {}} />); });
+        await screen.update(<ProjectsTree rows={collapsed} onToggle={() => {}} onOpenRef={() => {}} />);
         // The roving stop repairs to the nearest visible ancestor, never off the tree.
         expect(item('plugins')!.props.webTabIndex).toBe(0);
     });
@@ -146,7 +146,7 @@ describe('ProjectsTree (lab p-projects TREE/HIDDEN)', () => {
         expect(screen.findByTestId('projects-tree-hidden-scratch')).toBeNull();
         await screen.pressByTestIdAsync('projects-tree-hidden');
         expect(onToggle).toHaveBeenCalledTimes(1);
-        await act(async () => { screen.tree.update(render(true)); });
+        await screen.update(render(true));
         expect(expanded()).toBe(true);
         await screen.pressByTestIdAsync('projects-tree-hidden-scratch');
         expect(onOpenRef).toHaveBeenCalledWith('scratch-ref', address);

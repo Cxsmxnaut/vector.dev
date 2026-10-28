@@ -82,20 +82,22 @@ export function useProjectsTreeKeyboard(rows: readonly ProjectsTreeRow[], handle
             if (row) handlersRef.current.onOpenRow(row);
         },
     });
-    const getRowProps = React.useCallback((row: ProjectsTreeRow): NonNullable<React.ComponentProps<typeof CollectionNavigationRow>['treeItem']> => ({
+    const { activeKey, bindFocusTarget, onFocusChange, onKeyDown } = tree;
+    const getRowPropsForActiveKey = React.useCallback((row: ProjectsTreeRow, rowActiveKey: string | null): NonNullable<React.ComponentProps<typeof CollectionNavigationRow>['treeItem']> => ({
         webRole: 'treeitem',
-        webTabIndex: row.key === tree.activeKey ? 0 : -1,
+        webTabIndex: row.key === rowActiveKey ? 0 : -1,
         accessibilityLevel: row.level + 1,
         accessibilityExpanded: row.expandable ? row.expanded : undefined,
-        pressableRef: (target) => tree.bindFocusTarget(row.key, target?.focus ? { focus: () => target.focus?.() } : null),
-        onFocus: () => tree.onFocusChange(row.key, true),
-        onBlur: () => tree.onFocusChange(row.key, false),
+        pressableRef: (target) => bindFocusTarget(row.key, target?.focus ? { focus: () => target.focus?.() } : null),
+        onFocus: () => onFocusChange(row.key, true),
+        onBlur: () => onFocusChange(row.key, false),
         onKeyDown: (event) => {
             const key = event.nativeEvent?.key ?? event.key;
-            if (key && tree.onKeyDown(row.key, key, event)) event.preventDefault?.();
+            if (key && onKeyDown(row.key, key, event)) event.preventDefault?.();
         },
-    }), [tree]);
-    return { getRowProps };
+    }), [bindFocusTarget, onFocusChange, onKeyDown]);
+    const getRowProps = React.useCallback((row: ProjectsTreeRow) => getRowPropsForActiveKey(row, activeKey), [activeKey, getRowPropsForActiveKey]);
+    return { activeKey, getRowProps, getRowPropsForActiveKey };
 }
 
 /** Where a row's action lands: a leaf opens its exact checkout, a parent opens or closes in place. */
@@ -157,24 +159,31 @@ export const ProjectsTree = React.memo(function ProjectsTree(props: Readonly<{
     const live = React.useMemo((): ProjectsTreeLiveCheckouts | null => liveInput ? {
         ...liveInput,
         projectsByKey: new Map(liveInput.projects.map((project) => [project.key, project] as const)),
-    } : null, [liveInput]);
-    const rowListProps: ProjectsTreeRowListProps = {
+    } : null, [liveInput?.source, liveInput?.projects, liveInput?.openRefId, liveInput?.expandedKeys, liveInput?.collapsedKeys]);
+    const handlersRef = React.useRef({ onOpenRef, onToggle });
+    handlersRef.current = { onOpenRef, onToggle };
+    // These callbacks run on user intent; changing a parent's closure does not change any row's presentation.
+    const openRef = React.useCallback((refId: string, address?: WorkspaceAddressV1) => handlersRef.current.onOpenRef(refId, address), []);
+    const toggle = React.useCallback((key: string) => handlersRef.current.onToggle(key), []);
+    const rowListProps = React.useMemo((): ProjectsTreeRowListProps => ({
         testID,
         disclosureColumn,
-        getRowProps: keyboard.getRowProps,
+        getRowProps: keyboard.getRowPropsForActiveKey,
         renderRowMenu: props.renderRowMenu,
         hrefForRef: props.hrefForRef,
-        onOpenRef,
-        onToggle,
-    };
+        onOpenRef: openRef,
+        onToggle: toggle,
+    }), [testID, disclosureColumn, keyboard.getRowPropsForActiveKey, props.renderRowMenu, props.hrefForRef, openRef, toggle]);
+    const runs = React.useMemo(() => projectRuns(props.rows), [props.rows]);
     return (
         <View testID={testID} {...(Platform.OS === 'web' ? { role: 'tree' as const } : {})}>
             {live ? (
-                projectRuns(props.rows).map((run) => (
-                    <ProjectsTreeLiveSection key={run[0]!.key} rows={run} live={live} rowList={rowListProps} />
+                runs.map((run) => (
+                    <ProjectsTreeLiveSection key={run[0]!.key} rows={run} live={live} rowList={rowListProps}
+                        activeKey={run.some(row => row.key === keyboard.activeKey) ? keyboard.activeKey : null} />
                 ))
             ) : (
-                <ProjectsTreeRowList rows={props.rows} {...rowListProps} />
+                <ProjectsTreeRowList rows={props.rows} activeKey={keyboard.activeKey} {...rowListProps} />
             )}
             {props.saved && props.saved.items.length > 0 ? (
                 <>
@@ -255,7 +264,7 @@ export const ProjectsTree = React.memo(function ProjectsTree(props: Readonly<{
 type ProjectsTreeRowListProps = Readonly<{
     testID: string;
     disclosureColumn: boolean;
-    getRowProps: ReturnType<typeof useProjectsTreeKeyboard>['getRowProps'];
+    getRowProps: ReturnType<typeof useProjectsTreeKeyboard>['getRowPropsForActiveKey'];
     renderRowMenu?: ((row: ProjectsTreeRow) => React.ReactNode) | null;
     hrefForRef?: ((refId: string, address?: WorkspaceAddressV1) => string | null) | null;
     onOpenRef: (refId: string, address?: WorkspaceAddressV1) => void;
@@ -263,7 +272,7 @@ type ProjectsTreeRowListProps = Readonly<{
 }>;
 
 /** The tree's rows as drawn: one shared row anatomy for every Project section. */
-function ProjectsTreeRowList(props: ProjectsTreeRowListProps & Readonly<{ rows: readonly ProjectsTreeRow[] }>) {
+function ProjectsTreeRowList(props: ProjectsTreeRowListProps & Readonly<{ rows: readonly ProjectsTreeRow[]; activeKey: string | null }>) {
     const { theme } = useUnistyles();
     const reducedMotion = useReducedMotionPreference();
     return (
@@ -312,7 +321,7 @@ function ProjectsTreeRowList(props: ProjectsTreeRowListProps & Readonly<{ rows: 
                         selected={row.selected}
                         dimmed={row.offline === true}
                         indentPx={row.level * HAPPIER_TREE_ROW_METRICS.indentStepPx}
-                        treeItem={props.getRowProps(row)}
+                        treeItem={props.getRowProps(row, props.activeKey)}
                         accessibilityLabel={row.titleQualifier ? `${row.title}, ${row.titleQualifier}` : row.title}
                         rightElement={trailing}
                         onPress={() => openTreeRow(row, props.onOpenRef, props.onToggle)}
@@ -338,25 +347,38 @@ function projectRuns(rows: readonly ProjectsTreeRow[]): ProjectsTreeRow[][] {
  * so a change to one checkout re-renders this Project only; the tree above keeps membership, focus and
  * keyboard order and is not involved.
  */
-function ProjectsTreeLiveSection(props: Readonly<{
+const ProjectsTreeLiveSection = React.memo(function ProjectsTreeLiveSection(props: Readonly<{
     rows: readonly ProjectsTreeRow[];
     live: ProjectsTreeLiveCheckouts;
     rowList: ProjectsTreeRowListProps;
+    activeKey: string | null;
 }>) {
     const { live } = props;
     const project = live.projectsByKey.get(props.rows[0]!.key);
     const keys = (project?.checkouts ?? []).map(projectsTreeCheckoutKey);
     const facts = useProjectsTreeCheckoutFactsFor(live.source, keys);
-    const rows = project
+    const rows = React.useMemo(() => project
         ? buildProjectsTreeRows({
             projects: [applyProjectsTreeCheckoutFacts(project, (_checkout, index) => facts[index] ?? null)],
             openRefId: live.openRefId,
             expandedKeys: live.expandedKeys,
             collapsedKeys: live.collapsedKeys,
         })
-        : props.rows;
-    return <ProjectsTreeRowList rows={rows} {...props.rowList} />;
-}
+        : props.rows, [project, facts, live.openRefId, live.expandedKeys, live.collapsedKeys, props.rows]);
+    return <ProjectsTreeRowList rows={rows} activeKey={props.activeKey} {...props.rowList} />;
+}, (previous, next) => {
+    if (previous.rowList !== next.rowList || previous.activeKey !== next.activeKey || previous.live.source !== next.live.source) return false;
+    const key = next.rows[0]!.key;
+    const project = next.live.projectsByKey.get(key);
+    if (project !== previous.live.projectsByKey.get(key)) return false;
+    if (!project) return previous.rows === next.rows;
+    // Global selection/disclosure carriers are projected to this Project, just as facts are.
+    const selectedRef = (openRefId: string | null) => project.checkouts.some(checkout => checkout.refId === openRefId) ? openRefId : null;
+    if (selectedRef(previous.live.openRefId) !== selectedRef(next.live.openRefId)) return false;
+    const sameDisclosure = (rowKey: string) => previous.live.expandedKeys.has(rowKey) === next.live.expandedKeys.has(rowKey)
+        && (previous.live.collapsedKeys?.has(rowKey) === true) === (next.live.collapsedKeys?.has(rowKey) === true);
+    return sameDisclosure(key) && project.checkouts.every(checkout => sameDisclosure(`${key}/${checkout.machineId}`));
+});
 
 /** The tree's leading anatomy: the disclosure column, then the row's glyph (`styles.leading`). */
 const TREE_LEADING_GAP_PX = 8;

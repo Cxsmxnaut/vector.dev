@@ -68,7 +68,12 @@ function createProjectsTreeCheckoutFactsSource(
 /** Mount only with the rendered Projects tree; no catalog fetch, SCM discovery or registration. */
 export function useProjectsTreeCheckoutFactsSource(refs: readonly WorkspaceRefV1[]): ProjectsTreeCheckoutFactsSource {
     const store = getStorage();
-    return React.useMemo(() => createProjectsTreeCheckoutFactsSource(refs, store), [refs, store]);
+    // Labels, grouping and ordering do not change checkout facts or subscriptions.
+    // Opening a checkout does affect its arrival marker, so retain that input too.
+    const checkoutInputs = React.useMemo(() => JSON.stringify(refs.map(ref => JSON.stringify([
+        ref.serverId, ref.id, ref.machineId, ref.rootPath, ref.lastOpenedAtMs != null,
+    ])).sort()), [refs]);
+    return React.useMemo(() => createProjectsTreeCheckoutFactsSource(refs, store), [checkoutInputs, store]);
 }
 
 /** Every checkout's facts; re-renders on any change. Per-row readers use `useProjectsTreeCheckoutFactsFor`. */

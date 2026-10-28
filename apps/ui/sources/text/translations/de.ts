@@ -17609,6 +17609,7 @@ settingsSession: {
             rowsLoadingTitle: "Deine Projekte werden geladen",
             rowsUnavailableTitle: "Deine Projekte wurden nicht geladen.",
             rowsUnavailableBody: "Nichts wurde entfernt. Versuche es gleich noch einmal.",
+            rowsStaleReason: "Deine Projekte konnten nicht aktualisiert werden.",
             openInvalidTitle: "Dieser Link verweist nicht auf genau einen Checkout.",
             openInvalidBody: "Öffne das Projekt stattdessen über Projekte.",
             backToProjects: "Zurück zu Projekten",

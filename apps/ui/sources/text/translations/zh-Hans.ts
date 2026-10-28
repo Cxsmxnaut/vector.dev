@@ -17151,6 +17151,7 @@ settingsSession: {
         rowsLoadingTitle: "正在加载你的项目",
         rowsUnavailableTitle: "你的项目未能加载。",
         rowsUnavailableBody: "没有删除任何内容。请稍后重试。",
+        rowsStaleReason: "你的项目未能刷新。",
         openInvalidTitle: "此链接没有指向唯一的检出。",
         openInvalidBody: "请改为从“项目”打开该项目。",
         backToProjects: "返回项目",

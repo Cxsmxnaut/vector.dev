@@ -9756,7 +9756,17 @@ class Sync {
 
     /** Reads the Account's project rows back after a write made elsewhere (a controller daemon's lifecycle Action). */
     public refreshProjectAccountRows = async () => {
-        await (await this.ensureProjectAccountRowsRuntime()).refresh();
+        const scope = this.pendingSettingsScope;
+        const needsInitialCensus = this.projectAccountRowsRuntime === null;
+        const runtime = this.ensureProjectAccountRowsRuntime();
+        const owner = await runtime;
+        // A newly created owner has already read and applied this refresh's census.
+        if (needsInitialCensus) return;
+        if (scope && this.projectAccountRowsRuntime === runtime) {
+            // Retain admitted display rows while withholding fresh mutation authority.
+            storage.getState().setProjectAccountRowsStatusForScope(scope, 'loading');
+        }
+        await owner.refresh();
     };
 
     public mutateProjectWorkspaceRef = async (mutation: WorkspaceRefAccountMutation, expectedScope: AccountSettingsScope) => {

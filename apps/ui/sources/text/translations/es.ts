@@ -17540,6 +17540,7 @@ settingsSession: {
         rowsLoadingTitle: "Cargando tus proyectos",
         rowsUnavailableTitle: "Tus proyectos no se cargaron.",
         rowsUnavailableBody: "No se eliminó nada. Inténtalo de nuevo en un momento.",
+        rowsStaleReason: "No se pudieron actualizar tus proyectos.",
         openInvalidTitle: "Este enlace no apunta a un único checkout.",
         openInvalidBody: "Abre el proyecto desde Proyectos.",
         backToProjects: "Volver a Proyectos",

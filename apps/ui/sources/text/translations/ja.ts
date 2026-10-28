@@ -17454,6 +17454,7 @@ settingsSession: {
         rowsLoadingTitle: "プロジェクトを読み込んでいます",
         rowsUnavailableTitle: "プロジェクトを読み込めませんでした。",
         rowsUnavailableBody: "何も削除されていません。少ししてからもう一度お試しください。",
+        rowsStaleReason: "プロジェクトを更新できませんでした。",
         openInvalidTitle: "このリンクは 1 つのチェックアウトを指していません。",
         openInvalidBody: "代わりにプロジェクトから開いてください。",
         backToProjects: "プロジェクトに戻る",

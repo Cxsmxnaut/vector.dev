@@ -17414,6 +17414,7 @@ settingsSession: {
         rowsLoadingTitle: "Chargement de tes projets",
         rowsUnavailableTitle: "Tes projets ne se sont pas chargés.",
         rowsUnavailableBody: "Rien n’a été supprimé. Réessaie dans un instant.",
+        rowsStaleReason: "Impossible d’actualiser tes projets.",
         openInvalidTitle: "Ce lien ne désigne pas un seul checkout.",
         openInvalidBody: "Ouvre plutôt le projet depuis Projets.",
         backToProjects: "Retour aux projets",

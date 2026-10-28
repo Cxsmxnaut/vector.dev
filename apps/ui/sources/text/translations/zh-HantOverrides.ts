@@ -13195,6 +13195,7 @@ settingsSession: {
             rowsLoadingTitle: "正在載入你的專案",
             rowsUnavailableTitle: "你的專案未能載入。",
             rowsUnavailableBody: "沒有刪除任何內容。請稍後再試。",
+            rowsStaleReason: "你的專案未能重新整理。",
             openInvalidTitle: "此連結沒有指向唯一的檢出。",
             openInvalidBody: "請改從「專案」開啟該專案。",
             backToProjects: "返回專案",

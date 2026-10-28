@@ -17542,6 +17542,7 @@ settingsSession: {
         rowsLoadingTitle: "Caricamento dei tuoi progetti",
         rowsUnavailableTitle: "I tuoi progetti non sono stati caricati.",
         rowsUnavailableBody: "Non è stato rimosso nulla. Riprova tra un momento.",
+        rowsStaleReason: "Non è stato possibile aggiornare i tuoi progetti.",
         openInvalidTitle: "Questo link non indica un solo checkout.",
         openInvalidBody: "Apri invece il progetto da Progetti.",
         backToProjects: "Torna a Progetti",

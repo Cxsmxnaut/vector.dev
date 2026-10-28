@@ -6,7 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createSessionListRenderableSessionFixture } from '@/dev/testkit';
 import { renderScreen } from '@/dev/testkit/render/renderScreen';
 import { standardCleanup } from '@/dev/testkit/cleanup/standardCleanup';
-import { createThemeFixture } from '@/dev/testkit/fixtures/themeFixtures';
 import { createHomeGovernanceHarness, installHomeGovernanceBoundaries } from '@/dev/testkit/harness/homeGovernanceHarness';
 import { installDisconnectedServerSocketBoundary } from '@/dev/testkit/harness/serverAccountConnectionHarness';
 import { loadSyncSingletonForTests } from '@/dev/testkit/harness/syncSingletonLoader';
@@ -552,11 +551,9 @@ describe('ProjectsListView', () => {
             createdAtMs: 1,
         };
         const { ProjectsListItemMenu } = await import('./ProjectsListItemMenu');
-        const theme = createThemeFixture();
         const firstOnRemove = vi.fn();
         const screen = await renderScreen(
             <ProjectsListItemMenu
-                theme={theme}
                 workspaceRef={workspaceRef}
                 pinAction="pin"
                 onTogglePinned={vi.fn()}
@@ -576,7 +573,6 @@ describe('ProjectsListView', () => {
         await act(async () => {
             screen.tree.update(
                 <ProjectsListItemMenu
-                    theme={theme}
                     workspaceRef={workspaceRef}
                     pinAction="pin"
                     onTogglePinned={vi.fn()}

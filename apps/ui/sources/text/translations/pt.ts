@@ -17647,6 +17647,7 @@ settingsSession: {
         rowsLoadingTitle: "Carregando seus projetos",
         rowsUnavailableTitle: "Seus projetos não carregaram.",
         rowsUnavailableBody: "Nada foi removido. Tente novamente em instantes.",
+        rowsStaleReason: "Não foi possível atualizar seus projetos.",
         openInvalidTitle: "Este link não aponta para um único checkout.",
         openInvalidBody: "Abra o projeto em Projetos.",
         backToProjects: "Voltar para Projetos",

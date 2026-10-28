@@ -17493,6 +17493,7 @@ settingsSession: {
         rowsLoadingTitle: "Загрузка проектов",
         rowsUnavailableTitle: "Не удалось загрузить проекты.",
         rowsUnavailableBody: "Ничего не удалено. Попробуйте ещё раз через минуту.",
+        rowsStaleReason: "Не удалось обновить проекты.",
         openInvalidTitle: "Эта ссылка не указывает на один checkout.",
         openInvalidBody: "Откройте проект из Проектов.",
         backToProjects: "Назад к Проектам",

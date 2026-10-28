@@ -22,7 +22,7 @@ import { workspaceAddressFromRefV1 } from '@happier-dev/protocol/workspaces';
 import { ProjectsTree, useProjectsTreeKeyboard } from './ProjectsTree';
 import { ProjectHideUndoNotice } from './ProjectHideUndoNotice';
 import { ProjectsAddMenu } from './ProjectsAddMenu';
-import { ProjectOpenResolutionCard, openProjectCandidate, useProjectRowsRetry } from './ProjectOpenResolution';
+import { ProjectOpenResolutionCard, ProjectRowsStaleLine, openProjectCandidate, useProjectRowsRetry } from './ProjectOpenResolution';
 import { ProjectActionApprovalNotice } from './ProjectActionApprovalNotice';
 import { useProjectRowCreationActions } from './ProjectSaveAsSourceSheet';
 
@@ -106,6 +106,8 @@ export const ProjectsListView = React.memo(() => {
                     title={t('projects.emptyTitle')}
                     subtitle={t('projects.emptyDescription')}
                 />
+            ) : model.staleRows ? (
+                <ProjectRowsStaleLine testID="projects-list:stale" asOf={model.staleRows.asOf} />
             ) : null}
 
             {rows.length > 0 ? (
@@ -230,7 +232,6 @@ function ProjectsListRow(props: Readonly<{
             ) : null}
             {ref || hideGroup ? (
                 <ProjectsListItemMenu
-                    theme={theme}
                     workspaceRef={ref}
                     pinAction={ref ? model.pinnedIdSet.has(ref.id) ? 'unpin' : 'pin' : null}
                     onTogglePinned={model.togglePinned}

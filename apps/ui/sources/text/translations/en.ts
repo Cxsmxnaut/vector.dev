@@ -21103,6 +21103,7 @@ const enProjects = {
     rowsLoadingTitle: "Loading your projects",
     rowsUnavailableTitle: "Your projects didn’t load.",
     rowsUnavailableBody: "Nothing was removed. Try again in a moment.",
+    rowsStaleReason: "Couldn’t refresh your projects.",
     openInvalidTitle: "This link doesn’t point to one checkout.",
     openInvalidBody: "Open the project from Projects instead.",
     backToProjects: "Back to Projects",
