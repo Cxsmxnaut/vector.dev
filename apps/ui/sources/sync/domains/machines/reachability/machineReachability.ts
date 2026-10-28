@@ -263,3 +263,8 @@ export function clearMachineRequestReachabilityForTest(): void {
     if (!changed) return;
     publishReachabilityChange(null);
 }
+
+// Each test starts with fresh observations: a prior test's Socket teardown must
+// not leave its Home unknown. Vitest's setup runs this only once this module loads.
+(globalThis as unknown as { [key: symbol]: Map<string, () => void> | undefined })[Symbol.for('happier.vitest.testResets')]
+    ?.set('machineRequestReachability', clearMachineRequestReachabilityForTest);

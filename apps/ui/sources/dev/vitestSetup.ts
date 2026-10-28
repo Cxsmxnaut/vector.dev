@@ -1,3 +1,5 @@
+// First: modules imported below may register their per-test reset as they load.
+import { testResetsForTests } from './vitestTestResets';
 import '@/boot/configureZodLocale';
 import './vitestDomTextEncoding';
 import * as React from 'react';
@@ -370,12 +372,9 @@ beforeEach(async () => {
     vi.stubGlobal('localStorage', createMemoryStorage(localStorageBacking) as unknown as Storage);
     vi.stubGlobal('sessionStorage', createMemoryStorage(sessionStorageBacking) as unknown as Storage);
 
-    // A prior test's real Socket teardown withdraws its Home's Machine presence.
-    // Start each test with fresh reachability observations, while preserving
-    // withdrawal/reconnect behavior within the test's own Account lifetimes.
-    (await vi.importActual<typeof import('@/sync/domains/machines/reachability/machineReachability')>(
-        '@/sync/domains/machines/reachability/machineReachability',
-    )).clearMachineRequestReachabilityForTest();
+    // Process-global state a prior test left behind (for example Machine presence its
+    // real Socket teardown withdrew) is reset by the modules that loaded it.
+    for (const reset of testResetsForTests.values()) reset();
 
     if (process.env.HAPPIER_VITEST_FORBID_FETCH === '1') {
         vi.stubGlobal('fetch', (async (input: RequestInfo | URL, init?: RequestInit) => {
