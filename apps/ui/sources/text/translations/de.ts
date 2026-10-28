@@ -17258,6 +17258,8 @@ settingsSession: {
             targetMismatchHint: "Wähle den Rechner erneut aus. Falls das weiterhin auftritt, verbinde ihn erneut mit diesem Home und versuche es noch einmal. Deine Auswahl bleibt erhalten.",
             invalidFolder: "Wähle einen Ordner in diesem Checkout.",
             unsupported: "Dieser Rechner kann dieses Projekt nicht vorbereiten.",
+            cloneUnsupported: "Dieser Rechner kann keine Repositorys klonen.",
+            hostingProviderUnavailable: "Der Hosting-Anbieter dieser Source ist auf diesem Rechner nicht verfügbar.",
             setupFailed: ({ project }: { project: string }) => `${project} wurde geöffnet, aber das Setup ist fehlgeschlagen.`,
             filesKept: "Der Checkout bleibt erhalten. Behebe das Setup oder öffne Skripte, um es erneut zu versuchen.",
             openScripts: "Skripte öffnen",

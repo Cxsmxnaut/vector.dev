@@ -117,6 +117,13 @@ const LEGACY_SCM_HOSTING_PROVIDER_IDS = Object.freeze({
   unknown: 'legacy.scm.hosting.unknown/unknown',
 } as const);
 
+/** Known pre-qualification identities; custom registry ids remain exact. */
+export function resolveLegacyScmHostingProviderId(id: string): string | undefined {
+  return Object.hasOwn(LEGACY_SCM_HOSTING_PROVIDER_IDS, id)
+    ? LEGACY_SCM_HOSTING_PROVIDER_IDS[id as keyof typeof LEGACY_SCM_HOSTING_PROVIDER_IDS]
+    : undefined;
+}
+
 function normalizeLegacyScmHostingProviderRef(value: unknown): unknown {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
   try {
@@ -128,7 +135,7 @@ function normalizeLegacyScmHostingProviderRef(value: unknown): unknown {
     const kind = typeof record.kind === 'string' ? record.kind : 'unknown';
     const displayName = typeof record.name === 'string' ? record.name : null;
     if (!displayName) return value;
-    const id = LEGACY_SCM_HOSTING_PROVIDER_IDS[kind as keyof typeof LEGACY_SCM_HOSTING_PROVIDER_IDS]
+    const id = resolveLegacyScmHostingProviderId(kind)
       ?? LEGACY_SCM_HOSTING_PROVIDER_IDS.unknown;
     return { ...record, id, displayName };
   } catch {

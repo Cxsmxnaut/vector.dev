@@ -12844,6 +12844,8 @@ settingsSession: {
             targetMismatchHint: "請重新選擇機器。如果問題持續，請將它重新連線至此Home後再試。你的選擇會保留。",
             invalidFolder: "請選擇此簽出內的資料夾。",
             unsupported: "此機器無法準備此專案。",
+            cloneUnsupported: "此機器無法複製儲存庫。",
+            hostingProviderUnavailable: "此 Source 的程式碼託管服務在此機器上無法使用。",
             setupFailed: ({ project }: { project: string }) => `${project} 已開啟，但設定失敗。`,
             filesKept: "簽出已保留。修正設定或開啟「指令碼」後重試。",
             openScripts: "開啟指令碼",

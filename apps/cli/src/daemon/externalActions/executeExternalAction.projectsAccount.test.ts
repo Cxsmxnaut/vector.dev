@@ -57,7 +57,7 @@ const token = `fixture.${Buffer.from(JSON.stringify({ sub: 'project-owner' })).t
 const credentials = { token, encryption: null };
 const target = { kind: 'machine' as const, machineId: 'project-machine' };
 const source = { id: 'source/a', revision: 2, name: 'App', repository: {
-  provider: { id: 'github', kind: 'github' as const, displayName: 'GitHub', baseUrl: 'https://github.com' },
+  provider: { id: 'happier.scm.forge.github/github', kind: 'github' as const, displayName: 'GitHub', baseUrl: 'https://github.com' },
   repository: { nameWithOwner: 'happier-dev/happier', cloneUrl: 'https://github.com/happier-dev/happier.git', visibility: 'public' as const },
   protocol: 'https' as const }, audience: [], createdByAccountId: 'project-owner' };
 

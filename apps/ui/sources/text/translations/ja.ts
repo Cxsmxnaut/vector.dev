@@ -17102,6 +17102,8 @@ settingsSession: {
         targetMismatchHint: "マシンを選び直してください。問題が続く場合は、このHomeにマシンを再接続して再試行してください。選択内容は保持されます。",
         invalidFolder: "このチェックアウト内のフォルダーを選んでください。",
         unsupported: "このマシンではこのプロジェクトを準備できません。",
+        cloneUnsupported: "このマシンではリポジトリをクローンできません。",
+        hostingProviderUnavailable: "このSourceのホスティングプロバイダーは、このマシンでは利用できません。",
         setupFailed: ({ project }: { project: string }) => `${project} を開きましたが、セットアップに失敗しました。`,
         filesKept: "チェックアウトは保持されます。セットアップを修正するか、スクリプトを開いて再試行してください。",
         openScripts: "スクリプトを開く",

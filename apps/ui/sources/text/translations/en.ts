@@ -20752,6 +20752,8 @@ const enProjects = {
       targetMismatchHint: "Choose the machine again. If this continues, reconnect it to this Home and retry. Your choices are kept.",
       invalidFolder: "Choose a folder inside this checkout.",
       unsupported: "This machine cannot prepare this project.",
+      cloneUnsupported: "This machine cannot clone repositories.",
+      hostingProviderUnavailable: "This Source’s hosting provider is unavailable on this machine.",
       setupFailed: ({ project }: { project: string }) => `${project} opened, but setup failed.`,
       filesKept: "The checkout is kept. Fix setup or open Scripts to try again.",
       openScripts: "Open Scripts",

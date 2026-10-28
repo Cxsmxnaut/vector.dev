@@ -17296,6 +17296,8 @@ settingsSession: {
         targetMismatchHint: "Escolha a máquina novamente. Se isso continuar, reconecte-a a este Home e tente outra vez. Suas escolhas são mantidas.",
         invalidFolder: "Escolha uma pasta dentro deste checkout.",
         unsupported: "Esta máquina não consegue preparar este projeto.",
+        cloneUnsupported: "Esta máquina não consegue clonar repositórios.",
+        hostingProviderUnavailable: "O provedor de hospedagem desta Source não está disponível nesta máquina.",
         setupFailed: ({ project }: { project: string }) => `${project} foi aberto, mas a configuração falhou.`,
         filesKept: "O checkout foi mantido. Corrija a configuração ou abra Scripts para tentar de novo.",
         openScripts: "Abrir Scripts",

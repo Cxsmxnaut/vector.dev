@@ -17014,6 +17014,8 @@ settingsSession: {
         targetMismatchHint: "Wybierz maszynę ponownie. Jeśli problem nadal występuje, połącz ją ponownie z tym Home i spróbuj jeszcze raz. Twój wybór zostaje zachowany.",
         invalidFolder: "Wybierz folder w tym checkoucie.",
         unsupported: "Ta maszyna nie może przygotować tego projektu.",
+        cloneUnsupported: "Ta maszyna nie może klonować repozytoriów.",
+        hostingProviderUnavailable: "Dostawca hostingu tej Source jest niedostępny na tej maszynie.",
         setupFailed: ({ project }: { project: string }) => `${project} otwarto, ale konfiguracja się nie powiodła.`,
         filesKept: "Checkout zostaje. Popraw konfigurację lub otwórz Skrypty, by spróbować ponownie.",
         openScripts: "Otwórz Skrypty",

@@ -17063,6 +17063,8 @@ settingsSession: {
         targetMismatchHint: "Choisis à nouveau la machine. Si cela continue, reconnecte-la à ce Home et réessaie. Tes choix sont conservés.",
         invalidFolder: "Choisis un dossier dans ce checkout.",
         unsupported: "Cette machine ne peut pas préparer ce projet.",
+        cloneUnsupported: "Cette machine ne peut pas cloner de dépôts.",
+        hostingProviderUnavailable: "L’hébergeur du dépôt de cette Source est indisponible sur cette machine.",
         setupFailed: ({ project }: { project: string }) => `${project} est ouvert, mais la configuration a échoué.`,
         filesKept: "Le checkout est conservé. Corrige la configuration ou ouvre Scripts pour réessayer.",
         openScripts: "Ouvrir Scripts",

@@ -17141,6 +17141,8 @@ settingsSession: {
         targetMismatchHint: "Выберите машину заново. Если проблема повторяется, подключите её к этому Home заново и повторите попытку. Ваш выбор сохранён.",
         invalidFolder: "Выберите папку внутри этого checkout’а.",
         unsupported: "Эта машина не может подготовить проект.",
+        cloneUnsupported: "Эта машина не может клонировать репозитории.",
+        hostingProviderUnavailable: "Хостинг-провайдер этой Source недоступен на этой машине.",
         setupFailed: ({ project }: { project: string }) => `${project} открыт, но настройка не удалась.`,
         filesKept: "Checkout сохранён. Исправьте настройку или откройте «Скрипты», чтобы повторить.",
         openScripts: "Открыть скрипты",

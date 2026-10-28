@@ -16799,6 +16799,8 @@ settingsSession: {
         targetMismatchHint: "请重新选择机器。如果问题持续，请将它重新连接到此Home后重试。你的选择会保留。",
         invalidFolder: "请选择此检出内的文件夹。",
         unsupported: "此机器无法准备此项目。",
+        cloneUnsupported: "此机器无法克隆仓库。",
+        hostingProviderUnavailable: "此 Source 的代码托管服务在此机器上不可用。",
         setupFailed: ({ project }: { project: string }) => `${project} 已打开，但设置失败。`,
         filesKept: "检出已保留。修复设置或打开“脚本”后重试。",
         openScripts: "打开脚本",

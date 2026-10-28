@@ -500,7 +500,16 @@ it('binds the authorized portable Source reactively without losing a Source-free
     await flushHookEffects({ cycles: 12 });
     expect(resolve('project')).toEqual({
       status: 'ready',
-      input: { target: { serverId: connection.home.id, ...source } },
+      input: {
+        target: {
+          serverId: connection.home.id,
+          ...source,
+          repository: {
+            ...source.repository,
+            provider: { ...source.repository.provider, id: 'happier.scm.forge.github/github' },
+          },
+        },
+      },
     });
     expect(
       reads.every(
