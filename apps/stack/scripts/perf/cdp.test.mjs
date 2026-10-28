@@ -128,7 +128,7 @@ test('capture composes CDP events, safe network records, telemetry and mapped CP
           send({ method: 'Network.loadingFailed', params: { requestId: 'unknown-failure', timestamp, errorText: 'never-save private URL or diagnostic' } });
           send({ method: 'Runtime.bindingCalled', params: { name: '__happierPerfTelemetry', payload: '{"events":[{"name":"sync.store.storage.notify","count":3}]}' } });
           send({ method: 'Runtime.bindingCalled', params: { name: '__happierPerfTelemetry', payload: '{"events":[{"name":"sync.store.storage.notify","count":3}]}' } });
-          send({ method: 'Network.webSocketFrameReceived', params: { timestamp, response: { opcode: 1, payloadData: '42["update",{"token":"never-save"}]' } } });
+          send({ method: 'Network.webSocketFrameReceived', params: { timestamp, response: { opcode: 1, payloadData: '42["update",{"body":{"t":"new-message","delivery":"hint"},"token":"never-save"}]' } } });
           send({ method: 'Network.webSocketFrameReceived', params: { timestamp, response: { opcode: 2, payloadData: Buffer.from([1, 2, 3, 4]).toString('base64') } } });
           send({ method: 'Network.webSocketFrameReceived', params: { timestamp, response: { opcode: 8, payloadData: Buffer.from([3, 232]).toString('base64') } } });
         }
@@ -164,6 +164,11 @@ test('capture composes CDP events, safe network records, telemetry and mapped CP
     assert.ok(result.clock.nativePairs.length >= 5);
     assert.equal(result.network.encodedBytes, 25);
     assert.equal(result.network.encodedBytesObserved, 75);
+    assert.equal(result.network.records.find(row => row.requestId === 'n').encodedBodyBytes, 17);
+    assert.equal(result.network.records.find(row => row.requestId === 'n').requestBodyBytes, 0);
+    assert.equal(result.network.records.find(row => row.requestId === 'canceled').decodedBytes, null);
+    assert.equal(result.sockets.find(row => row.event === 'update').type, 'new-message');
+    assert.equal(result.sockets.find(row => row.event === 'update').delivery, 'hint');
     assert.equal(result.network.decodedBytes, 42, 'sum decoded chunks only for responses completed within the window');
     assert.equal(result.network.records.find(row => row.requestId === 'late').decodedBytes, 91);
     assert.equal(result.network.dispositions.canceled, 1);
@@ -175,7 +180,7 @@ test('capture composes CDP events, safe network records, telemetry and mapped CP
     assert.equal(result.network.records.find(row => row.requestId === 'unknown-failure').failureCode, 'unclassified');
     assert.equal(result.network.records.find(row => row.requestId === 'n').serverRequestId, 'returned-id');
     assert.equal(result.telemetry.reduce((sum, summary) => sum + summary.events[0].count, 0), 8);
-    assert.deepEqual(result.sockets.map(row => row.event), ['before-native-pair', 'update', 'protocol-or-binary', 'protocol-or-binary'], 'buffer early sockets and do not shift them with a future native clock step');
+    assert.deepEqual(result.sockets.map(row => row.event), ['unknown', 'update', 'binary', 'websocket'], 'buffer early sockets and do not shift them with a future native clock step');
     assert.equal(result.react.commits, 2);
     assert.equal(result.cpu.functions[0].name, 'realOwner');
     assert.equal(result.cpu.functions[0].source, 'src/Owner.ts');

@@ -5,7 +5,7 @@ import { createGzip } from 'node:zlib';
 import { join } from 'node:path';
 import { SourceMap } from 'node:module';
 import { connectPage } from './cdp.mjs';
-import { frameKey, normalizeProfileSamples, requestFingerprint, safeUrl, summarizeNetwork, summarizeProfile } from './analysis.mjs';
+import { frameKey, networkRouteClass, normalizeProfileSamples, requestFingerprint, safeUrl, socketFrameClassification, summarizeNetwork, summarizeProfile } from './analysis.mjs';
 import { summarizeHeapProfile, summarizeMainThreadTrace, summarizeJsThreadLagSampler } from './profiling.mjs';
 
 const TRACE_CATEGORIES = ['devtools.timeline', 'disabled-by-default-devtools.timeline', 'v8.execute', 'blink.user_timing', 'disabled-by-default-v8.cpu_profiler'];
@@ -183,12 +183,13 @@ export async function startCapture(options) {
     }
     const row = { id: `${event.requestId}:${requests.length}`, requestId: event.requestId,
       endpoint: safeUrl(event.request.url), method: event.request.method,
+      routeClass: networkRouteClass(event.request.url, event.request.method),
       startMs: paired ? event.wallTime * 1000 : undefined, requestStartMs: paired ? event.wallTime * 1000 : undefined,
       nativeWallTime: event.wallTime, nativeTimestamp: event.timestamp, clockOffsetMs,
       fingerprint: requestFingerprint(event.request, salt),
       bodyUnknown: Boolean(event.request.hasPostData && !event.request.postData),
-      requestBodyBytes: event.request.postData === undefined ? null : Buffer.byteLength(event.request.postData),
-      decodedBytes: 0,
+      requestBodyBytes: event.request.postData === undefined ? event.request.hasPostData ? null : 0 : Buffer.byteLength(event.request.postData),
+      decodedBytes: 0, encodedBodyBytes: 0, dataChunks: 0,
       initiator: { type: event.initiator?.type, stack: stackFrames(event.initiator?.stack, requestedAsyncDepth) } };
     requests.push(row); inFlight.set(event.requestId, row);
     if (requestedAsyncDepth) initiatorWork.push(expandStack(event.initiator?.stack)
@@ -217,16 +218,28 @@ export async function startCapture(options) {
   });
   cdp.on('Network.dataReceived', event => {
     const row = inFlight.get(event.requestId);
-    if (row) row.decodedBytes += event.dataLength;
+    if (row) {
+      row.decodedBytes += event.dataLength;
+      row.encodedBodyBytes = row.encodedBodyBytes === null || !Number.isFinite(event.encodedDataLength)
+        ? null : row.encodedBodyBytes + event.encodedDataLength;
+      row.dataChunks++;
+    }
   });
   cdp.on('Network.loadingFinished', event => {
     const row = inFlight.get(event.requestId);
-    if (row) { row.endMs = at(event.timestamp, row); row.nativeEndTimestamp = event.timestamp; row.encodedBytes = event.encodedDataLength; inFlight.delete(event.requestId); }
+    if (row) {
+      row.endMs = at(event.timestamp, row); row.nativeEndTimestamp = event.timestamp; row.encodedBytes = event.encodedDataLength;
+      if (row.method === 'HEAD' || [204, 304].includes(row.status)) row.decodedBytes = row.encodedBodyBytes = 0;
+      else if (!row.dataChunks) row.decodedBytes = row.encodedBodyBytes = null;
+      else if (row.decodedBytes > 0 && row.encodedBodyBytes === 0) row.encodedBodyBytes = null;
+      inFlight.delete(event.requestId);
+    }
   });
   cdp.on('Network.loadingFailed', event => {
     const row = inFlight.get(event.requestId);
     if (row) {
       row.endMs = at(event.timestamp, row); row.nativeEndTimestamp = event.timestamp; row.failed = true; row.canceled = typeof event.canceled === 'boolean' ? event.canceled : null;
+      row.decodedBytes = row.encodedBodyBytes = null;
       // CDP errorText can contain arbitrary content; retain only Chromium's code.
       row.failureCode = /^net::ERR_[A-Z0-9_]+$/.test(event.errorText) ? event.errorText : 'unclassified';
       if (/^[a-zA-Z0-9_-]+$/.test(event.blockedReason ?? '')) row.blockedReason = event.blockedReason;
@@ -242,19 +255,17 @@ export async function startCapture(options) {
   for (const direction of ['Sent', 'Received']) cdp.on(`Network.webSocketFrame${direction}`, event => {
     if (!recording) return;
     const { payloadData, opcode } = event.response;
-    const name = opcode === 1 ? payloadData.match(/^\d*(?:-\d+)?\["([a-zA-Z0-9_.:/-]+)"/)?.[1] : undefined;
+    const classification = socketFrameClassification(payloadData, opcode);
+    const name = classification.event;
     let rpcMethod;
     // Only the method identifier leaves this boundary, never Socket.IO args.
     if (name === 'rpc-call') {
       try { const payload = JSON.parse(payloadData.slice(payloadData.indexOf('['))); const value = payload[1]?.method;
         if (typeof value === 'string' && /^[a-zA-Z0-9_.:/-]+$/.test(value)) rpcMethod = value; } catch {}
     }
-    const kind = opcode !== 1 ? 'binary' : payloadData === '2' ? 'ping' : payloadData === '3' ? 'pong'
-      : payloadData.startsWith('40') ? 'connect' : payloadData.startsWith('41') ? 'disconnect'
-      : payloadData.startsWith('43') ? 'ack' : name ? 'event' : 'protocol';
-    sockets.push({ nativeTimestamp: event.timestamp, requestId: event.requestId, direction: direction.toLowerCase(), opcode, kind,
+    sockets.push({ nativeTimestamp: event.timestamp, requestId: event.requestId, direction: direction.toLowerCase(), opcode, ...classification,
       bytes: opcode === 1 ? Buffer.byteLength(payloadData) : Buffer.byteLength(payloadData, 'base64'),
-      event: name ?? 'protocol-or-binary', ...(rpcMethod ? { rpcMethod } : {}) });
+      ...(rpcMethod ? { rpcMethod } : {}) });
   });
   cdp.on('Runtime.bindingCalled', event => {
     if (!recording || event.name !== '__happierPerfTelemetry') return;

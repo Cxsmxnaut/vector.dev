@@ -3896,9 +3896,6 @@ importers:
       '@types/node':
         specifier: '>=20'
         version: 22.20.5
-      socket.io-parser:
-        specifier: 4.2.7
-        version: 4.2.7(supports-color@8.1.1)
       tar:
         specifier: 7.5.22
         version: 7.5.22

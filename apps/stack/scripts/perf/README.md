@@ -232,7 +232,7 @@ Round-4 collector details:
   automation overhead. Shared process samples include all clients, not per-lane
   CPU/RSS, peaks or allocated DB backends. Suppressed pings cannot establish
   poll rates; missing operation/constructor counts remain unavailable.
-- Current bundles use schema 5. Comparisons keep schema versions separate as
+- Current development bundles use schema 6. Comparisons keep schema versions separate as
   well as journey/cache/UI/instrumentation mode: legacy unbracketed requests,
   terminal-only telemetry and delayed rotating-log reads cannot be silently
   pooled with corrected captures. Fixed/exact Session route-class metrics are
@@ -288,10 +288,36 @@ CPU profiles; no request bodies, credentials or database rows are collected.
 
 ### Opt-in browser attribution and settled Home
 
+Development schema-6 captures report transfer through this owner. Each journey's
+native start/end bracket is its phase: use separate journey captures for cold,
+warm, settled and busy windows. Requests belong to their start window; responses
+finishing later remain pending at its end. Frames belong to their native timestamp.
+
+`network.json.endpoints` includes request counts and body bytes, decoded body
+bytes, encoded body chunks, and encoded response bytes (including headers), grouped
+by method, sanitized endpoint and route class. Missing evidence is `null`; HEAD,
+204 and 304 bodies are zero. Cached decoded data with zero encoded chunk evidence
+does not establish zero wire-body bytes. The older `encodedBytes` aggregate retains
+its observed-response convention; use the availability-aware transfer fields for
+regression measurements. No raw bodies, headers or query values are saved.
+
+`sockets.json` projects allowlisted event families, payload types and explicit
+`hint`/`full` delivery alongside frame sizes. Unknown names/types stay in an
+`unknown` bucket. Engine ping/pong and WebSocket control frames are separate.
+Binary headers are classified, while binary attachments remain unattributed
+`binary` frames; these are frame counts, not reconstructed logical messages.
+WebSocket bytes are decoded payload bytes, not compressed wire-byte evidence.
+
+`bundle.json.counts` carries `transfer.http.<method>.<route-class>.*` and
+`transfer.socket.<direction>.<family>.<type>.<delivery>.*` into the existing
+comparison JSON/Markdown and CI summary. Absent buckets are zero only when the
+capture has `transfer.measured: 1`; unknown measurements remain `null`.
+These measurements are report-only until PERFCI calibration; this adds no gate.
+
 Pass `--profiling` (or set `"profiling": true` in the journey) to collect a
 full Chrome trace, Long Animation Frames, React Performance Track measures,
 sampling heap profile, root changed-key notifications and a physical socket
-timeline in the same schema-5 bundle. This extends the existing collector;
+timeline in the same schema-6 bundle. This extends the existing collector;
 ordinary timing/counts capture does not enable these diagnostic observers.
 `compare` separates profiling-on/off and backend role sets, and never uses
 heavily instrumented runs for timing percentiles.
