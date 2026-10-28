@@ -1111,6 +1111,8 @@ export const ca: TranslationStructure = {
     },
 
     appCrash: {
+        saveDiagnostics: "Desa els diagnòstics",
+        diagnosticsSaveFailed: "No s’han pogut desar els diagnòstics. Els detalls de l’error continuen disponibles. Torna-ho a provar o copia’ls.",
         copyFailed: "No s’han pogut copiar els detalls de l’error. Torna-ho a provar.",
         discardFailed: "No s’ha pogut descartar l’error desat. Torna-ho a provar.",
         restartWithoutReport: "Reinicia sense desar",

@@ -1013,6 +1013,8 @@ export const en = {
     },
 
     appCrash: {
+        saveDiagnostics: "Save diagnostics",
+        diagnosticsSaveFailed: "Diagnostics could not be saved. Your crash details are still available. Try again or copy them.",
         copyFailed: "The crash details could not be copied. Try again.",
         discardFailed: "The saved crash could not be discarded. Try again.",
         restartWithoutReport: "Restart without saving",

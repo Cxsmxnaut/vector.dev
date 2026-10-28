@@ -1015,6 +1015,8 @@ export const fr: TranslationStructure = {
     },
 
     appCrash: {
+        saveDiagnostics: "Enregistrer les diagnostics",
+        diagnosticsSaveFailed: "Les diagnostics n’ont pas pu être enregistrés. Les détails de l’erreur restent disponibles. Réessayez ou copiez-les.",
         copyFailed: "Les détails du plantage n’ont pas pu être copiés. Réessayez.",
         discardFailed: "Le plantage enregistré n’a pas pu être supprimé. Réessayez.",
         restartWithoutReport: "Redémarrer sans enregistrer",

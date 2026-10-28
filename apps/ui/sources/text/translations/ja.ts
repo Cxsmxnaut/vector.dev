@@ -1153,6 +1153,8 @@ export const ja: TranslationStructure = {
   },
 
   appCrash: {
+      saveDiagnostics: "診断情報を保存",
+      diagnosticsSaveFailed: "診断情報を保存できませんでした。エラーの詳細は引き続き利用できます。もう一度試すか、コピーしてください。",
       copyFailed: "クラッシュの詳細をコピーできませんでした。再試行してください。",
       discardFailed: "保存されたクラッシュを破棄できませんでした。再試行してください。",
       restartWithoutReport: "保存せずに再起動",

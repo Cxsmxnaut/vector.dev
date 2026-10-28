@@ -1191,6 +1191,8 @@ export const pl: TranslationStructure = {
   },
 
   appCrash: {
+      saveDiagnostics: "Zapisz diagnostykę",
+      diagnosticsSaveFailed: "Nie udało się zapisać diagnostyki. Szczegóły awarii są nadal dostępne. Spróbuj ponownie lub je skopiuj.",
       copyFailed: "Nie udało się skopiować szczegółów awarii. Spróbuj ponownie.",
       discardFailed: "Nie udało się odrzucić zapisanej awarii. Spróbuj ponownie.",
       restartWithoutReport: "Uruchom ponownie bez zapisywania",

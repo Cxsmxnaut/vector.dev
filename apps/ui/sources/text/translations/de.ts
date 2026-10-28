@@ -1015,6 +1015,8 @@ export const de: TranslationStructure = {
     },
 
     appCrash: {
+        saveDiagnostics: "Diagnosedaten speichern",
+        diagnosticsSaveFailed: "Die Diagnosedaten konnten nicht gespeichert werden. Die Fehlerdetails sind weiterhin verfügbar. Versuche es erneut oder kopiere sie.",
         copyFailed: "Die Absturzdetails konnten nicht kopiert werden. Versuche es erneut.",
         discardFailed: "Der gespeicherte Absturz konnte nicht verworfen werden. Versuche es erneut.",
         restartWithoutReport: "Ohne Speichern neu starten",

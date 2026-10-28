@@ -1900,6 +1900,8 @@ const zhHantOverrides: DeepPartial<TranslationStructure> = {
     },
 
     appCrash: {
+        saveDiagnostics: "儲存診斷資訊",
+        diagnosticsSaveFailed: "無法儲存診斷資訊。當機詳細資料仍可使用。請重試或複製詳細資料。",
         copyFailed: "無法複製當機詳細資料。請重試。",
         discardFailed: "無法捨棄已儲存的當機。請重試。",
         restartWithoutReport: "不儲存並重新啟動",

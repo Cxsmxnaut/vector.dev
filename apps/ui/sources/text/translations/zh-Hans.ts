@@ -1155,6 +1155,8 @@ export const zhHans: TranslationStructure = {
   },
 
   appCrash: {
+      saveDiagnostics: "保存诊断信息",
+      diagnosticsSaveFailed: "无法保存诊断信息。崩溃详情仍然可用。请重试或复制详情。",
       copyFailed: "无法复制崩溃详情。请重试。",
       discardFailed: "无法丢弃已保存的崩溃。请重试。",
       restartWithoutReport: "不保存并重启",

@@ -1170,6 +1170,8 @@ export const it: TranslationStructure = {
   },
 
   appCrash: {
+      saveDiagnostics: "Salva diagnostica",
+      diagnosticsSaveFailed: "Impossibile salvare la diagnostica. I dettagli dell’errore sono ancora disponibili. Riprova o copiali.",
       copyFailed: "Impossibile copiare i dettagli del crash. Riprova.",
       discardFailed: "Impossibile eliminare il crash salvato. Riprova.",
       restartWithoutReport: "Riavvia senza salvare",

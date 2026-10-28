@@ -1171,6 +1171,8 @@ export const es: TranslationStructure = {
   },
 
   appCrash: {
+      saveDiagnostics: "Guardar diagnósticos",
+      diagnosticsSaveFailed: "No se pudieron guardar los diagnósticos. Los detalles del error siguen disponibles. Inténtalo de nuevo o cópialos.",
       copyFailed: "No se pudieron copiar los detalles del fallo. Inténtalo de nuevo.",
       discardFailed: "No se pudo descartar el fallo guardado. Inténtalo de nuevo.",
       restartWithoutReport: "Reiniciar sin guardar",
