@@ -162,6 +162,64 @@ backfill or historical Run-content scan is added.
 
 ## Baseline classes
 
+### Project checkout authoring relationship (0.3 development)
+
+The V1 Project Account row owner stores an optional, closed
+`authoringSession: {serverId, sessionId}` display relationship beside the private
+content in its existing reserved KV record. The qualified row key, relationship,
+read requests, mutation requests and results remain closed. The new dedicated
+`POST /v1/account/project-rows/authoring-session` operation records only this
+relationship for an existing Account-owned checkout. It grants no access and
+does not interpret a Session title or setup outcome.
+
+Read/list requests opt in with `includeAuthoringSession: true`; requests without
+that field and ordinary structural mutation acknowledgements keep their prior
+wire shape. New readers accept absent relationship fields. A current UI talking
+to an older strict row server retries its rejected opt-in census once without
+the flag, then uses the existing hydrated-Session discovery. A missing recording
+operation (404/405) retains the already-committed owner-private provenance.
+Other failures propagate rather than pretending the relationship was recorded.
+The Session's Home is stored by its established portable identity. When that
+identity is unavailable, private provenance remains the fallback; a device-local
+profile alias is never written into the shared relationship.
+
+The persisted metadata needs no database schema migration. Structural mutations
+and Account-mode conversion retain it; checkout deletion removes it. Historical
+rows are not inferred or backfilled from private Session content. The new writer
+runs only at Session creation/recovery, and identical retries do not advance the
+row revision or publish another change. There is no new SDK epoch, client-update
+floor or reverse-development-binary storage promise.
+
+Setup authoring in 0.3 development can hand its private origin to Session birth.
+The existing Machine operation-capability owner advertises
+`sessionSpawnAuthoringOrigin: { protocolVersions: [1] }`; only an explicitly
+supported leaf permits the optional closed `authoringOrigin` spawn input. The
+origin and its nested destination references retain their existing closed
+schema. This is a negotiated extension of the existing spawn operation, separate
+from SDK package SemVer, with no new route, event union or database migration.
+Missing, malformed or unsupported capability leaves retain the existing
+post-create owner-private checkpoint and its typed failure. Older callers omit
+the input and a new daemon preserves their creation behavior.
+
+The daemon carries the admitted origin through its private runner startup
+custody into `work.authoringOriginV1` in the initial owner metadata. The existing
+Account-mode envelope writer owns encryption. The UI confirms the equal origin
+through an exact owner read before the relationship POST and sends no origin
+PATCH after handing persistence to birth. Missing or unreadable confirmation is
+an `authoring_origin` failure, not permission to start a second writer. The
+capability advertisement alone is not proof that persistence succeeded.
+
+The existing device-local spawn-attempt record retains the chosen persistence
+owner for deferred and recovered creation. An older record without that fact
+can confirm an already stored equal origin; otherwise recovery refuses the
+unknown handoff rather than guessing which writer owns it. Temporary-computer
+creation retains an explicit legacy checkpoint until its own birth handoff is
+negotiated. These adapters preserve older request/record shapes without a new
+storage key, retry loop, timer or server-visible provenance content.
+Cross-Home recovery reads operation and spawn-attempt custody with the admitted
+destination Account. The originating Account still owns the draft and checkout
+relationship; its Account id is never substituted for the destination's id.
+
 The 0.3 development Discussion reply owner adds optional closed `returnPublication`
 metadata to existing original-input JSON and a closed `discussion_publication` observation
 mutation. Existing originals without that metadata remain readable; native outcomes are
