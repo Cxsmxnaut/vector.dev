@@ -99,7 +99,8 @@ export function createLayoutArtifactHttpBoundary<T>(accountId: string, definitio
             return Response.json({ items: items.filter(row => kind !== null ? row.kind === kind
                 : Array.isArray(kinds) && typeof row.kindHint === 'string' && kinds.includes(row.kindHint)), hasUnclassified: false });
         }
-        if (path === `/v1/artifacts/${artifactId}/access/grants`) return artifact && (callerAccess === 'owner' || callerAccess === 'admin')
+        // The server's grants reader admits every current grantee; management is separate.
+        if (path === `/v1/artifacts/${artifactId}/access/grants`) return artifact && callerAccess !== null
             ? Response.json({ artifactId, ownerAccountId: artifact.ownerAccountId, access: callerAccess, grants })
             : Response.json({ error: 'artifact_access_forbidden' }, { status: 403 });
         if (path !== '/v1/artifacts' && path !== `/v1/artifacts/${artifactId}`) return Response.json({ error: 'not_found' }, { status: 404 });
