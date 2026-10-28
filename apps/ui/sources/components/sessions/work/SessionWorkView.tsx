@@ -470,7 +470,7 @@ export const SessionWorkView = React.memo((props: Readonly<{
                             />
                         ) : null}
                         {/* FIN 04's slot: the Goal row opens the one Goal control, the composer's. */}
-                        <SessionGoalValueRow sessionId={props.sessionId} entry={goalControlEntry} testID="session-work-goal" />
+                        <SessionGoalValueRow sessionId={props.sessionId} serverId={sessionServerId} entry={goalControlEntry} testID="session-work-goal" />
                         <SessionWorkPlanRow sessionId={props.sessionId} serverId={sessionServerId} />
                     </WorkFlatSheet>
                     <SessionAgentStartDraftRows sessionId={props.sessionId} serverId={sessionServerId} drafts={startDrafts} onOpen={openStartDraft} />
