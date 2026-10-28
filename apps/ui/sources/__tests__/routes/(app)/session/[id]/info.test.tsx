@@ -779,7 +779,7 @@ describe('/session/[id]/info', () => {
 
         const helperParams = completeSessionForkNavigationSpy.mock.calls[0]?.[0] as any;
         await act(async () => { helperParams.navigate('next-child'); });
-        expect(routerNavigateSpy).toHaveBeenCalledWith('/session/next-child?serverId=server-b', expect.any(Object));
+        expect(routerPushSpy).toHaveBeenCalledWith('/session/next-child?serverId=server-b');
     });
 
     it('fails closed and hides the handoff quick action when direct peer truth is runtime-unknown and server-routed fallback would make the UI untruthful', async () => {

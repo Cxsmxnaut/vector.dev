@@ -866,9 +866,8 @@ describe('SessionHeaderActionMenu handoff', () => {
     helperParams.navigate('sess_next');
     // The canonical opener now carries the resolved server scope in the href; asserting the bare
     // path would pin the pre-migration shape.
-    expect(String(sessionActionsModuleState.routerNavigateSpy.mock.calls[0]?.[0])).toContain('/session/sess_next');
-    expect(String(sessionActionsModuleState.routerNavigateSpy.mock.calls[0]?.[0])).toContain('serverId=');
-    expect(sessionActionsModuleState.routerNavigateSpy.mock.calls[0]?.[1]?.dangerouslySingular?.()).toBe('session');
+    expect(String(sessionActionsModuleState.routerPushSpy.mock.calls[0]?.[0])).toContain('/session/sess_next');
+    expect(String(sessionActionsModuleState.routerPushSpy.mock.calls[0]?.[0])).toContain('serverId=');
   });
 
   it('keeps the closed trigger stable when only the session sequence changes', async () => {
