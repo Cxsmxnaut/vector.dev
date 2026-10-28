@@ -4,7 +4,7 @@ import { projectUiSessionAwareness } from '@/sync/domains/session/awareness/sess
 import { readSessionRuntimeObservation } from '@/sync/domains/session/sessionRuntimeObservation';
 import { resolveSessionAwarenessContentLabel } from '@/sync/domains/session/awareness/sessionAwarenessContentLabels';
 import { isSessionAwarenessContentReadableV1 } from '@happier-dev/protocol/sessions/awareness/availability';
-import { readSessionAwarenessPresentationV1, readSessionAwarenessWorkStatusV1, type SessionAwarenessPresentationFactsV1, type SessionAwarenessPresentationStateV1 } from '@happier-dev/protocol/sessions/awareness/presentationV1';
+import { readSessionAwarenessWorkStatusV1, type SessionAwarenessPresentationFactsV1, type SessionAwarenessPresentationStateV1 } from '@happier-dev/protocol/sessions/awareness/presentationV1';
 import { readSessionDirectoryKind } from '@happier-dev/protocol/sessions/metadata/directory';
 import * as React from 'react';
 import { Message } from "@happier-dev/session-core/messages";
