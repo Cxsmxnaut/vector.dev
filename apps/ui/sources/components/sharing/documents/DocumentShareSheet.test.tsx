@@ -531,6 +531,15 @@ describe('DocumentShareSheet', () => {
         await screen.pressByTestIdAsync('document-share-grant-team:studio');
         await screen.pressByTestIdAsync('document-share-remove:team:studio');
         await settle();
+        expect(host.grants).toEqual([ana, studio]);
+        expect(host.requests.filter(request => request.method !== 'GET')).toEqual([]);
+        expect(screen.findByTestId('document-share-remove-confirm:team:studio')).not.toBeNull();
+        await screen.pressByTestIdAsync('document-share-remove-cancel:team:studio');
+        expect(screen.findByTestId('document-share-remove-confirm:team:studio')).toBeNull();
+        expect(host.grants).toEqual([ana, studio]);
+        await screen.pressByTestIdAsync('document-share-remove:team:studio');
+        await screen.pressByTestIdAsync('document-share-remove-confirm:team:studio');
+        await settle();
         expect(host.grants).toEqual([ana]);
         expect(host.documentUpdates).toEqual([]);
     });
@@ -793,6 +802,7 @@ describe('DocumentShareSheet', () => {
 
         await screen.pressByTestIdAsync('document-share-grant-team:studio');
         await screen.pressByTestIdAsync('document-share-remove:team:studio');
+        await screen.pressByTestIdAsync('document-share-remove-confirm:team:studio');
         await settle();
         expect(host.requests.at(-1)).toEqual({ method: 'DELETE',
             body: { artifactId: 'wf-1', principal: { kind: 'team', teamId: 'studio' } } });
@@ -823,6 +833,7 @@ describe('DocumentShareSheet', () => {
         expect(screen.findByTestId('document-share-grant-team:payments')).not.toBeNull();
         await screen.pressByTestIdAsync('document-share-grant-team:studio');
         await screen.pressByTestIdAsync('document-share-remove:team:studio');
+        await screen.pressByTestIdAsync('document-share-remove-confirm:team:studio');
         await settle();
         expect(screen.findByTestId('document-share-grant-team:studio')).toBeNull();
         expect(screen.findByTestId('document-share-grant-account:ana')).not.toBeNull();
@@ -839,7 +850,16 @@ describe('DocumentShareSheet', () => {
         await settle();
         expect(hook.getCurrent().grants).toHaveLength(2);
 
-        hook.getCurrent().actions.confirmRemove(self);
+        await act(async () => { hook.getCurrent().actions.confirmRemove(self); });
+        expect(host.requests.filter(request => request.method === 'DELETE')).toEqual([]);
+        await act(async () => { hook.getCurrent().actions.requestRemove(self); });
+        await act(async () => { hook.getCurrent().actions.confirmRemove({ kind: 'team', teamId: 'studio' }); });
+        expect(host.requests.filter(request => request.method === 'DELETE')).toEqual([]);
+        await act(async () => { hook.getCurrent().actions.cancelRemove(self); });
+        await act(async () => { hook.getCurrent().actions.confirmRemove(self); });
+        expect(host.requests.filter(request => request.method === 'DELETE')).toEqual([]);
+        await act(async () => { hook.getCurrent().actions.requestRemove(self); });
+        await act(async () => { hook.getCurrent().actions.confirmRemove(self); });
         await settle();
         expect(host.access).toBeNull();
         expect(hook.getCurrent().grants).toEqual([]);
@@ -857,6 +877,7 @@ describe('DocumentShareSheet', () => {
         await settle();
         await screen.pressByTestIdAsync('document-share-grant-account:owner');
         await screen.pressByTestIdAsync('document-share-remove:account:owner');
+        await screen.pressByTestIdAsync('document-share-remove-confirm:account:owner');
         await settle();
 
         expect(renderedTestIds(screen, 'document-share-grant-')).toEqual([]);
