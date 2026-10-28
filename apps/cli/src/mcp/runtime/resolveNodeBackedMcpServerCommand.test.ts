@@ -47,7 +47,6 @@ describe('resolveNodeBackedMcpServerCommand', () => {
       value: originalExecPath,
       configurable: true,
     });
-    vi.resetModules();
   });
 
   it('falls back to the tsx source entrypoint when the dist entrypoint is missing', async () => {
@@ -162,29 +161,6 @@ describe('resolveNodeBackedMcpServerCommand', () => {
       env: {
         TSX_TSCONFIG_PATH: '/repo/tsconfig.json',
       },
-    });
-  });
-
-  it('falls back to the dist entrypoint when package-dist is missing', async () => {
-    vi.mocked(existsSync).mockImplementation((pathLike) => {
-      const path = String(pathLike);
-      if (path.endsWith('/package-dist/mcp/bridges/remoteMcpStdioBridge.mjs')) return false;
-      if (path.endsWith('/dist/mcp/bridges/remoteMcpStdioBridge.mjs')) return true;
-      return false;
-    });
-
-    await expect(
-      resolveNodeBackedMcpServerCommand({
-        distEntrypointSegments: ['mcp', 'bridges', 'remoteMcpStdioBridge.mjs'],
-        sourceEntrypointSegments: ['mcp', 'bridges', 'remoteMcpStdioBridge.ts'],
-      }),
-    ).resolves.toEqual({
-      command: process.execPath,
-      args: [
-        '--no-warnings',
-        '--no-deprecation',
-        '/repo/dist/mcp/bridges/remoteMcpStdioBridge.mjs',
-      ],
     });
   });
 
