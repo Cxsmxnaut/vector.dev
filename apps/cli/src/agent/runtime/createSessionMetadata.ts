@@ -22,6 +22,7 @@ import { SessionAttestedContextV1Schema, type SessionAttestedContextV1 } from '@
 import { accountSettingsParse } from '@happier-dev/protocol/account/settings/accountSettings';
 import { ConnectedServiceBindingsV2IngressSchema } from '@happier-dev/protocol/connect/connected-service-bindings';
 import { SessionPromptStackV1Schema, type SessionPromptStackV1 } from '@happier-dev/protocol/sessions/context/sessionContextV1';
+import { PluginUiNewSessionSeedOriginV1Schema, type PluginUiNewSessionSeedOriginV1 } from '@happier-dev/protocol/plugins/ui';
 import {
     applyAcpConfigOptionIntentSessionMetadata,
     applyAcpSessionModeIntentSessionMetadata,
@@ -194,6 +195,7 @@ export function applyInitialSessionCreationFactsToMetadata<TMetadata extends Ses
     metadata: TMetadata,
     facts: Readonly<{ allowedTools?: readonly string[]; unlistedTools?: 'ask' | 'deny'; workspaceWrites?: 'allow' | 'deny'; identity?: SessionIdentityAdditions;
         attestedContext?: SessionAttestedContextV1; memoryEnabled?: boolean; promptStack?: SessionPromptStackV1;
+        authoringOrigin?: PluginUiNewSessionSeedOriginV1;
         accountSettings?: Readonly<Record<string, unknown>> }>,
 ): Omit<TMetadata, 'bot' | 'createdAsBot' | 'work' | 'allowedTools' | 'unlistedTools' | 'workspaceWrites' | 'attestedContext'> & SessionIdentityAdditions
     & Pick<Metadata, 'allowedTools' | 'unlistedTools' | 'workspaceWrites' | 'attestedContext'> & { work: NonNullable<Metadata['work']> } {
@@ -210,6 +212,7 @@ export function applyInitialSessionCreationFactsToMetadata<TMetadata extends Ses
         ...(facts.unlistedTools === undefined ? {} : { unlistedTools: facts.unlistedTools }),
         ...(facts.workspaceWrites === undefined ? {} : { workspaceWrites: facts.workspaceWrites }),
         work: { ...work,
+            ...(facts.authoringOrigin === undefined ? {} : { authoringOriginV1: PluginUiNewSessionSeedOriginV1Schema.parse(facts.authoringOrigin) }),
             ...(facts.promptStack === undefined ? {} : { promptStack: SessionPromptStackV1Schema.parse(facts.promptStack) }),
             memoryEnabled: facts.memoryEnabled ?? (identity?.bot?.kind === 'bot'
                 ? settings.memoryUseInNewBots : settings.memoryUseInNewSessions) },

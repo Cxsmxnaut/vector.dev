@@ -20,6 +20,15 @@ const input = {
 } as const;
 
 describe('SessionSpawnNewInputV2Schema', () => {
+  it('admits private authoring provenance for negotiated spawn while excluding server-visible drafts', () => {
+    const authoringOrigin = { kind: 'project', accountId: 'original-account',
+      workspace: { serverId: 'original-home', workspaceId: 'original-workspace', machineId: 'original-machine', rootPath: '/private/original' }, page: 'scripts' };
+    expect(SessionSpawnNewInputV2Schema.parse({ ...input, authoringOrigin })).toMatchObject({ authoringOrigin });
+    expect(sessionSpawnInput.SessionSpawnNewActionInputV2Schema.safeParse({ ...input, authoringOrigin }).success).toBe(true);
+    expect(sessionSpawnInput.SessionServerStartSpawnDraftV1Schema.safeParse({ ...input, authoringOrigin }).success).toBe(false);
+    expect(SessionSpawnNewInputV2Schema.safeParse({ ...input, authoringOrigin: { ...authoringOrigin, extra: true } }).success).toBe(false);
+    expect(SessionSpawnNewInputV2Schema.parse(input)).not.toHaveProperty('authoringOrigin');
+  });
   it('reserves a Discussion participant without admitting a prompt, trigger or source continuation', () => {
     const selected = { ...input, discussionParticipant: { discussionId: 'discussion-1', participantSlotId: 'slot-1' } };
     expect(SessionSpawnNewInputV2Schema.parse(selected)).toEqual(selected);

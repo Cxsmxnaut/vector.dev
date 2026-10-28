@@ -413,6 +413,7 @@ describe('ApiMachineClient operation protocol capability publication', () => {
           sessionInputAdmission: { protocolVersions: [1, 2] },
           sessionSpawn: { protocolVersions: [1, 2] },
           sessionSpawnPlacementOrigin: { protocolVersions: [1] },
+          sessionSpawnAuthoringOrigin: { protocolVersions: [1] },
           pluginWebhookClaim: { protocolVersions: [1] },
           sessionFollow: { contextV1: true, wakeOnHumanChangeV1: true },
           irohMachineEndpoint: {

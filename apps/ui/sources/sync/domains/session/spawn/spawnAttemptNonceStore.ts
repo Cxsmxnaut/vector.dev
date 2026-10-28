@@ -267,6 +267,7 @@ export async function acquireSpawnAttemptCustody(params: Readonly<{
     userAttemptId?: string | null;
     createUserAttemptId?: () => string;
     seedNonce?: string | null;
+    authoringOriginPersistence?: PersistedSpawnAttempt['authoringOriginPersistence'];
 }>): Promise<AcquireSpawnAttemptCustodyResult> {
     const machineId = normalizeRequired(params.machineId);
     const targetFingerprint = normalizeRequired(params.targetFingerprint);
