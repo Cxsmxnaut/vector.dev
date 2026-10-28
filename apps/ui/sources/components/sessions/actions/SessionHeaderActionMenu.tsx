@@ -80,8 +80,8 @@ import { resolveSessionHeaderActionTargetPx, SESSION_HEADER_ICON_SIZE_PX } from 
 import { Icon } from '@/components/ui/icons/Icon';
 import { emitSessionResumeRequest } from '@/components/sessions/model/sessionResumeRequests';
 import { buildSessionDebugInformationForSession } from '@/components/sessions/debug/sessionDebugInformation';
-import { copySessionDebugInformationToClipboard } from '@/components/sessions/debug/sessionDebugClipboard';
-import { createCopySessionDebugInformationMenuItem, SESSION_COPY_DEBUG_INFORMATION_MENU_ITEM_ID } from '@/components/sessions/debug/sessionDebugMenuItem';
+import { copySessionDebugInformationToClipboard, isSessionCopyActionId } from '@/components/sessions/debug/sessionDebugClipboard';
+import { createSessionCopyMenuItem, SESSION_COPY_MENU_ITEM_ID } from '@/components/sessions/debug/sessionDebugMenuItem';
 
 type SessionHeaderActionMenuProps = Readonly<{
   sessionId: string;
@@ -346,10 +346,6 @@ function SessionHeaderActionMenuInner(props: SessionHeaderActionMenuProps) {
       }
     }
 
-    if (!existingActionIds.has(SESSION_COPY_DEBUG_INFORMATION_MENU_ITEM_ID)) {
-      out.push(createCopySessionDebugInformationMenuItem({ iconColor: theme.colors.chrome.header.foreground }));
-    }
-
     if (showTeleportAction) {
       out.push({
         id: 'voice.teleport',
@@ -359,9 +355,17 @@ function SessionHeaderActionMenuInner(props: SessionHeaderActionMenuProps) {
     }
 
     out.push(...actionItems);
+    if (open && !existingActionIds.has(SESSION_COPY_MENU_ITEM_ID)) {
+      out.push(createSessionCopyMenuItem({
+        iconColor: theme.colors.chrome.header.foreground,
+        information: buildSessionDebugInformationForSession(readCurrentSessionForOpenMenu(props.sessionId, session)),
+      }));
+    }
     return out;
   }, [
     props.extraItems,
+    props.sessionId,
+    open,
     archivePending,
     agentSwitchingEnabled,
     session,
@@ -410,9 +414,9 @@ function SessionHeaderActionMenuInner(props: SessionHeaderActionMenuProps) {
         }
         setOpen(false);
         if (props.onSelectExtraItem?.(actionId) === true) return;
-        if (actionId === SESSION_COPY_DEBUG_INFORMATION_MENU_ITEM_ID) {
+        if (isSessionCopyActionId(actionId)) {
           const currentSession = readCurrentSessionForOpenMenu(props.sessionId, session);
-          fireAndForget(copySessionDebugInformationToClipboard(buildSessionDebugInformationForSession(currentSession)), {
+          fireAndForget(copySessionDebugInformationToClipboard(buildSessionDebugInformationForSession(currentSession), actionId), {
             tag: 'SessionHeaderActionMenu.execute.copyInformation',
           });
           return;

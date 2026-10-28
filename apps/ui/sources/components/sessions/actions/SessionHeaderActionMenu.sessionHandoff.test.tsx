@@ -606,13 +606,15 @@ describe('SessionHeaderActionMenu handoff', () => {
       metadata: { path: '/workspace', host: 'test-host', flavor: 'claude', claudeSessionId: 'vendor-session', sessionLogPath: '/tmp/session.log' },
     });
     const screen = await renderScreen(<SessionHeaderActionMenu sessionId={session.id} session={session} />);
+    await act(async () => { screen.findByType('DropdownMenu' as React.ElementType).props.onOpenChange(true); });
     storageState.current.sessions = {
       [session.id]: { ...session, metadata: { ...session.metadata, claudeSessionId: 'current-vendor-session' } },
     };
     const dropdown = screen.findByType('DropdownMenu' as React.ElementType);
     expect(dropdown.props.items).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: 'session.copyDebugInformation' }),
+      expect.objectContaining({ id: 'session.copy' }),
     ]));
+    expect(dropdown.props.items.at(-1)?.id).toBe('session.copy');
     await act(async () => {
       dropdown.props.onSelect('session.copyDebugInformation');
       await findFireAndForgetByTag('SessionHeaderActionMenu.execute.copyInformation');
@@ -622,14 +624,38 @@ describe('SessionHeaderActionMenu handoff', () => {
       'agentInput.agent.claude session ID: current-vendor-session',
       'Happier logs: /tmp/session.log',
     ].join('\n'));
+    for (const [itemId, expected] of [
+      ['session.copySessionId', session.id],
+      ['session.copyProviderSessionId', 'current-vendor-session'],
+    ]) {
+      await act(async () => { dropdown.props.onOpenChange(true); });
+      await act(async () => {
+        dropdown.props.onSelect(itemId);
+        await findFireAndForgetByTag('SessionHeaderActionMenu.execute.copyInformation');
+      });
+      expect(clipboardMock).toHaveBeenLastCalledWith(expected);
+    }
+
   });
 
-  it('reports clipboard refusal from the header', async () => {
-    clipboardMock.mockResolvedValue(false);
-    const session = createSessionFixture({ id: 'header-copy-failure' });
+  it('omits the provider ID choice when no provider session ID is available', async () => {
+    const session = createSessionFixture({ id: 'header-no-provider-id' });
     const screen = await renderScreen(<SessionHeaderActionMenu sessionId={session.id} session={session} />);
+    await act(async () => { screen.findByType('DropdownMenu' as React.ElementType).props.onOpenChange(true); });
+    const copyMenu = screen.findByType('DropdownMenu' as React.ElementType).props.items
+      .find((item: { id: string }) => item.id === 'session.copy');
+    expect(copyMenu.submenu.items.map((item: { id: string }) => item.id)).toEqual([
+      'session.copyDebugInformation', 'session.copySessionId',
+    ]);
+  });
+
+  it.each(['session.copyDebugInformation', 'session.copySessionId', 'session.copyProviderSessionId'])('reports clipboard refusal for %s from the header', async (actionId) => {
+    clipboardMock.mockResolvedValue(false);
+    const session = createSessionFixture({ id: 'header-copy-failure', metadata: { path: '/workspace', host: 'host', flavor: 'claude', claudeSessionId: 'vendor-session' } });
+    const screen = await renderScreen(<SessionHeaderActionMenu sessionId={session.id} session={session} />);
+    await act(async () => { screen.findByType('DropdownMenu' as React.ElementType).props.onOpenChange(true); });
     await act(async () => {
-      screen.findByType('DropdownMenu' as React.ElementType).props.onSelect('session.copyDebugInformation');
+      screen.findByType('DropdownMenu' as React.ElementType).props.onSelect(actionId);
       await findFireAndForgetByTag('SessionHeaderActionMenu.execute.copyInformation');
     });
     expect(modalAlertMock).toHaveBeenCalledWith('common.error', 'sessionInfo.failedToCopyMetadata');
