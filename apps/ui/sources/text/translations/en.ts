@@ -1013,6 +1013,13 @@ export const en = {
     },
 
     appCrash: {
+        copyFailed: "The crash details could not be copied. Try again.",
+        discardFailed: "The saved crash could not be discarded. Try again.",
+        restartWithoutReport: "Restart without saving",
+        reportSaveFailed: "Crash details could not be saved. Copy the error details before restarting, or try reporting again.",
+        savedReportNotice: "The saved crash is shown below. Review and edit it before submitting. It stays on this device until submission or dismissal.",
+        discardSavedReport: "Discard saved crash",
+        stackTruncated: "Stack shortened for this field. The full crash remains saved on this device.",
         title: 'Something went wrong',
         subtitle: 'Happier hit an unexpected error. You can restart the app UI or copy details for support.',
         detailsTitle: 'Error details',

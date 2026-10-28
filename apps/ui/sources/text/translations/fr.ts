@@ -1015,6 +1015,13 @@ export const fr: TranslationStructure = {
     },
 
     appCrash: {
+        copyFailed: "Les détails du plantage n’ont pas pu être copiés. Réessayez.",
+        discardFailed: "Le plantage enregistré n’a pas pu être supprimé. Réessayez.",
+        restartWithoutReport: "Redémarrer sans enregistrer",
+        reportSaveFailed: "Les détails du plantage n’ont pas pu être enregistrés. Copiez-les avant de redémarrer ou réessayez le signalement.",
+        savedReportNotice: "Le plantage enregistré figure ci-dessous. Vérifiez et modifiez les détails avant l’envoi. Ils restent sur cet appareil jusqu’à l’envoi ou la suppression.",
+        discardSavedReport: "Supprimer le plantage enregistré",
+        stackTruncated: "Pile abrégée pour ce champ. Le plantage complet reste enregistré sur cet appareil.",
         title: 'Quelque chose s’est mal passé',
         subtitle: 'Happier a rencontré une erreur inattendue. Tu peux redémarrer l’UI de l’app ou copier les détails pour le support.',
         detailsTitle: 'Détails de l’erreur',

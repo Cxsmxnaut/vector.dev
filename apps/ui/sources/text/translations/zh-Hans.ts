@@ -1155,6 +1155,13 @@ export const zhHans: TranslationStructure = {
   },
 
   appCrash: {
+      copyFailed: "无法复制崩溃详情。请重试。",
+      discardFailed: "无法丢弃已保存的崩溃。请重试。",
+      restartWithoutReport: "不保存并重启",
+      reportSaveFailed: "无法保存崩溃详情。请在重启前复制错误详情，或重试报告。",
+      savedReportNotice: "已保存的崩溃显示在下方。请在提交前检查并编辑。提交或丢弃前，信息会保留在此设备上。",
+      discardSavedReport: "丢弃已保存的崩溃",
+      stackTruncated: "此字段中的堆栈已缩短。完整崩溃信息仍保存在此设备上。",
     title: "出错了",
     subtitle: "Happier 发生了意外错误。你可以重启应用界面，或复制详细信息以便支持排查。",
     detailsTitle: "错误详情",

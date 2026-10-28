@@ -1015,6 +1015,13 @@ export const de: TranslationStructure = {
     },
 
     appCrash: {
+        copyFailed: "Die Absturzdetails konnten nicht kopiert werden. Versuche es erneut.",
+        discardFailed: "Der gespeicherte Absturz konnte nicht verworfen werden. Versuche es erneut.",
+        restartWithoutReport: "Ohne Speichern neu starten",
+        reportSaveFailed: "Die Absturzdetails konnten nicht gespeichert werden. Kopiere sie vor dem Neustart oder versuche die Meldung erneut.",
+        savedReportNotice: "Der gespeicherte Absturz wird unten angezeigt. Prüfe und bearbeite ihn vor dem Senden. Er bleibt bis zum Senden oder Verwerfen auf diesem Gerät.",
+        discardSavedReport: "Gespeicherten Absturz verwerfen",
+        stackTruncated: "Stack für dieses Feld gekürzt. Der vollständige Absturz bleibt auf diesem Gerät gespeichert.",
         title: 'Da ist etwas schiefgelaufen',
         subtitle: 'Happier ist auf einen unerwarteten Fehler gestoßen. Du kannst die App-Oberfläche neu starten oder Details für den Support kopieren.',
         detailsTitle: 'Fehlerdetails',

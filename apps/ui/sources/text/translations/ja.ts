@@ -1153,6 +1153,13 @@ export const ja: TranslationStructure = {
   },
 
   appCrash: {
+      copyFailed: "クラッシュの詳細をコピーできませんでした。再試行してください。",
+      discardFailed: "保存されたクラッシュを破棄できませんでした。再試行してください。",
+      restartWithoutReport: "保存せずに再起動",
+      reportSaveFailed: "クラッシュの詳細を保存できませんでした。再起動する前にエラーの詳細をコピーするか、報告を再試行してください。",
+      savedReportNotice: "保存されたクラッシュを以下に表示しています。送信前に確認・編集してください。送信または破棄するまで、この端末に保持されます。",
+      discardSavedReport: "保存されたクラッシュを破棄",
+      stackTruncated: "この欄ではスタックを短縮しています。完全なクラッシュ情報はこの端末に保存されています。",
     title: "問題が発生しました",
     subtitle:
       "Happierで予期しないエラーが発生しました。アプリUIを再起動するか、サポート用に詳細をコピーできます。",

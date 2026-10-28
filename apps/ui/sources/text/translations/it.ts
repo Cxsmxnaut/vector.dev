@@ -1170,6 +1170,13 @@ export const it: TranslationStructure = {
   },
 
   appCrash: {
+      copyFailed: "Impossibile copiare i dettagli del crash. Riprova.",
+      discardFailed: "Impossibile eliminare il crash salvato. Riprova.",
+      restartWithoutReport: "Riavvia senza salvare",
+      reportSaveFailed: "Impossibile salvare i dettagli del crash. Copiali prima di riavviare oppure riprova la segnalazione.",
+      savedReportNotice: "Il crash salvato è mostrato qui sotto. Controllalo e modificalo prima di inviarlo. Resta su questo dispositivo fino all’invio o all’eliminazione.",
+      discardSavedReport: "Elimina il crash salvato",
+      stackTruncated: "Stack abbreviato per questo campo. Il crash completo resta salvato su questo dispositivo.",
     title: "Qualcosa è andato storto",
     subtitle:
       "Happier ha riscontrato un errore imprevisto. Puoi riavviare l'interfaccia dell'app o copiare i dettagli per l'assistenza.",

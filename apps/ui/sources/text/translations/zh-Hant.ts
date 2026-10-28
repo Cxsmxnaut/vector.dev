@@ -1900,6 +1900,13 @@ const zhHantOverrides: DeepPartial<TranslationStructure> = {
     },
 
     appCrash: {
+        copyFailed: "無法複製當機詳細資料。請重試。",
+        discardFailed: "無法捨棄已儲存的當機。請重試。",
+        restartWithoutReport: "不儲存並重新啟動",
+        reportSaveFailed: "無法儲存當機詳細資料。請在重新啟動前複製錯誤詳細資料，或重試回報。",
+        savedReportNotice: "已儲存的當機顯示於下方。請在提交前檢查並編輯。提交或捨棄前，資訊會保留在此裝置上。",
+        discardSavedReport: "捨棄已儲存的當機",
+        stackTruncated: "此欄位中的堆疊已縮短。完整當機資訊仍儲存在此裝置上。",
         title: '發生錯誤',
         subtitle: 'Happier 發生了非預期的錯誤。你可以重新啟動應用程式介面，或複製詳細資訊以便支援排查。',
         detailsTitle: '錯誤詳細資訊',

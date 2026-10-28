@@ -1171,6 +1171,13 @@ export const es: TranslationStructure = {
   },
 
   appCrash: {
+      copyFailed: "No se pudieron copiar los detalles del fallo. Inténtalo de nuevo.",
+      discardFailed: "No se pudo descartar el fallo guardado. Inténtalo de nuevo.",
+      restartWithoutReport: "Reiniciar sin guardar",
+      reportSaveFailed: "No se pudieron guardar los detalles del fallo. Cópialos antes de reiniciar o vuelve a intentar enviar el informe.",
+      savedReportNotice: "El fallo guardado se muestra abajo. Revísalo y edítalo antes de enviarlo. Permanece en este dispositivo hasta enviarlo o descartarlo.",
+      discardSavedReport: "Descartar fallo guardado",
+      stackTruncated: "Pila abreviada para este campo. El fallo completo sigue guardado en este dispositivo.",
     title: "Algo salió mal",
     subtitle:
       "Happier tuvo un error inesperado. Puedes reiniciar la interfaz de la app o copiar los detalles para soporte.",

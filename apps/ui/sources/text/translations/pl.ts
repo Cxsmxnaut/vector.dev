@@ -1191,6 +1191,13 @@ export const pl: TranslationStructure = {
   },
 
   appCrash: {
+      copyFailed: "Nie udało się skopiować szczegółów awarii. Spróbuj ponownie.",
+      discardFailed: "Nie udało się odrzucić zapisanej awarii. Spróbuj ponownie.",
+      restartWithoutReport: "Uruchom ponownie bez zapisywania",
+      reportSaveFailed: "Nie udało się zapisać szczegółów awarii. Skopiuj je przed ponownym uruchomieniem lub spróbuj zgłosić awarię ponownie.",
+      savedReportNotice: "Zapisana awaria jest pokazana poniżej. Sprawdź i edytuj ją przed wysłaniem. Pozostanie na tym urządzeniu do wysłania lub odrzucenia.",
+      discardSavedReport: "Odrzuć zapisaną awarię",
+      stackTruncated: "Stos skrócony dla tego pola. Pełna awaria pozostaje zapisana na tym urządzeniu.",
     title: "Coś poszło nie tak",
     subtitle:
       "W Happier wystąpił nieoczekiwany błąd. Możesz ponownie uruchomić interfejs aplikacji lub skopiować szczegóły dla pomocy.",
