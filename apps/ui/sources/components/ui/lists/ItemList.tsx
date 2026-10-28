@@ -1,23 +1,15 @@
 import * as React from 'react';
-import { useContainingGlassSurfaceGroup } from '@/components/ui/glass/GlassSurface';
 import { ScrollView, View, StyleProp, ViewStyle, Platform, ScrollViewProps, StyleSheet as RNStyleSheet } from 'react-native';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
-import { useIsInsideModalBoundary } from '@/modal/context/ModalBoundaryContext';
-import { useScrollViewWheelScrollTo } from '@/components/ui/scroll/useScrollViewWheelScrollTo';
-import { PopoverScrollSourceProvider } from '@/components/ui/popover';
 import { BASE_CONTENT_PADDING_BOTTOM } from '@/components/ui/lists/pageListBottomPadding';
-import { useSessionCockpitBottomChromeHeight } from '@/components/workspaceCockpit/session/SessionCockpitChromeRegistry';
 import { KeyboardAwareScrollView } from '@/components/ui/keyboardAvoidance/KeyboardAwareScrollView';
-import { ListPresentationProvider, useContainedPageScope, type ListPresentation } from './listPresentation';
+import { ListPresentationProvider, type ListPresentation } from './listPresentation';
 import type { PageColumn } from '@/components/ui/layout/contentWidthMode';
 import { glassSurfaceBackgroundColor } from '@/components/ui/glass/glassSurfacePaint';
-import { useGlassSurfaceColor } from '@/components/ui/glass/useGlassSurfaceColor';
-import { PluginUiScrollActivityProvider } from '@happier-dev/plugin-ui/advanced';
-import { createScrollViewNearViewportTracker } from '@/components/widgets/nearViewport';
-import { PaneHeaderScrollIsolation, usePaneHeaderScrollSink } from '@/components/appShell/panes/paneHeaderScroll';
 import { RoundButtonSizeScope } from '@/components/ui/buttons/RoundButton';
 import { HAPPIER_PAGE_METRICS, useContainingHappierMaterialRole, useHappierMaterialColorResolver } from '@happier-dev/plugin-ui/presentation';
 import { PageFrame } from '@/components/ui/layout/PageFrame';
+import { usePageScroller, type PageScrollTarget } from './pageScroller';
 
 
 export interface ItemListProps extends ScrollViewProps {
@@ -51,9 +43,6 @@ const stylesheet = StyleSheet.create((theme) => ({
     groupedBackground: {
         backgroundColor: glassSurfaceBackgroundColor(theme.colors.background.canvas, 'content', true),
     },
-    pageBackground: {
-        backgroundColor: glassSurfaceBackgroundColor(theme.colors.surface.base, 'content', true),
-    },
     contentContainer: {
         paddingBottom: Platform.select({ ios: 34, default: 16 }),
         paddingTop: 0,
@@ -85,14 +74,7 @@ function isRefObject<T>(ref: React.ForwardedRef<T>): ref is React.MutableRefObje
 
 export const ItemList = React.memo(React.forwardRef<ScrollView, ItemListProps>((props, ref) => {
     const styles = stylesheet;
-    const { theme } = useUnistyles();
-    const materialRole = useContainingHappierMaterialRole();
-    const paintColor = useHappierMaterialColorResolver();
     const internalRef = React.useRef<ScrollView>(null);
-    const isInsideModalBoundary = useIsInsideModalBoundary();
-    // When the floating tab bar overlays this screen, extend the bottom padding so
-    // the last rows clear it. 0 when no bar is present, so non-tab screens are unchanged.
-    const bottomChromeHeight = useSessionCockpitBottomChromeHeight();
 
     const {
         children,
@@ -109,34 +91,21 @@ export const ItemList = React.memo(React.forwardRef<ScrollView, ItemListProps>((
     } = props;
 
     const isIOS = Platform.OS === 'ios';
-    // A card modal's body is the column: its page list takes the card's width and text edge (R-APP-7).
-    const contained = useContainedPageScope();
     const isWeb = Platform.OS === 'web';
-    const rawOnWheel = onWheel;
-    const installWebModalWheelFix = isWeb && isInsideModalBoundary && rawOnWheel == null;
-    const pageColor = presentation === 'page' ? theme.colors.surface.base : theme.colors.background.canvas;
-    const nativePageColor = useGlassSurfaceColor(pageColor, 'content', true, false, true);
-
-    // A list standing on the navigation plane (a navigation column, a side panel on the canvas) draws no ground.
-    const onNavigationPlane = useContainingGlassSurfaceGroup() === 'sidebar';
-    const backgroundStyle = onNavigationPlane ? TRANSPARENT_GROUND : materialRole === undefined
-        ? isWeb ? presentation === 'page' ? styles.pageBackground : styles.groupedBackground : { backgroundColor: nativePageColor }
-        : { backgroundColor: paintColor(presentation === 'page' ? theme.colors.surface.base : theme.colors.background.canvas, 'transparent') };
-    const authoredBackground = RNStyleSheet.flatten(style)?.backgroundColor;
-
-    const { onScroll, onLayout, onContentSizeChange, ...restScrollViewProps } = scrollViewProps;
-    const tracker = React.useMemo(() => createScrollViewNearViewportTracker(internalRef, scrollViewProps.horizontal === true), [scrollViewProps.horizontal]);
-    // A vertical page list that is a pane's primary body drives the pane header's shade; it then ends
-    // the scope for anything scrolling inside it, so a nested list never claims the header.
-    const paneHeaderScroll = usePaneHeaderScrollSink();
-    const reportsPaneHeader = paneHeaderScroll !== null && scrollViewProps.horizontal !== true;
-    const reportedMountRef = React.useRef(false);
-
-    const wheelScrollHandlers = useScrollViewWheelScrollTo(internalRef, {
-        enabled: installWebModalWheelFix,
+    const { onScroll, onLayout, onContentSizeChange, scrollEventThrottle, ...restScrollViewProps } = scrollViewProps;
+    const page = usePageScroller({
+        presentation,
+        pageNoticeActive,
+        style,
+        horizontal: scrollViewProps.horizontal === true,
+        scrollRef: internalRef as React.RefObject<PageScrollTarget | null>,
         onScroll,
-        onWheel: rawOnWheel ?? undefined,
+        onLayout,
+        onContentSizeChange,
+        onWheel,
+        scrollEventThrottle,
     });
+    const { onWheel: pageOnWheel, ...pageHandlers } = page.handlers;
 
     const setRefs = React.useCallback((node: ScrollView | null) => {
         internalRef.current = node;
@@ -150,19 +119,14 @@ export const ItemList = React.memo(React.forwardRef<ScrollView, ItemListProps>((
 
     const scrollProps = {
         ref: setRefs,
-        style: [
-            styles.container,
-            backgroundStyle,
-            style,
-            materialRole !== undefined && typeof authoredBackground === 'string' ? { backgroundColor: paintColor(authoredBackground, 'transparent') } : null,
-        ],
+        style: [styles.container, ...page.style],
         contentContainerStyle: [
             styles.contentContainer,
             presentation === 'page' ? { paddingBottom: 0 } : null,
-            contained && presentation === 'grouped' ? styles.containedGroupedGutter : null,
+            page.contained && presentation === 'grouped' ? styles.containedGroupedGutter : null,
             fill ? styles.fill : null,
             containerStyle,
-            bottomChromeHeight > 0 ? { paddingBottom: (presentation === 'page' ? 0 : BASE_CONTENT_PADDING_BOTTOM) + bottomChromeHeight } : null,
+            page.bottomChromeHeight > 0 ? { paddingBottom: (presentation === 'page' ? 0 : BASE_CONTENT_PADDING_BOTTOM) + page.bottomChromeHeight } : null,
         ],
         showsVerticalScrollIndicator: scrollViewProps.showsVerticalScrollIndicator !== undefined
             ? scrollViewProps.showsVerticalScrollIndicator
@@ -170,42 +134,20 @@ export const ItemList = React.memo(React.forwardRef<ScrollView, ItemListProps>((
         contentInsetAdjustmentBehavior: (isIOS && !isWeb) ? 'automatic' as const : undefined,
         ...(!isWeb && innerViewRef ? { innerViewRef } : {}),
         ...restScrollViewProps,
-        ...(reportsPaneHeader && scrollViewProps.scrollEventThrottle === undefined ? { scrollEventThrottle: 16 } : {}),
-        onScroll: (event: Parameters<NonNullable<ScrollViewProps['onScroll']>>[0]) => {
-            tracker.onScroll(event);
-            if (reportsPaneHeader) paneHeaderScroll.reportTopDistance(event.nativeEvent.contentOffset.y);
-            (installWebModalWheelFix ? wheelScrollHandlers.onScroll : onScroll)?.(event);
-        },
-        onLayout: (event: Parameters<NonNullable<ScrollViewProps['onLayout']>>[0]) => {
-            tracker.onLayout(event);
-            // A body that just mounted starts at its top: the header it replaces under may still show a shade.
-            if (reportsPaneHeader && !reportedMountRef.current) { reportedMountRef.current = true; paneHeaderScroll.reportTopDistance(0); }
-            onLayout?.(event);
-        },
-        onContentSizeChange: (width: number, height: number) => { tracker.onContentSizeChange(width, height); onContentSizeChange?.(width, height); },
-        ...(installWebModalWheelFix
-            ? ({ onWheel: wheelScrollHandlers.onWheel } as any)
-            : (rawOnWheel ? ({ onWheel: rawOnWheel } as any) : {})),
+        ...pageHandlers,
+        ...(pageOnWheel ? ({ onWheel: pageOnWheel } as any) : {}),
     };
     const listContent = presentation === 'page' ? (
         <PageFrame column={pageColumn} content="sections" testID="page-frame" style={fill ? styles.fill : undefined}>
             <RoundButtonSizeScope size="normal">{children}</RoundButtonSizeScope>
         </PageFrame>
     ) : children;
-    const content = reportsPaneHeader ? <PaneHeaderScrollIsolation>{listContent}</PaneHeaderScrollIsolation> : listContent;
-    const scrollContent = keyboardAware ? (
+    const content = page.isolate(listContent);
+    return page.provide(keyboardAware ? (
         <KeyboardAwareScrollView {...scrollProps}>{content}</KeyboardAwareScrollView>
     ) : (
         <ScrollView {...scrollProps}>{content}</ScrollView>
-    );
-
-    return (
-        <PopoverScrollSourceProvider scrollSourceRef={internalRef}>
-            <ListPresentationProvider value={presentation} pageNoticeActive={pageNoticeActive} pageInsets={contained ? 'contained' : undefined}>
-                <PluginUiScrollActivityProvider tracker={tracker}>{scrollContent}</PluginUiScrollActivityProvider>
-            </ListPresentationProvider>
-        </PopoverScrollSourceProvider>
-    );
+    ));
 }));
 
 ItemList.displayName = 'ItemList';
