@@ -4,12 +4,13 @@ import type { WorkspaceRefV1 } from '@happier-dev/protocol/workspaces/workspaceR
 
 import { getStorage } from '@/sync/domains/state/storageStore';
 import { sessionListRuntimeClock } from '@/hooks/session/sessionListRuntimeClock';
+import { projectManager } from '@/sync/runtime/orchestration/projectManager';
 
 import { createProjectsTreeCheckoutFactsSelector } from './projectsTreeCheckoutFacts';
 import type { ProjectsTreeCheckoutFacts } from './projectsTreeRows';
 
 /**
- * The live facts of one set of checkouts: one selector, one store/clock subscription shared by every
+ * The live facts of one set of checkouts: one selector and shared input subscriptions for every
  * reader. Readers pick their own checkouts' facts (`useProjectsTreeCheckoutFactsFor`) and re-render only
  * when those change; nothing here subscribes until a reader mounts.
  */
@@ -24,15 +25,23 @@ function createProjectsTreeCheckoutFactsSource(
 ): ProjectsTreeCheckoutFactsSource {
     const select = createProjectsTreeCheckoutFactsSelector(refs);
     let nowMs = refs.length > 0 ? Math.max(sessionListRuntimeClock.getNowMs(), Date.now()) : Date.now();
-    const getSnapshot = () => select(store.getState(), nowMs);
+    // This source produces the shared facts at its input wakes. Snapshot reads
+    // by each rendered section must not recompute the whole checkout census.
+    let published: ReadonlyMap<string, ProjectsTreeCheckoutFacts> | null = null;
+    const getSnapshot = () => {
+        if (published === null) {
+            nowMs = refs.length > 0 ? Math.max(sessionListRuntimeClock.getNowMs(), Date.now()) : Date.now();
+            published = select(store.getState(), nowMs, true);
+        }
+        return published;
+    };
     const listeners = new Set<() => void>();
     let stop: (() => void) | null = null;
     const start = () => {
         const token = {};
-        let published = getSnapshot();
-        const refresh = () => {
+        const refresh = (scmChanged = false) => {
             nowMs = Math.max(sessionListRuntimeClock.getNowMs(), Date.now());
-            const next = getSnapshot();
+            const next = select(store.getState(), nowMs, scmChanged || published === null);
             // Re-arm even when a heartbeat extends freshness without changing
             // the visible facts. Only this source's deadline can wake its readers.
             const wakeAtMs = select.getNextWakeAtMs();
@@ -44,10 +53,22 @@ function createProjectsTreeCheckoutFactsSource(
             for (const listener of [...listeners]) listener();
         };
         const stopClock = sessionListRuntimeClock.subscribeWake(token, refresh);
-        const stopStore = store.subscribe(refresh);
+        const stopStore = store.subscribe((state, previous) => {
+            if (state.sessions !== previous.sessions
+                || state.sessionListRowsByServerId !== previous.sessionListRowsByServerId
+                || state.sessionListRenderableDelta.revision !== previous.sessionListRenderableDelta.revision
+                || state.machines !== previous.machines
+                || state.machineListByServerId !== previous.machineListByServerId
+                || state.machineListStatusByServerId !== previous.machineListStatusByServerId
+                || state.profileScope !== previous.profileScope
+                || state.getWorkspaceScmSnapshot !== previous.getWorkspaceScmSnapshot) refresh();
+        });
+        // SCM snapshots live outside Zustand; their owner publishes actual snapshot changes.
+        const stopScm = projectManager.subscribeScmSnapshots(() => refresh(true));
         refresh();
         return () => {
             stopStore();
+            stopScm();
             stopClock();
         };
     };
@@ -60,6 +81,7 @@ function createProjectsTreeCheckoutFactsSource(
             if (listeners.size > 0) return;
             stop?.();
             stop = null;
+            published = null;
         };
     };
     return { getSnapshot, subscribe };

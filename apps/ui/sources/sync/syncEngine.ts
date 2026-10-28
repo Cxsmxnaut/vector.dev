@@ -9723,7 +9723,7 @@ class Sync {
                     material: mode.mode === 'e2ee' && !isTokenOnlyAuthCredentials(credentials)
                         ? resolveAccountScopedCryptoMaterialFromCredentials(credentials) : null, randomBytes: getRandomBytes }),
                 isCurrent,
-                apply: snapshot => storage.getState().applyProjectAccountRowsForScope(scope, snapshot),
+                apply: (...args) => storage.getState().applyProjectAccountRowsForScope(scope, ...args),
                 onRefreshFailure,
                 // Optional recency is attached by the memory owner when it is available.
                 // Its failure must not stop the independent structural census.

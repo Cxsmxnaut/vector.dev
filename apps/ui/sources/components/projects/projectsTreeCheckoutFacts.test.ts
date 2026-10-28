@@ -24,7 +24,7 @@ const session = (id: string, extra: Parameters<typeof createSessionListRenderabl
         metadata: { machineId: 'machine-1', path: '/repo/nested' }, ...extra })
 );
 const state = (): ProjectsTreeCheckoutFactsState => ({
-    sessions: {}, machines: {}, machineListByServerId: {},
+    sessions: {}, machines: {}, machineListByServerId: {}, machineListStatusByServerId: {},
     sessionListRowsByServerId: {}, profileScope: { serverId: 'home-a', accountId: 'account-a' },
     sessionListRenderableDelta: { revision: 0, changedSessionIds: [], removedSessionIds: [], rebuiltSessionListIndex: false },
     localSettings: { projectLastMobileSurfaceByWorkspaceRefId: {} },
@@ -34,6 +34,26 @@ const state = (): ProjectsTreeCheckoutFactsState => ({
 afterEach(() => projectManager.clear());
 
 describe('Projects tree checkout facts', () => {
+    it('PF4 keeps equal checkout facts and changes only one of 150 checkout identities', () => {
+        const refs = Array.from({ length: 150 }, (_, index) => ref(`checkout-${index}`, 'home-a', `/repo-${index}`));
+        const source = state();
+        const select = createProjectsTreeCheckoutFactsSelector(refs);
+        const before = select(source, 1_100);
+        let publications = 0;
+        for (let arrival = 0; arrival < 5; arrival++) {
+            const next = select({ ...source }, 1_101 + arrival);
+            if (next !== before) publications++;
+        }
+        expect(publications).toBe(0);
+        const checkout = refs[42];
+        projectManager.updateWorkspaceScmSnapshot(checkout, { ...snapshot(), repo: { isRepo: true, rootPath: checkout.rootPath },
+            branch: { ...snapshot().branch, head: 'changed' } });
+        const after = select(source, 1_110);
+        expect(after).not.toBe(before);
+        const changed = [...after].filter(([key, value]) => value !== before.get(key));
+        expect(changed).toHaveLength(1);
+        expect(changed[0][1].branch).toBe('changed');
+    });
     it('uses the viewer admission instead of promoting a quiet runtime permission into Needs you', () => {
         const source = state();
         const row = session('quiet', { metadata: { machineId: 'machine-1', path: '/repo' },

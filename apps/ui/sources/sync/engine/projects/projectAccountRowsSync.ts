@@ -25,7 +25,7 @@ function failure(code: string): Error & { code: string } { return Object.assign(
 /** One Account/Home-owned materialization of the reserved physical rows. */
 export function createProjectAccountRowsSync(options: Readonly<{
     scope: ServerAccountScope; transport: ProjectAccountRowsTransport; cipher: ProjectAccountRowCipherV1;
-    isCurrent(): boolean; apply(snapshot: ProjectAccountRowsSnapshot): void;
+    isCurrent(): boolean; apply(snapshot: ProjectAccountRowsSnapshot, source: 'census' | 'projection'): void;
     onRefreshFailure?(error: unknown): void;
     readRecency?(ref: WorkspaceRefV1): number | undefined;
     writeRecency?(ref: WorkspaceRefV1, timestamp: number): Promise<void>;
@@ -60,9 +60,9 @@ export function createProjectAccountRowsSync(options: Readonly<{
             } else throw failure('project_account_row_invalid');
         }
         const snapshot = parseProjectAccountSnapshotV1({ workspaceRefs, relationships });
-        return { ...snapshot, scope: options.scope, status: 'ready', coverage: 'complete', organizations, revisionsByPhysicalKey };
+        return { ...snapshot, scope: options.scope, status: 'ready', coverage: 'complete', organizations, revisionsByPhysicalKey, authoringSessionsByPhysicalKey };
     }
-    function observe(rows: readonly ProjectAccountRowV1[]): ProjectAccountRowsSnapshot {
+    function observe(rows: readonly ProjectAccountRowV1[], source: 'census' | 'projection' = 'projection'): ProjectAccountRowsSnapshot {
         assertCurrent();
         const incoming = rows.map(row => ({ row, payload: row.content === null ? null : options.cipher.open(row.key, row.content) }));
         const merged = new Map(opened.map(item => [buildProjectAccountRowPhysicalKeyV1(item.row.key), item]));
@@ -81,7 +81,7 @@ export function createProjectAccountRowsSync(options: Readonly<{
         }
         const next = [...merged.values()];
         const snapshot = project(next); // Open and validate the whole census before disclosing any row.
-        assertCurrent(); opened = next; options.apply(snapshot); return snapshot;
+        assertCurrent(); opened = next; options.apply(snapshot, source); return snapshot;
     }
     async function refresh(signal?: AbortSignal): Promise<ProjectAccountRowsSnapshot> {
         signal?.throwIfAborted();
@@ -90,7 +90,7 @@ export function createProjectAccountRowsSync(options: Readonly<{
         const task = (async () => {
             const result = await options.transport.list({ signal }); assertCurrent(); signal?.throwIfAborted();
             if (result.status !== 'listed') throw failure(`project_account_rows_${result.status}`);
-            return observe(result.rows);
+            return observe(result.rows, 'census');
         })();
         refreshInFlight = task;
         try { return await task; }
@@ -258,11 +258,11 @@ export function createProjectAccountRowsSync(options: Readonly<{
                 // The ref mutation already carries its CAS. The unchanged graph CAS
                 // fences concurrent links without contending on unrelated labels.
             } else if (existing && structural && areAccountSettingsJsonValuesEqual(ProjectAccountWorkspaceRefV1Schema.parse((({ lastOpenedAtMs: _recency, ...value }) => value)(existing)), structural)) {
-                if (rememberedOpen !== undefined) { await options.writeRecency?.(existing, rememberedOpen); options.apply(project(opened)); }
+                if (rememberedOpen !== undefined) { await options.writeRecency?.(existing, rememberedOpen); options.apply(project(opened), 'projection'); }
                 return { ok: true, workspaceRefId: existing.id };
             }
             if (await commit(request, signal) === 'conflict') continue; // Re-read rows and re-admit this intent at the same semantic owner.
-            if (rememberedOpen !== undefined) { await options.writeRecency?.(ref, rememberedOpen); options.apply(project(opened)); }
+            if (rememberedOpen !== undefined) { await options.writeRecency?.(ref, rememberedOpen); options.apply(project(opened), 'projection'); }
             if (intent.kind === 'migrate_label') { await options.retireLegacyLabel?.(intent.legacyKey, intent.label); return { ok: true, workspaceRefId: ref.id, migrated: true }; }
             return intent.kind === 'upsert' ? { ok: true, workspaceRefId: ref.id } : { ok: true };
         }
@@ -271,6 +271,6 @@ export function createProjectAccountRowsSync(options: Readonly<{
         refreshRecency: (reader?: typeof options.readRecency) => {
             assertCurrent();
             if (reader) readRecency = reader;
-            options.apply(project(opened));
+            options.apply(project(opened), 'projection');
         } };
 }

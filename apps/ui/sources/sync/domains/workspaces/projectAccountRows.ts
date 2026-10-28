@@ -2,7 +2,7 @@ import { useStoreWithEqualityFn } from 'zustand/traditional';
 import type { StoreApi } from 'zustand/vanilla';
 import type { WorkspaceRefV1 } from '@happier-dev/protocol/workspaces/workspaceRefV1';
 import type { WorkspaceSyncRelationshipV1 } from '@happier-dev/protocol';
-import type { ProjectAccountOrganizationV1, ProjectAccountRowKeyV1 } from '@happier-dev/protocol/projects/projectAccountRowsV1';
+import type { ProjectAccountAuthoringSessionV1, ProjectAccountOrganizationV1, ProjectAccountRowKeyV1 } from '@happier-dev/protocol/projects/projectAccountRowsV1';
 import { areServerAccountScopesEqual, type ServerAccountScope } from '@/sync/domains/scope/serverAccountScope';
 import { readRegisteredStorageState, subscribeRegisteredStorageState } from '@/sync/domains/state/storageStateReaderBridge';
 import { resolveWorkspaceRefById } from './workspaceRefs';
@@ -17,9 +17,13 @@ export type ProjectAccountRowsSnapshot = Readonly<{
     scope: ServerAccountScope;
     status: ProjectAccountRowsStatus;
     coverage: 'unknown' | 'partial' | 'complete';
+    /** When the rows were last read successfully; a failed refresh labels the retained rows with it. */
+    lastReadyAtMs?: number;
     workspaceRefs: readonly WorkspaceRefV1[];
     relationships: readonly WorkspaceSyncRelationshipV1[];
     organizations: readonly ProjectOrganizationRow[];
+    /** Server-owned display relationships; absence retains the older hydrated-Session fallback. */
+    authoringSessionsByPhysicalKey?: Readonly<Record<string, ProjectAccountAuthoringSessionV1>>;
     revisionsByPhysicalKey: Readonly<Record<string, number>>;
 }>;
 

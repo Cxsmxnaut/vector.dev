@@ -15,8 +15,8 @@ import { resolveWorkStatusTone } from '@/components/work/status/resolveWorkStatu
 import { readSessionWorkStatusFacts } from '@/components/work/status/sessionWorkStatusFacts';
 import {
     readRealmQualifiedMobileSurface,
-    resolveProjectMobileSurfaceStorageKey,
 } from '@/sync/domains/settings/mobileSurfacePersistence';
+import { resolveProjectMobileSurfaceStorageKeys } from '@/sync/domains/settings/mobileSurfacePersistence';
 import { buildWorkspaceCacheKey, normalizeWorkspaceRootPath } from '@/sync/domains/workspaces/workspaceScope';
 import type { ScmWorkingSnapshot } from '@/sync/domains/state/storageTypes';
 import type { LocalSettings } from '@/sync/domains/settings/localSettings';
@@ -24,11 +24,11 @@ import type { LocalSettings } from '@/sync/domains/settings/localSettings';
 import { projectsTreeCheckoutKey, type ProjectsTreeCheckoutFacts } from './projectsTreeRows';
 
 export type ProjectsTreeCheckoutFactsState = Pick<StorageState,
-    'sessions' | 'sessionListRowsByServerId' | 'sessionListRenderableDelta' | 'machines' | 'machineListByServerId' | 'profileScope' | 'getWorkspaceScmSnapshot'
+    'sessions' | 'sessionListRowsByServerId' | 'sessionListRenderableDelta' | 'machines' | 'machineListByServerId' | 'machineListStatusByServerId' | 'profileScope' | 'getWorkspaceScmSnapshot'
 > & Readonly<{ localSettings: Pick<LocalSettings, 'projectLastMobileSurfaceByWorkspaceRefId'> }>;
 
 export type ProjectsTreeCheckoutFactsSelector = {
-    (state: ProjectsTreeCheckoutFactsState, nowMs: number): ReadonlyMap<string, ProjectsTreeCheckoutFacts>;
+    (state: ProjectsTreeCheckoutFactsState, nowMs: number, scmChanged?: boolean): ReadonlyMap<string, ProjectsTreeCheckoutFacts>;
     getNextWakeAtMs(): number | null;
 };
 
@@ -108,11 +108,15 @@ export function createProjectsTreeCheckoutFactsSelector(refs: readonly Workspace
         affected.add(scopeKey);
     };
 
-    const select = (state: ProjectsTreeCheckoutFactsState, nowMs: number): ReadonlyMap<string, ProjectsTreeCheckoutFacts> => {
-        if (previousRevision === state.sessionListRenderableDelta.revision && previousNowMs === nowMs
+    const select = (state: ProjectsTreeCheckoutFactsState, nowMs: number, scmChanged = false): ReadonlyMap<string, ProjectsTreeCheckoutFacts> => {
+        const mobileSurfaceKeys = resolveProjectMobileSurfaceStorageKeys({
+            workspaceRefs: refs, activeScope: state.profileScope, activeServerId: state.profileScope?.serverId,
+        });
+        if (!scmChanged && previousRevision === state.sessionListRenderableDelta.revision && previousNowMs === nowMs
             && previousState?.sessionListRowsByServerId === state.sessionListRowsByServerId
             && previousState.sessions === state.sessions && previousState.machines === state.machines
             && previousState.machineListByServerId === state.machineListByServerId
+            && previousState.machineListStatusByServerId === state.machineListStatusByServerId
             && previousState.profileScope === state.profileScope
             && previousState.getWorkspaceScmSnapshot === state.getWorkspaceScmSnapshot
             && previousState.localSettings === state.localSettings) return previous;
@@ -121,8 +125,9 @@ export function createProjectsTreeCheckoutFactsSelector(refs: readonly Workspace
         const rowsChanged = previousState?.sessionListRowsByServerId !== state.sessionListRowsByServerId
             || previousState?.sessions !== state.sessions;
         const canApplyDelta = previousRevision !== null && delta.revision === previousRevision + 1;
-        const rebuild = previousState === null || previousState.machines !== state.machines
+        const rebuild = scmChanged || previousState === null || previousState.machines !== state.machines
             || previousState.machineListByServerId !== state.machineListByServerId
+            || previousState.machineListStatusByServerId !== state.machineListStatusByServerId
             || previousState.profileScope !== state.profileScope
             || previousState.getWorkspaceScmSnapshot !== state.getWorkspaceScmSnapshot
             || previousNowMs !== null && nowMs < previousNowMs
@@ -145,7 +150,7 @@ export function createProjectsTreeCheckoutFactsSelector(refs: readonly Workspace
         for (const [scope, wakeAt] of wakeAtByScope) if (wakeAt <= nowMs) affected.add(scope);
         const next = new Map<string, ProjectsTreeCheckoutFacts>();
         let unchanged = previous.size === refs.length;
-        for (const ref of refs) {
+        for (const [refIndex, ref] of refs.entries()) {
             const key = checkoutKey(ref);
             const scope = buildWorkspaceCacheKey(ref);
             const old = previous.get(key);
@@ -175,10 +180,7 @@ export function createProjectsTreeCheckoutFactsSelector(refs: readonly Workspace
             const workspaceSnapshot = state.getWorkspaceScmSnapshot(ref);
             const snapshot = !workspaceSnapshot || (memberSnapshot && memberSnapshot.fetchedAt > workspaceSnapshot.fetchedAt)
                 ? memberSnapshot : workspaceSnapshot;
-            const surfaceKey = resolveProjectMobileSurfaceStorageKey({
-                workspaceRefs: refs, workspaceRefId: ref.id, activeScope: state.profileScope,
-                activeServerId: state.profileScope?.serverId, targetServerId: ref.serverId,
-            });
+            const surfaceKey = mobileSurfaceKeys[refIndex];
             const facts: ProjectsTreeCheckoutFacts = {
                 ...(snapshot || affected.has(scope) ? readScmFacts(snapshot, ref.rootPath)
                     : { branch: old?.branch ?? null, isWorktree: old?.isWorktree ?? null }),
@@ -195,7 +197,7 @@ export function createProjectsTreeCheckoutFactsSelector(refs: readonly Workspace
         for (const wakeAt of wakeAtByScope.values()) nextWakeAtMs = Math.min(nextWakeAtMs ?? Infinity, wakeAt);
         previousState = { sessions: state.sessions, sessionListRowsByServerId: state.sessionListRowsByServerId,
             sessionListRenderableDelta: state.sessionListRenderableDelta, machines: state.machines,
-            machineListByServerId: state.machineListByServerId, profileScope: state.profileScope,
+            machineListByServerId: state.machineListByServerId, machineListStatusByServerId: state.machineListStatusByServerId, profileScope: state.profileScope,
             getWorkspaceScmSnapshot: state.getWorkspaceScmSnapshot, localSettings: state.localSettings };
         previousNowMs = nowMs;
         previousRevision = delta.revision;
