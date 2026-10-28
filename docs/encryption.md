@@ -1062,6 +1062,24 @@ E2EE content uses `project_account_row` (kind byte 34), with an opened
 the envelope purpose and persisted Account mode without opening ciphertext.
 Stored readers drop unknown fields recursively; mutation inputs remain strict.
 
+The accepted checkout row may also hold `authoringSession: {serverId, sessionId}`
+beside its private content envelope in the existing reserved KV value. This is
+server-visible non-content relationship metadata in both Account modes: no
+Session title, path, prompt or user text is copied into it. The original
+checkout's authenticated Account records it at the ordinary post-create
+authoring checkpoint after `work.authoringOriginV1` is confirmed, either from
+Session birth or the older-daemon private checkpoint. A Session launched
+on another Home retains that Home's qualified identity. The relationship grants
+no Session access and establishes no setup readiness.
+
+Only opted-in row reads disclose the relationship; ordinary structural writes
+and Account-mode conversion preserve it. Forget removes it with the checkout.
+Equal recording retries leave the row revision and change feed untouched.
+Scripts selects this id before Session hydration and reads that one Session
+through the existing qualified reader for its private title and time. Rows
+without the relationship retain hydrated owner-metadata discovery. This adds no
+database column, migration, content backfill, inventory scan or idle timer.
+
 The CLI retains its last accepted same-scope Project snapshot when a refresh
 fails transiently, while the refresh itself still returns the failure. Authentication,
 mode, envelope and schema failures withdraw that projection. Before initial loading
@@ -4294,11 +4312,26 @@ existing device-local draft supplement. The closed origin contains qualified
 destination facts, never a raw return href or private plugin launch input. Plugin selection retains
 its contribution and instance identity; the current registry admits the reopened surface. Ordinary New session origins are
 distinguished from setup authoring, including when opened from Scripts. Explicit Send carries
-that destination into `work.authoringOriginV1` through the same Session owner
-metadata tuple writer. Editing the launch Machine or folder preserves the
-original qualified Account, Home and workspace destination. Cold materialized
-Temporary computer recovery publishes the retained origin before retiring draft
-and creator custody; a failed publication keeps that recovery retryable. The field remains
+that destination into `work.authoringOriginV1`. When the selected daemon
+advertises the birth-origin capability, the existing private spawn request
+carries the admitted origin into the runner's initial owner metadata at
+`initializeBackendRunSession` → `getOrCreateSession`. The existing envelope
+builder seals it with Account-scoped material for E2EE Accounts and uses the
+explicit plain owner envelope for genuinely keyless Accounts. It never enters
+the recipient-safe shared metadata or server-visible Session creation hints.
+An exact owner read confirms birth persistence before recording the id-only
+checkout relationship; no browser origin PATCH competes with startup publishers.
+Older daemons retain the existing owner metadata tuple checkpoint. A negotiated
+birth handoff with unavailable or unequal origin fails with the typed
+`authoring_origin` phase instead of acquiring another writer.
+Editing the launch Machine or folder preserves the original qualified Account,
+Home and workspace destination. The existing device-local spawn-attempt custody
+retains the writer choice for deferred/recovered ordinary creation; it contains
+no new copy of the origin. Cross-Home creation and recovery bind Session and
+operation custody to the admitted destination Account while retaining draft
+and checkout ownership on the originating Account. Cold materialized Temporary computer recovery uses
+the explicit legacy checkpoint before retiring draft and creator custody; a
+failed publication keeps that recovery retryable. The field remains
 owner-private in both Account encryption modes and does not establish Project
 setup readiness.
 
