@@ -237,12 +237,13 @@ export function resolveHappierSeriesGeometry(series: readonly HappierSeries[], o
 /**
  * How exact values read a numeric coordinate. `formatCoordinate` is the caller's own reading of its x
  * (a time bucket in its calendar and unit, read as a date): a chart's coordinates are the caller's
- * encoding, so only the caller can say them in words.
+ * encoding, so only the caller can say them in words. `formatValue` is the caller's own reading of a value
+ * (its unit and display precision); without one a value reads with every meaningful digit.
  */
-export type HappierSeriesReadingOptions = Readonly<{ formatCoordinate?: (x: number) => string; locale?: string }>;
+export type HappierSeriesReadingOptions = Readonly<{ formatCoordinate?: (x: number) => string; formatValue?: (value: number) => string; locale?: string }>;
 
 /**
- * Never round the accessible numerical fact, even when the caller abbreviates visible ink: a label that
+ * Unless the caller gives its own `formatValue`, never round the accessible numerical fact, even when the caller abbreviates visible ink: a label that
  * shortens its coordinate ("Tue", "Noon") is followed by the exact one, in the caller's reading when it
  * gives one, so a timestamp reads as a date and never as an epoch number.
  */
@@ -254,7 +255,7 @@ export function describeHappierSeriesCoordinate(bucket: HappierSeriesBucket, opt
 }
 
 export function describeHappierSeriesBucket(bucket: HappierSeriesBucket, unknownLabel: string, options: HappierSeriesReadingOptions = {}): string {
-  return `${describeHappierSeriesCoordinate(bucket, options)}${bucket.annotation ? ` · ${bucket.annotation}` : ''}: ${bucket.values.map((entry) => `${entry.label} ${entry.value === null ? unknownLabel : formatHappierDataValue(entry.value, options.locale)}`).join(', ')}`;
+  return `${describeHappierSeriesCoordinate(bucket, options)}${bucket.annotation ? ` · ${bucket.annotation}` : ''}: ${bucket.values.map((entry) => `${entry.label} ${entry.value === null ? unknownLabel : options.formatValue ? options.formatValue(entry.value) : formatHappierDataValue(entry.value, options.locale)}`).join(', ')}`;
 }
 
 /**
