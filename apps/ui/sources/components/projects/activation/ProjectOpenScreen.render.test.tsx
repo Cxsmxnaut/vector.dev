@@ -26,7 +26,7 @@ vi.mock('@/sync/api/externalActionAccountTransport', async (importOriginal) => {
     return { ...real, executeOriginalAccountMachineAction: async (params: unknown) => {
         if (!projectOpenAccountActionBoundary.capture) return real.executeOriginalAccountMachineAction(params as never);
         projectOpenAccountActionBoundary.calls.push(params);
-        return { ok: true, result: { kind: 'refused', code: 'invalid_directory' } };
+        return { ok: true, result: { kind: 'refused', code: 'FEATURE_UNSUPPORTED' } };
     } };
 });
 
@@ -278,7 +278,7 @@ describe('Project Open rendered choices', () => {
         expect(screen.findByTestId('projects.open.destination')).toBeTruthy();
     });
 
-    it('submits the clone destination shown in the row through the real draft and projects.open Action path', async () => {
+    it('submits the shown clone destination and renders missing clone support through the real projects.open Action path', async () => {
         const draftId = '00000000-0000-4000-8000-000000000081';
         const { createHomeGovernanceHarness, installHomeGovernanceBoundaries } =
             await import('@/dev/testkit/harness/homeGovernanceHarness');
@@ -315,6 +315,12 @@ describe('Project Open rendered choices', () => {
                 machineId: 'machine',
                 materialization: { kind: 'clone', destinationParentPath: '/Users/tester/src', destinationDirectoryName: 'Hello-World' },
             },
+        });
+        const { AttentionBanner } = await import('@/components/ui/lists/AttentionBanner');
+        await vi.waitFor(() => {
+            const banner = screen.findAllByType(AttentionBanner).find(node => node.props.testID === 'projects.open.refused');
+            expect(banner?.props.title).toBe(t('projects.open.cloneUnsupported'));
+            expect(banner?.props.details).toEqual(['FEATURE_UNSUPPORTED']);
         });
     });
 
