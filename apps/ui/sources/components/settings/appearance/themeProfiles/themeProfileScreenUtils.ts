@@ -50,7 +50,7 @@ export const activateThemeProfileFromSettingsScreen = async (input: Readonly<{
     nextThemePreference?: ThemePreference;
     themeProfiles: ThemeProfilesLocalStateV1;
     setThemePreference?: (themePreference: ThemePreference) => void;
-    setThemeProfiles: (state: ThemeProfilesLocalStateV1) => ThemeProfileView | void;
+    setThemeProfiles: (state: ThemeProfilesLocalStateV1) => ThemeProfileView;
     forceAnimate?: boolean;
     reduceMotion?: boolean;
 }>): Promise<void> => {
@@ -67,7 +67,7 @@ export const activateThemeProfileFromSettingsScreen = async (input: Readonly<{
         saveLocalSettings: (settings: LocalSettings) => {
             const accepted = input.setThemeProfiles(settings.themeProfiles);
             input.setThemePreference?.(settings.themePreference);
-            return { ...settings, themeProfiles: accepted?.state ?? settings.themeProfiles };
+            return { ...settings, themeProfiles: accepted.state };
         },
     });
 };

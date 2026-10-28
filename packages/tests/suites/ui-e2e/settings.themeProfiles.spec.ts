@@ -183,6 +183,16 @@ test.describe('ui e2e: custom theme profiles', () => {
     await expectVisibleTestId(page, 'settings-theme-profiles-screen');
     await expect(page.locator('[data-testid^="settings-theme-profile-custom-theme_"]:visible')).toHaveCount(2, { timeout: 60_000 });
 
+    // Appearance and the library screen share the same selection commit owner.
+    await gotoDomContentLoadedWithRetries(page, `${uiBaseUrl}/settings/appearance?happier_hmr=0`, 180_000);
+    await (await expectVisibleTestId(page, 'settings-theme-selector-trigger')).click();
+    await (await expectVisibleTestId(page, 'dropdown-option-light')).click();
+    await (await expectVisibleTestId(page, 'settings-theme-selector-trigger')).click();
+    await (await expectVisibleTestId(page, `dropdown-option-${profileId}`)).click();
+    await openThemeProfiles({ page, uiBaseUrl });
+    await (await expectVisibleTestId(page, `settings-theme-edit-${profileId}`)).click();
+    await expectVisibleTestId(page, 'settings-theme-profile-deactivate');
+
     // A second browser gets only this fixture account's credentials/server config.
     // Exclude every settings cache and local preference so the library must arrive over sync.
     const originalState = await context.storageState();

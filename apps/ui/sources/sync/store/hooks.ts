@@ -2443,7 +2443,7 @@ export function useThemeProfiles(): ThemeProfilesLocalStateV1 {
   return useThemeProfileView().state;
 }
 
-export function useThemeProfilesMutable(): [ThemeProfilesLocalStateV1, (value: ThemeProfilesLocalStateV1) => ThemeProfileView | void, ThemeProfileView?] {
+export function useThemeProfilesMutable(): [ThemeProfilesLocalStateV1, (value: ThemeProfilesLocalStateV1) => ThemeProfileView, ThemeProfileView] {
   const before = useThemeProfileView();
   return [before.state, React.useCallback((value: ThemeProfilesLocalStateV1) => applyThemeProfilesFromUi(value, before), [before]), before];
 }

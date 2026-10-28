@@ -284,7 +284,7 @@ export const ThemeProfileEditorScreen = React.memo(function ThemeProfileEditorSc
             setThemePreference,
             setThemeProfiles: next => {
                 const accepted = editSession.setThemeProfiles(next);
-                if (accepted) commit.view = accepted;
+                commit.view = accepted;
                 return accepted;
             },
             forceAnimate: true,
@@ -310,7 +310,7 @@ export const ThemeProfileEditorScreen = React.memo(function ThemeProfileEditorSc
             committedRef.current = true;
             applyThemeRuntimeSelection({
                 themePreference,
-                themeProfiles: accepted?.state ?? nextThemeProfiles,
+                themeProfiles: accepted.state,
                 systemTheme: Appearance.getColorScheme() === 'dark' ? 'dark' : 'light',
             });
         }
@@ -321,7 +321,6 @@ export const ThemeProfileEditorScreen = React.memo(function ThemeProfileEditorSc
         if (!draft || readonly) return themeProfiles;
         const editSession = editSessionRef.current;
         const requested = setActiveThemeProfileForMode(upsertThemeProfile(editSession.themeProfiles, draft), assetAppearance, draft.id);
-        if (!editSession.themeProfileView || !themeProfileView) return requested;
         try {
             return rebaseThemeProfileUiChange(editSession.themeProfileView, requested, themeProfileView);
         } catch {
@@ -346,7 +345,7 @@ export const ThemeProfileEditorScreen = React.memo(function ThemeProfileEditorSc
         committedRef.current = true;
         applyThemeRuntimeSelection({
             themePreference,
-            themeProfiles: accepted?.state ?? nextThemeProfiles,
+            themeProfiles: accepted.state,
             systemTheme: Appearance.getColorScheme() === 'dark' ? 'dark' : 'light',
         });
         router.back();

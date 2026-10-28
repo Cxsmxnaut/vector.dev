@@ -1,8 +1,7 @@
 import { useThemeProfilesMutable } from '@/sync/domains/state/storage';
 import { createThemeProfileNavigationParams, type ThemeProfileView } from '@/sync/domains/settings/themeProfiles';
 import * as React from 'react';
-import { Appearance, Platform, View } from 'react-native';
-import { setStatusBarStyle } from 'expo-status-bar';
+import { View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useUnistyles } from 'react-native-unistyles';
 
@@ -12,17 +11,15 @@ import { ItemList } from '@/components/ui/lists/ItemList';
 import { ItemRowActions } from '@/components/ui/lists/ItemRowActions';
 import type { ItemAction } from '@/components/ui/lists/itemActions';
 import { DropdownMenu, type DropdownMenuItem } from '@/components/ui/forms/dropdown/DropdownMenu';
-import { resolveStatusBarStyleForThemePreference, type ThemePreference } from '@/components/ui/layout/statusBarStyle';
-import { runThemePreferenceChange } from '@/components/settings/appearance/themePreferenceTransition';
+import { useApplyThemeSelection } from '@/components/settings/appearance/useApplyThemeSelection';
 import { useReducedMotionPreference } from '@/hooks/ui/useReducedMotionPreference';
 import { Modal } from '@/modal';
 import { useLocalSettingMutable } from '@/sync/domains/state/storage';
 import { t } from '@/text';
 import { createThemeProfileDraft } from '@/theme/profiles/createThemeProfileDraft';
 import { THEME_PROFILE_MAX_PROFILES } from '@/theme/profiles/themeProfileConstants';
-import { applyThemeRuntimeSelection } from '@/theme/profiles/themeProfileRuntime';
 import { isThemeProfileActive, setActiveThemeProfileForMode } from '@/theme/profiles/themeProfilePersistence';
-import type { ThemeProfileMode, ThemeProfilesLocalStateV1, ThemeProfileV1 } from '@/theme/profiles/themeProfileTypes';
+import type { ThemeProfileMode, ThemeProfileV1 } from '@/theme/profiles/themeProfileTypes';
 import { buildThemePresetSourceOptions, type ThemePresetSourceOption } from './themeProfilePresetOptions';
 import { Icon } from '@/components/ui/icons/Icon';
 import {
@@ -59,27 +56,7 @@ export const ThemeProfilesSettingsScreen = React.memo(function ThemeProfilesSett
         router.push(profileEditorRoute('new'));
     }, [router]);
 
-    const applyThemeSelection = React.useCallback((nextThemePreference: ThemePreference, nextThemeProfiles: ThemeProfilesLocalStateV1) => {
-        const systemTheme = Appearance.getColorScheme() === 'dark' ? 'dark' : 'light';
-        void runThemePreferenceChange({
-            currentPreference: themePreference,
-            nextPreference: nextThemePreference,
-            platform: Platform.OS,
-            reduceMotion,
-            forceAnimate: true,
-            systemTheme,
-            mutation: () => {
-                const accepted = setThemeProfiles(nextThemeProfiles);
-                setThemePreference(nextThemePreference);
-                applyThemeRuntimeSelection({
-                    themePreference: nextThemePreference,
-                    themeProfiles: accepted?.state ?? nextThemeProfiles,
-                    systemTheme,
-                });
-                setStatusBarStyle(resolveStatusBarStyleForThemePreference(nextThemePreference, systemTheme), true);
-            },
-        });
-    }, [reduceMotion, setThemePreference, setThemeProfiles, themePreference]);
+    const applyThemeSelection = useApplyThemeSelection({ themePreference, setThemePreference, setThemeProfiles, reduceMotion });
 
     const duplicateTheme = React.useCallback((option: ThemePresetSourceOption) => {
         if (profileLimitReached) return;
