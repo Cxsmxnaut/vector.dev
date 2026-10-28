@@ -16,7 +16,7 @@ import { manifest as authoredAccountManifest, sourceProviderManifest } from '../
 
 /** Real public-author compiler and release producers, with only Home HTTP storage replaced. */
 export async function registerAuthoredAccountActionRelease(app: FastifyInstance, accountId: string,
-    options: Readonly<{ includeAccountProvider?: boolean }> = {}) {
+    options: Readonly<{ includeAccountProvider?: boolean; includeBundledPluginIds?: readonly string[] }> = {}) {
     const projectRoot = resolve(import.meta.dirname, '../../../../../packages/plugin-sdk/fixtures/account-actions');
     const packages = await readWorkspacePackages(resolve(import.meta.dirname, '../../../../..'));
     const packageJson = JSON.parse(await readFile(join(projectRoot, 'package.json'), 'utf8')) as {
@@ -65,8 +65,9 @@ export async function registerAuthoredAccountActionRelease(app: FastifyInstance,
             artifactId: slot.artifactId, tier: slot.tier, platform: slot.platform,
             artifactDigest: slot.artifactDigest, hostUiApiRange: slot.hostUiApiRange, accountArtifactId: fixture.artifactId })), packageAssets: [] });
     app.post(PluginAvailabilityActionHttpPathsV1['account.plugins.availability.intents.list'], async () => ({
-        availabilityCursor: 1, pluginIds: fixtures.map(fixture => fixture.pluginId),
-        intentReads: fixtures.map(fixture => ({ pluginId: fixture.pluginId, response: response(fixture) })), failedPluginIds: [] }));
+        availabilityCursor: 1, pluginIds: [...fixtures.map(fixture => fixture.pluginId), ...(options.includeBundledPluginIds ?? [])],
+        intentReads: [...fixtures.map(fixture => ({ pluginId: fixture.pluginId, response: response(fixture) })),
+            ...(options.includeBundledPluginIds ?? []).map(pluginId => ({ pluginId, response: response(undefined) }))], failedPluginIds: [] }));
     app.post(PluginAvailabilityActionHttpPathsV1['account.plugins.availability.intent.read'], async request => {
         const { pluginId } = PluginAvailabilityIntentReadActionInputV1Schema.parse(request.body);
         return response(fixtures.find(fixture => fixture.pluginId === pluginId));

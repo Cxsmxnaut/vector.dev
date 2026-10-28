@@ -90,14 +90,8 @@ import {
     createStableDeclaredPluginSecretsHost,
 } from '../../context/secrets';
 import type { PluginSecretDeclaration } from '../../context/declaredPluginSecrets';
-import {
-    createAccountSettingsBackedSettingsRecordStore,
-    createPluginStorageBackedSettingsRecordStore,
-    createRoutedPluginSettingsRecordStore,
-    createStablePluginSettingsHost,
-    type PluginAccountSettingsRecordAdapter,
-} from './settings';
-import { createAccountPluginSettingsRecordStorage } from '../../context/accountPluginSettingsRecordStorage';
+import type { PluginAccountSettingsRecordAdapter } from './settings';
+import { createProductionPluginSettingsHostFactory } from './settingsHost';
 import {
     createStablePluginConnectedAccountsHost,
     type StablePluginConnectedAccountsOwner,
@@ -393,55 +387,16 @@ export function createProductionPluginInvocationServiceOwners(params?: Readonly<
         activePluginIds: params?.activePluginIds ?? new Set<string>(),
     });
     const accountCredentialAuthority = params?.accountCredentialAuthority;
-    const accountSettingsRecordAdapter = accountCredentialAuthority
-        ? Object.freeze({
-                isAvailable: () => false,
-                async bindOperation() {
-                    return Object.freeze({
-                        async readRecord() {
-                            return Object.freeze({ status: 'unavailable' as const });
-                        },
-                        async writeRecord() {
-                            return Object.freeze({ status: 'unavailable' as const });
-                        },
-                    });
-                },
-                watchRecord() {
-                    return () => {};
-                },
-            })
-        : params?.accountSettingsRecordAdapter
-            ?? createAccountPluginSettingsRecordStorage();
     const storagePaths = params?.storagePaths;
-    const createSettingsHost = (
-        declarations: readonly Readonly<{
-            pluginId: string;
-            contribution: PluginSettingsContributionV2;
-        }>[],
-    ) => createStablePluginSettingsHost({
-            declarations,
-            ...(params?.onPluginSettingsUnavailable
-                ? { onPluginSettingsUnavailable: params.onPluginSettingsUnavailable }
-                : {}),
-            recordStore: createRoutedPluginSettingsRecordStore([
-                ...(storagePaths
-                    ? [createPluginStorageBackedSettingsRecordStore({
-                        storageForPlugin(pluginId) {
-                            return createPluginStorageOwner({
-                                pluginId,
-                                paths: storagePaths,
-                            }).daemon;
-                        },
-                    })]
-                    : []),
-                createAccountSettingsBackedSettingsRecordStore(accountSettingsRecordAdapter),
-            ]),
-            broker,
-        });
+    const createSettingsHost = createProductionPluginSettingsHostFactory({
+        accountScoped: !!accountCredentialAuthority,
+        ...(params?.accountSettingsRecordAdapter ? { accountSettingsRecordAdapter: params.accountSettingsRecordAdapter } : {}),
+        ...(storagePaths ? { storagePaths } : {}),
+        ...(params?.onPluginSettingsUnavailable ? { onPluginSettingsUnavailable: params.onPluginSettingsUnavailable } : {}),
+        broker,
+    });
     const settingsHost = params?.settingsDeclarations
-        ? createSettingsHost(params.settingsDeclarations.filter((entry) => (
-            !accountCredentialAuthority || entry.contribution.scope !== 'account'
-        )))
+        ? createSettingsHost(params.settingsDeclarations)
         : null;
     const accountSecretCustody = createAccountPluginSecretCustodyRouter(
         accountCredentialAuthority

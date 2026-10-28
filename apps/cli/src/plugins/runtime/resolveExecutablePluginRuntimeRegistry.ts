@@ -195,6 +195,7 @@ import {
     type ManagedProviderRuntimeInvocationServices,
 } from './invocation/services/production';
 import { readPluginSettingsValuesWithDefaults } from './invocation/services/settings';
+import { createAccountPluginSettingsRecordStorage } from './context/accountPluginSettingsRecordStorage';
 import type {
     PluginAccountSettingsRecordAdapter,
 } from './invocation/services/settings';
@@ -4532,6 +4533,14 @@ export async function resolveExecutablePluginRuntimeRegistry(
             // release/Account retirement is enforced by the captured binding.
             subscribeToCatalogChanges: () => () => {},
         }).bind(binding); } } : undefined;
+    const accountExecution = params?.accountExecution;
+    const accountSettingsRecordAdapter = params?.accountSettingsRecordAdapter
+        ?? (accountExecution ? createAccountPluginSettingsRecordStorage({
+            readCredentials: readSessionCredentials,
+            isCurrentAccount: async () => await accountExecution.isCredentialCurrent?.() !== false
+                && accountExecution.isCurrent(),
+            resolveBaseUrl: () => accountExecution.serverUrl,
+        }) : undefined);
     invocationServiceOwners = createProductionPluginInvocationServiceOwners({
         ...(!params?.accountExecution ? {
             demandBackgroundService: (target) => activatedRegistry.demandBackgroundService(target),
@@ -4539,8 +4548,8 @@ export async function resolveExecutablePluginRuntimeRegistry(
         ...(params?.stableEventsBroker
             ? { eventsBroker: params.stableEventsBroker }
             : {}),
-        ...(params?.accountSettingsRecordAdapter
-            ? { accountSettingsRecordAdapter: params.accountSettingsRecordAdapter }
+        ...(accountSettingsRecordAdapter
+            ? { accountSettingsRecordAdapter }
             : {}),
         ...(accountCredentialAuthority ? { accountCredentialAuthority } : {}),
         ...(pluginActionExecutor ? { actionExecutor: pluginActionExecutor } : {}),
