@@ -162,6 +162,17 @@ class ProjectManager {
     private projectKeyToId: Map<string, string> = new Map();
     private sessionToProject: Map<string, string> = new Map();
     private nextProjectId = 1;
+    private readonly scmSnapshotListeners = new Set<() => void>();
+
+    /** Snapshot demand is independent of unrelated root-store publications. */
+    subscribeScmSnapshots(listener: () => void): () => void {
+        this.scmSnapshotListeners.add(listener);
+        return () => { this.scmSnapshotListeners.delete(listener); };
+    }
+
+    private publishScmSnapshotChange(): void {
+        for (const listener of [...this.scmSnapshotListeners]) listener();
+    }
 
     /**
      * Generate a unique key string from machine ID and path
@@ -337,6 +348,7 @@ class ProjectManager {
         for (const sessionId of project.sessionIds) {
             this.sessionToProject.delete(sessionId);
         }
+        if (project.scmSnapshot) this.publishScmSnapshotChange();
     }
 
     /**
@@ -669,6 +681,7 @@ class ProjectManager {
         project.scmSnapshot = scmSnapshot;
         project.lastScmStatusUpdate = Date.now();
         project.updatedAt = Date.now();
+        this.publishScmSnapshotChange();
         return true;
     }
 
@@ -702,10 +715,12 @@ class ProjectManager {
     clearProjectScmStatus(projectId: string): void {
         const project = this.projects.get(projectId);
         if (project) {
+            const hadSnapshot = project.scmSnapshot != null;
             project.scmStatus = null;
             project.scmSnapshot = null;
             project.lastScmStatusUpdate = Date.now();
             project.updatedAt = Date.now();
+            if (hadSnapshot) this.publishScmSnapshotChange();
         }
     }
 
@@ -977,10 +992,12 @@ class ProjectManager {
      * Clear all projects (useful for testing or resetting state)
      */
     clear(): void {
+        const hadSnapshots = [...this.projects.values()].some(project => project.scmSnapshot != null);
         this.projects.clear();
         this.projectKeyToId.clear();
         this.sessionToProject.clear();
         this.nextProjectId = 1;
+        if (hadSnapshots) this.publishScmSnapshotChange();
     }
 
     /**

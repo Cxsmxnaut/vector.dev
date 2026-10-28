@@ -416,3 +416,26 @@ describe('Projects model Action admission', () => {
         await hook.unmount();
     });
 });
+
+describe('Projects model failed census refresh', () => {
+    it('keeps a complete cached census and names the failed refresh until a successful read clears it', async () => {
+        const machine = createMachineFixture({ id: 'machine', activeAt: Date.now() });
+        storage.setState({ machines: { machine }, machineListByServerId: { [serverId]: [machine] } });
+        const hook = await renderHook(() => useProjectsListModel());
+        expect(hook.getCurrent().treeProjects).toHaveLength(1);
+        expect(hook.getCurrent().staleRows).toBeNull();
+        const scope = { serverId, accountId: 'account-a' };
+
+        await act(async () => storage.getState().setProjectAccountRowsStatusForScope(scope, 'error'));
+        // The cached rows stay, authorized by nothing new, and the model says they may be stale since the last success.
+        expect(hook.getCurrent().treeProjects).toHaveLength(1);
+        expect(hook.getCurrent().rowsUnconfirmed).toBeNull();
+        expect(hook.getCurrent().staleRows).toEqual({ asOf: expect.any(Number) });
+
+        const { createDefaultActionExecutor } = await import('@/sync/ops/actions/defaultActionExecutor');
+        await act(async () => { expect(await createDefaultActionExecutor().execute('projects.list', { serverId })).toMatchObject({ ok: true }); });
+        expect(hook.getCurrent().staleRows).toBeNull();
+        expect(hook.getCurrent().treeProjects).toHaveLength(1);
+        await hook.unmount();
+    });
+});

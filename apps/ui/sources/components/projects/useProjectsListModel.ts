@@ -26,7 +26,7 @@ import { ProjectVisibilitySetOutputV1Schema } from '@happier-dev/protocol/projec
 import { createFrontDoorActionExecute } from '@/sync/ops/actions/frontDoorRuntimeActionExecutor';
 import { areServerProfileIdentifiersEquivalent } from '@/sync/domains/server/serverProfiles';
 import { useProjectsSourcesComposition } from './useProjectsSourcesComposition';
-import { buildProjectsTreeHiddenItems, buildProjectsTreeProjects } from './projectsTreeRows';
+import { buildProjectsTreeHiddenItems, buildProjectsTreeProjects, type ProjectsTreeProject } from './projectsTreeRows';
 import { resolveMachineDisplayNames } from '@/utils/sessions/machineDisplayNames';
 import { useMachinePresenceSummaries } from '@/sync/domains/machines/reachability/useMachinePresenceSummary';
 import { resolveWorkspaceRefByAddress } from '@/sync/domains/workspaces/workspaceRefs';
@@ -110,9 +110,11 @@ export function useProjectsListModel() {
         ...allMachines,
         ...[...new Set(treeRefs.map(ref => ref.machineId))].filter(id => !machinesById.has(id)).map(id => ({ id, absence: 'unlisted' as const })),
     ]), [allMachines, machinesById, treeRefs]);
+    const previousTreeProjects = React.useRef<{ visible: ProjectsTreeProject[]; hidden: ProjectsTreeProject[] }>({ visible: [], hidden: [] });
     const treeProjection = React.useMemo(() => {
         const presenceById = new Map(allMachines.map((machine, index) => [machine.id, machinePresence[index]] as const));
-        const project = (projectGroups: typeof groups.projectGroups) => buildProjectsTreeProjects({
+        const project = (projectGroups: typeof groups.projectGroups, previousProjects: ProjectsTreeProject[]) => buildProjectsTreeProjects({
+            previousProjects,
             groups: projectGroups, projectName: resolveWorkspaceRefDisplayName,
             machine: machineId => {
                 const machine = machinesById.get(machineId);
@@ -124,9 +126,14 @@ export function useProjectsListModel() {
         });
         // Rows are named after their Machines: until the Machine inventory has loaded, any Machine would read as
         // "unlisted" and every path as absolute, so the tree waits (the column shows its quiet rows) instead of guessing.
-        if (!machinesReady) return { treeProjects: [], hiddenTreeProjects: [], hiddenItems: [] };
-        const hiddenTreeProjects = project(groups.hiddenProjectGroups);
-        return { treeProjects: project(groups.projectGroups), hiddenTreeProjects, hiddenItems: buildProjectsTreeHiddenItems(hiddenTreeProjects) };
+        if (!machinesReady) {
+            previousTreeProjects.current = { visible: [], hidden: [] };
+            return { treeProjects: [], hiddenTreeProjects: [], hiddenItems: [] };
+        }
+        const hiddenTreeProjects = project(groups.hiddenProjectGroups, previousTreeProjects.current.hidden);
+        const treeProjects = project(groups.projectGroups, previousTreeProjects.current.visible);
+        previousTreeProjects.current = { visible: treeProjects, hidden: hiddenTreeProjects };
+        return { treeProjects, hiddenTreeProjects, hiddenItems: buildProjectsTreeHiddenItems(hiddenTreeProjects) };
     }, [composition.sources, composition.teamName, groups.hiddenProjectGroups, groups.projectGroups, machineNames, machinesById, machinesReady, allMachines, machinePresence, accountScope]);
     const newSessionHere = React.useCallback(async (ref: WorkspaceRefV1): Promise<ActionExecuteResult> => {
         const lifetime = captureActiveServerAccountScopeLifetime();
@@ -356,6 +363,12 @@ export function useProjectsListModel() {
             // Known rows still wait for the Machines that name them (quiet rows, never "unlisted").
             : hasAnyProjects && !machinesReady ? { kind: 'unconfirmed', status: 'loading' } : null
     ), [censusComplete, censusStatus, hasAnyProjects, machinesReady]);
+    // A refresh that failed over rows already held: they stay, labeled as of the last success, with Retry. (With none
+    // held, or Machines still loading, `rowsUnconfirmed` already says so.) Rows are never authorization to mutate.
+    const lastReadyAtMs = census?.lastReadyAtMs ?? null;
+    const staleRows = React.useMemo((): Readonly<{ asOf: number | null }> | null => (
+        hasAnyProjects && !rowsUnconfirmed && censusStatus === 'error' ? { asOf: lastReadyAtMs } : null
+    ), [censusStatus, hasAnyProjects, lastReadyAtMs, rowsUnconfirmed]);
     const projectCount = groups.projectGroups.length;
 
     return {
@@ -375,6 +388,7 @@ export function useProjectsListModel() {
         groups,
         hasAnyProjects,
         rowsUnconfirmed,
+        staleRows,
         projectCount,
         allMachines,
         addFirstMachines,

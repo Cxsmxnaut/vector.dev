@@ -301,7 +301,7 @@ describe('Work and Coach widget bodies', () => {
       transport: { list: async () => ({ status: 'listed', coverage: 'complete', rows: [{ key: rowKey, revision: 1, content },
         { key: opaqueKey, revision: 1, content: opaqueContent }, { key: otherOpaqueKey, revision: 1, content: otherOpaqueContent }] }),
         mutate: async () => { throw new Error('Label read must not mutate Project rows'); } },
-      apply: snapshot => storage.getState().applyProjectAccountRowsForScope(scope, snapshot) });
+      apply: (...args) => storage.getState().applyProjectAccountRowsForScope(scope, ...args) });
     try {
       storage.setState({ profileScope: scope });
       storage.getState().activateProjectAccountRowsScope(scope);
