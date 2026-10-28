@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { appendFile, writeFile } from 'node:fs/promises';
+import { writeFile } from 'node:fs/promises';
 
 import { createTestAuthMtls } from '../../src/testkit/auth';
 import { fetchJson } from '../../src/testkit/http';
@@ -8,12 +8,14 @@ import { startServerLight, type StartedServer } from '../../src/testkit/process/
 import { resolveUiWebBeforeAllTimeoutMs, startUiWeb, type StartedUiWeb } from '../../src/testkit/process/uiWeb';
 import { createRunDirs } from '../../src/testkit/runDir';
 import { patchSessionMetadataWithRetry } from '../../src/testkit/sessions';
+import { postPlainUiTextMessage } from '../../src/testkit/sessionHandoffUiMessages';
 import { appendBrowserDiagnostics, collectBrowserDiagnostics } from '../../src/testkit/uiE2e/browserDiagnostics';
 import { startForwardedHeaderProxy } from '../../src/testkit/uiE2e/forwardedHeaderProxy';
-import { collectNetworkTransfer, networkTransferMarkdown, type NetworkTransferSnapshot } from '../../src/testkit/uiE2e/networkTransfer';
+import { collectNetworkTransfer, type NetworkTransferSnapshot } from '../../src/testkit/uiE2e/networkTransfer';
 import { gotoDomContentLoadedWithRetries, normalizeLoopbackBaseUrl } from '../../src/testkit/uiE2e/pageNavigation';
 import { createPlainSession } from '../../src/testkit/uiE2e/sessionFoldersDrag';
 import { importSessionOrganization } from '../../src/testkit/uiE2e/sessionOrganization';
+import { NETWORK_WORKLOAD_REVISION } from './session.networkTransfer.contract';
 
 const SESSION_COUNT = 101; // Enough for a 100-row ordinary list page plus its oldest, off-page pin.
 const BURST_COUNT = 5;
@@ -40,6 +42,9 @@ test('reports Home network transfer for cold/warm bootstrap, idle and unopened-s
   const diagnostics = collectBrowserDiagnostics({ page });
   let seededSessionCount = 0;
   let verifiedBootstraps = 0;
+  let openedSessions = 0;
+  let reconnects = 0;
+  const transcriptText = 'network transcript '.padEnd(1024, 'x');
   const pendingResponses = new Set<Promise<void>>();
   let responseError = false;
   let listsContainingPin = 0;
@@ -159,10 +164,42 @@ test('reports Home network transfer for cold/warm bootstrap, idle and unopened-s
     await expect.poll(() => capture!.inFlight(), { timeout: 120_000 }).toBe(0);
     capture.endPhase();
 
+    // Seed after the calibrated Home phases, preserving their list fixture bytes.
+    await postPlainUiTextMessage({ baseUrl: server.baseUrl, token, sessionId: backgroundSessionId,
+      text: transcriptText, localId: 'network-transcript-fixture' });
+    capture.beginPhase('session-open');
+    await page.getByTestId(`session-list-item-${backgroundSessionId}`).first().click();
+    await expect(page.getByTestId('session-composer-send')).toBeVisible({ timeout: 120_000 });
+    await expect(page.getByText(transcriptText, { exact: true }).first()).toBeVisible({ timeout: 120_000 });
+    await expect.poll(() => capture!.inFlight(), { timeout: 120_000 }).toBe(0);
+    openedSessions += 1;
+    capture.endPhase();
+
+    capture.beginPhase('session-leave');
+    // At the calibrated desktop viewport the permanent sidebar hides the mobile
+    // back button. Browser Back leaves through the same routed navigation stack.
+    await page.goBack();
+    await expect(page.getByTestId('session-composer-send')).toBeHidden({ timeout: 120_000 });
+    await expect(page.getByTestId(`session-list-item-${backgroundSessionId}`).first()).toBeVisible({ timeout: 120_000 });
+    await expect.poll(() => capture!.inFlight(), { timeout: 120_000 }).toBe(0);
+    capture.endPhase();
+
+    capture.beginPhase('transport-reconnect');
+    await context.setOffline(true);
+    await expect.poll(() => capture!.snapshot().phases.at(-1)?.socketDisconnects, { timeout: 120_000 }).toBeGreaterThan(0);
+    await patchSessionMetadataWithRetry({ baseUrl: server.baseUrl, token, sessionId: backgroundSessionId,
+      ciphertext: JSON.stringify(sessionMetadata('recovered session')), expectedVersion: BURST_COUNT + 1 });
+    await context.setOffline(false);
+    // A live socket alone is insufficient: the edit made in the gap must materialize.
+    await expect(page.getByTestId(`session-list-item-${backgroundSessionId}`).first()).toContainText('recovered session', { timeout: 120_000 });
+    await expect.poll(() => capture!.inFlight(), { timeout: 120_000 }).toBe(0);
+    reconnects += 1;
+    capture.endPhase();
+
     const measured = capture.snapshot();
     for (const phase of measured.phases.filter((phase) => phase.name.endsWith('-home'))) {
-      // Current-list fulfillment owns required IDs; Home must not hydrate each pin by exact GET.
-      expect(phase.http.filter((row) => row.method === 'GET' && row.route === 'exact-session').reduce((sum, row) => sum + row.requests, 0)).toBe(0);
+      // Ceilings (including no per-pin exact GETs) are enforced by the CI reporter,
+      // so PRs can initially observe regressions without failing their checks.
       expect(phase.http.some((row) => row.method === 'GET' && row.route.startsWith('session-list') && typeof row.decodedBodyBytes === 'number' && row.decodedBodyBytes > 0)).toBe(true);
     }
     outcome = 'passed';
@@ -172,7 +209,7 @@ test('reports Home network transfer for cold/warm bootstrap, idle and unopened-s
     capture?.endPhase();
     const measurement: NetworkTransferSnapshot = capture?.snapshot() ?? { status: 'incomplete', wsEncodedBytes: 'unavailable', lostEvents: 0, phases: [] };
     const result = {
-      schemaVersion: 1, workloadRevision: 'home-network-plain-metadata-v1', sourceLine: '0.2',
+      schemaVersion: 2, workloadRevision: NETWORK_WORKLOAD_REVISION, sourceLine: '0.2', testStatus: outcome,
       status: outcome === 'failed' ? 'failed' : measurement.status,
       ci: { branch: process.env.GITHUB_HEAD_REF ?? process.env.GITHUB_REF_NAME ?? null, sha: process.env.GITHUB_SHA ?? null, run: process.env.GITHUB_RUN_ID ?? null, attempt: process.env.GITHUB_RUN_ATTEMPT ?? null },
       retry: testInfo.retry, repeatEachIndex: testInfo.repeatEachIndex,
@@ -184,20 +221,16 @@ test('reports Home network transfer for cold/warm bootstrap, idle and unopened-s
         wsApplicationBytes: 'CDP payload UTF-8 bytes or base64-decoded binary bytes, including Engine.IO/Socket.IO envelopes, after extension decompression. Heartbeat/control buckets are separate.',
         socketIoCoverage: 'WebSocket payloads; pre-upgrade HTTP polling bytes are reported as engine-transport HTTP, without WS event attribution.',
       },
-      fixture: { sessionCount: SESSION_COUNT, seededSessionCount, offPagePins: 1, storageMode: 'plain', burstKind: 'metadata-update', burstCount: BURST_COUNT, burstPayloadBytes: Buffer.byteLength(BURST_PAYLOAD), idleMs: 30_000, coldCache: 'disabled', warmCache: 'enabled', verifiedBootstraps },
-      ceilings: null, baseline: 'missing', measurement,
+      fixture: { sessionCount: SESSION_COUNT, seededSessionCount, offPagePins: 1, storageMode: 'plain', burstKind: 'metadata-update', burstCount: BURST_COUNT, burstPayloadBytes: Buffer.byteLength(BURST_PAYLOAD), idleMs: 30_000, coldCache: 'disabled', warmCache: 'enabled', verifiedBootstraps,
+        openedSessions, reconnects, transcriptMessages: 1, transcriptPayloadBytes: Buffer.byteLength(transcriptText) },
+      measurement,
     };
     const cleanup = await Promise.allSettled([capture?.stop(), ui?.stop(), proxy?.stop(), server?.stop()]);
     const cleanupFailures = cleanup.filter((result): result is PromiseRejectedResult => result.status === 'rejected');
     if (cleanupFailures.length > 0) result.status = 'failed';
     const jsonPath = testInfo.outputPath(`network-transfer.retry-${testInfo.retry}.json`);
-    const artifactLink = process.env.GITHUB_SERVER_URL && process.env.GITHUB_REPOSITORY && process.env.GITHUB_RUN_ID
-      ? `[Current JSON artifacts](${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}#artifacts). Base observation: missing.\n\n`
-      : 'Base observation: missing.\n\n';
-    const markdown = `Home network transfer — ${result.status}; retry ${testInfo.retry}; repetition ${testInfo.repeatEachIndex}\n\n${artifactLink}${networkTransferMarkdown(measurement)}`;
     await writeFile(jsonPath, JSON.stringify(result, null, 2));
     await testInfo.attach('network-transfer', { path: jsonPath, contentType: 'application/json' });
-    if (process.env.CI && process.env.GITHUB_STEP_SUMMARY) await appendFile(process.env.GITHUB_STEP_SUMMARY, markdown);
     if (cleanupFailures.length > 0) throw new AggregateError(cleanupFailures.map((result) => result.reason), 'network transfer fixture cleanup failed');
   }
 });

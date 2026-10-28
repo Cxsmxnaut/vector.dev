@@ -17,6 +17,20 @@ async function fixture() {
 }
 
 describe('network transfer capture', () => {
+  it('keeps between-phase fixture traffic out of the completed phase while retaining its late responses', async () => {
+    const { source, capture } = await fixture();
+    capture.beginPhase('burst');
+    source.emit('Network.requestWillBeSent', { requestId: 'late', request: { url: 'http://api.test/v2/sessions', method: 'GET' } });
+    capture.endPhase();
+    source.emit('Network.loadingFinished', { requestId: 'late', encodedDataLength: 20 });
+    source.emit('Network.requestWillBeSent', { requestId: 'setup', request: { url: 'http://api.test/v2/sessions', method: 'GET' } });
+    source.emit('Network.webSocketFrameReceived', { requestId: 'socket', response: { opcode: 1, payloadData: '42["update",{"body":{"t":"new-message"}}]' } });
+    const phase = capture.snapshot().phases[0];
+    expect(phase.http[0]).toMatchObject({ requests: 1, lateResponses: 1 });
+    expect(phase.webSocket).toEqual([]);
+    await capture.stop();
+  });
+
   it('excludes non-network data URLs without calling their body events lost HTTP evidence', async () => {
     const { source, capture } = await fixture();
     capture.beginPhase('home');

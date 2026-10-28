@@ -32,8 +32,12 @@ export type NetworkTransferSnapshot = {
 };
 
 // Export only fixed vocabulary. New protocol events remain measurable without leaking names or contents.
-const EVENT_FAMILIES = new Set(['update', 'ephemeral', 'rpc-call', 'rpc-request', 'rpc-response', 'rpc-register', 'rpc-registered', 'rpc-error', 'session-alive', 'machine-alive']);
-const EVENT_TYPES = new Set(['new-message', 'update-message', 'new-session', 'update-session', 'delete-session', 'update-machine', 'new-machine', 'delete-machine', 'update-account', 'pending-changed', 'session-organization-changed', 'activity', 'usage', 'machine-activity', 'session-runtime', 'session-list-changed']);
+export const NETWORK_HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS', 'OTHER'] as const;
+export const NETWORK_ROUTES = ['non-api', 'engine-transport', 'session-list', 'session-list-targeted', 'transcript', 'exact-session', 'organization-scoped', 'organization-full', 'changes', 'features-auth', 'other-api'] as const;
+export const NETWORK_EVENT_FAMILIES = ['update', 'ephemeral', 'rpc-call', 'rpc-request', 'rpc-response', 'rpc-register', 'rpc-registered', 'rpc-error', 'session-alive', 'machine-alive'] as const;
+export const NETWORK_EVENT_TYPES = ['new-message', 'update-message', 'new-session', 'update-session', 'delete-session', 'update-machine', 'new-machine', 'delete-machine', 'update-account', 'pending-changed', 'session-organization-changed', 'activity', 'usage', 'machine-activity', 'session-runtime', 'session-list-changed'] as const;
+const EVENT_FAMILIES: ReadonlySet<string> = new Set(NETWORK_EVENT_FAMILIES);
+const EVENT_TYPES: ReadonlySet<string> = new Set(NETWORK_EVENT_TYPES);
 
 function record(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
@@ -141,7 +145,7 @@ export async function collectNetworkTransfer(session: CDPSession, apiBaseUrl: st
       completed.push(previous);
     }
     requests.set(event.requestId, {
-      phase: active, method: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'].includes(event.request.method) ? event.request.method : 'OTHER',
+      phase: active, method: NETWORK_HTTP_METHODS.some((method) => method === event.request.method) ? event.request.method : 'OTHER',
       route: routeClass(event.request.url, apiOrigin), done: false, failed: false,
       decoded: 0, encoded: 0, chunks: 0, encoding: 'unavailable', cache: false, serviceWorker: false, late: false,
       requestBodyBytes: typeof event.request.postData === 'string' ? Buffer.byteLength(event.request.postData) : event.request.hasPostData ? 'unavailable' : 0,
@@ -239,7 +243,10 @@ export async function collectNetworkTransfer(session: CDPSession, apiBaseUrl: st
       closePhase(); active = name;
       phases.push({ name, started: Date.now(), socketDisconnects: 0 });
     },
-    endPhase: closePhase,
+    endPhase() {
+      closePhase();
+      active = 'setup';
+    },
     inFlight,
     async setCacheDisabled(cacheDisabled: boolean) { await session.send('Network.setCacheDisabled', { cacheDisabled }); },
     snapshot(): NetworkTransferSnapshot {
@@ -295,17 +302,4 @@ export async function collectNetworkTransfer(session: CDPSession, apiBaseUrl: st
       await session.detach();
     },
   };
-}
-
-export function networkTransferMarkdown(snapshot: NetworkTransferSnapshot): string {
-  const rows = ['| Workload/phase | Metric | Base observation | PR observation | Delta | Ceiling | Status |', '| --- | --- | --- | ---: | --- | --- | --- |'];
-  for (const phase of snapshot.phases) {
-    for (const http of phase.http) {
-      for (const metric of ['requests', 'requestBodyBytes', 'decodedBodyBytes', 'encodedBodyBytes', 'encodedResponseBytes'] as const) {
-        rows.push(`| Home/${phase.name} | ${http.method} ${http.route} ${metric} | missing | ${http[metric]} | not comparable | report only | ${snapshot.status} |`);
-      }
-    }
-    for (const ws of phase.webSocket) rows.push(`| Home/${phase.name} | WS ${ws.direction} ${ws.family}/${ws.type} frames / application bytes | missing | ${ws.frames} / ${ws.applicationBytes} | not comparable | report only | ${snapshot.status} |`);
-  }
-  return `${rows.join('\n')}\n\nWS encoded bytes: unavailable (CDP observes decompressed application payloads).\n`;
 }
