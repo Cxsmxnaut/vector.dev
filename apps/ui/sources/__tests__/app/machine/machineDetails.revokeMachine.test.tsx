@@ -550,10 +550,16 @@ describe('MachineDetailScreen (revoke/forget machine)', () => {
             const sessionName = screen.findAll(node => node.props?.accessibilityLabel === 'profiles.tmuxSession'
                 && typeof node.props?.onChangeText === 'function')[0];
             sessionName.props.onChangeText('Selected session');
-            await vi.waitFor(() => expect(machineState.settings.sessionTmuxByMachineId).toMatchObject({
-                'machine-1': { useTmux: true, sessionName: 'Selected session' }, 'machine-2': neighbor,
-            }));
         });
+        // SettingTextInput keeps keystrokes local and commits the gesture on blur.
+        await act(async () => {
+            const sessionName = screen.findAll(node => node.props?.accessibilityLabel === 'profiles.tmuxSession'
+                && typeof node.props?.onBlur === 'function')[0];
+            await sessionName.props.onBlur();
+        });
+        await vi.waitFor(() => expect(machineState.settings.sessionTmuxByMachineId).toMatchObject({
+            'machine-1': { useTmux: true, sessionName: 'Selected session' }, 'machine-2': neighbor,
+        }));
         await act(async () => {
             override().props.onPress();
             await vi.waitFor(() => expect(machineState.settings.sessionTmuxByMachineId).not.toHaveProperty('machine-1'));
