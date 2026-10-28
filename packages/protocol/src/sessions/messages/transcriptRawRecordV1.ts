@@ -660,6 +660,9 @@ const AgentEventSchema = lazyZodSchema(() => z.pipe(z.discriminatedUnion('type',
       // readable when an unknown/malformed sidecar is ignored; its reader owns
       // strict admission before offering any result or operation identity.
       sessionMessageInvocationV1: z.optional(z.unknown()),
+      // The canonical stop reader validates this presentation sidecar; stored
+      // transcript reads must retain it without rejecting the fallback prose.
+      sessionStopV1: z.optional(z.unknown()),
       /**
        * Same-Session cross-Agent transition divider. This is a strict nested
        * sidecar on the EXISTING passthrough `message` arm, never a new
