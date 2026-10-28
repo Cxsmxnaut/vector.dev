@@ -5,7 +5,7 @@ import { createElement, StrictMode, Suspense } from 'react';
 // Instrument tests do not need the root fixture/catalog import graph.
 import { renderHook } from '../hooks/renderHook';
 import { standardCleanup } from '../cleanup/standardCleanup';
-import { countStoreNotifications, countTransportRequests, createRenderCommitCounter, useRenderCommitCounter } from './counts';
+import { countReadBorrowers, countStoreNotifications, countTransportRequests, createRenderCommitCounter, useRenderCommitCounter } from './counts';
 import { installTimerCensus } from './timerCensus';
 
 afterEach(() => {
@@ -89,6 +89,28 @@ describe('performance count instruments', () => {
         expect(transport.read()).toEqual({ 'GET /sessions': 2, 'GET /failed': 1 });
         transport.reset();
         expect(transport.read()).toEqual({});
+    });
+
+    it('counts borrower provenance before a queued read and retains cardinalities without arguments', async () => {
+        const held: Array<() => void> = [];
+        const reads = countReadBorrowers((ids: readonly string[], _secret: string) => new Promise<readonly string[]>(resolve => {
+            held.push(() => resolve(ids));
+        }), ids => ids);
+        function initiateRead() { return reads.request(['private-session', 'private-session', 'another-session'], 'private-token'); }
+        const pending = [initiateRead(), initiateRead()];
+        const observed = reads.read();
+        expect(observed.reduce((count, borrower) => count + borrower.calls, 0)).toBe(2);
+        expect(observed.reduce((count, borrower) => count + borrower.idCount, 0)).toBe(4);
+        expect(observed.every(borrower => borrower.provenance[0]?.method === 'initiateRead')).toBe(true);
+        expect(observed[0]?.provenance[0]).toMatchObject({ source: 'apps/ui/sources/dev/testkit/performance/counts.test.tsx' });
+        expect(JSON.stringify(observed)).not.toMatch(/private-session|another-session|private-token/);
+        for (const release of held) release();
+        expect(await Promise.all(pending)).toEqual([
+            ['private-session', 'private-session', 'another-session'],
+            ['private-session', 'private-session', 'another-session'],
+        ]);
+        reads.reset();
+        expect(reads.read()).toEqual([]);
     });
 
     it('censuses live timers, preserves scheduling, and keeps unattributed timers visible', () => {

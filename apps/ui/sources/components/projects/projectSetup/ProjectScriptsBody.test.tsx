@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { act } from 'react-test-renderer';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import type { ActionOperationSnapshotV1 } from '@happier-dev/protocol/actions/operations/v1';
 import { readProjectManifestDocument } from '@happier-dev/protocol/workspaces/projectSetup/projectManifestDocument';
 
@@ -15,6 +15,13 @@ import {
   restoreServerAccountForTest,
 } from '@/dev/testkit/harness/serverAccountConnectionHarness';
 import { createPlainAccountEncryptionCurrentnessFixture } from '@/dev/testkit/fixtures/accountEncryptionCurrentness';
+import { createPlainProjectAccountRowListFixture } from '@/dev/testkit/fixtures/projectAccountRows';
+import { buildProjectAccountRowPhysicalKeyV1 } from '@happier-dev/protocol/projects/projectAccountRowsV1';
+import { createPlainSessionByIdResponseFixture } from '@/dev/testkit/fixtures/sessionFixtures';
+import { createSessionMetadataHttpBoundary } from '@/dev/testkit/harness/sessionMetadataHttpBoundary';
+import { SessionCurrentProjectionRecordV1Schema } from '@happier-dev/protocol/sessions/listing/response';
+import { V2SessionByIdResponseSchema } from '@happier-dev/protocol/sessions/control/contract';
+import { countReadBorrowers } from '@/dev/testkit';
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 installDisconnectedServerSocketBoundary();
@@ -109,7 +116,7 @@ vi.mock('@/text', async () => {
   const parameterized = createTextModuleMock();
   return createTextModuleMock({ translate: (key, params) =>
     // Memory summaries disclose the stored amount through the translation parameter.
-    key === 'projects.scripts.editor.needsAbout' || key === 'projects.scripts.setup.lead'
+    key === 'projects.scripts.editor.needsAbout' || key === 'projects.scripts.setup.lead' || key === 'projects.authoring.lastSession'
       ? parameterized.t(key, params) : key,
   });
 });
@@ -120,6 +127,7 @@ const { AppPaneScopeLayoutProvider } = await import('@/components/appShell/panes
 const { storage } = await import('@/sync/domains/state/storageStore');
 const { actionOperationStore } =
   await import('@/sync/domains/actionOperations/actionOperationStore');
+const sessionParts = await import('@/sync/runtime/orchestration/serverScopedRpc/readSessionBatchForAuthority');
 const previous = storage.getState();
 let connection: Awaited<ReturnType<typeof restoreServerAccountForTest>> | null =
   null;
@@ -240,20 +248,43 @@ async function render(
     bottomPresentation?: 'docked' | 'overlay';
     /** The Project's phone bar: receives the way back a pushed page registers. */
     registerPageBack?: (back: (() => void) | null) => void;
+    authoredSession?: Readonly<{ id: string; response: Promise<Response>; reads: string[]; writes?: string[] }>;
   }> = {},
 ) {
+  const authoredMetadata = createSessionMetadataHttpBoundary(() => storage.getState().sessions);
+  let authoredSeeded = false;
   connection ??= await restoreServerAccountForTest({
     serverUrl: workspaceServerUrl,
     serverIdentityId: workspace.serverId,
     accountId: 'account-1',
     request: async (url, init) => {
       const path = new URL(String(url)).pathname;
+      if (host.authoredSession && path === `/v2/sessions/${host.authoredSession.id}`) {
+        if ((init?.method ?? 'GET') === 'GET') host.authoredSession.reads.push(host.authoredSession.id);
+        const response = await host.authoredSession.response;
+        if (!response.ok) return response.clone();
+        if (!authoredSeeded) {
+          const body = V2SessionByIdResponseSchema.parse(await response.clone().json());
+          authoredMetadata.replaceSession(host.authoredSession.id, SessionCurrentProjectionRecordV1Schema.parse(body.session));
+          authoredSeeded = true;
+        }
+        // A full owner read can backfill its display through PATCH. Serve that
+        // real CAS boundary separately from the exact Session read cost.
+        const result = authoredMetadata.handle(url, init);
+        if (init?.method === 'PATCH' && result?.ok) host.authoredSession.writes?.push(host.authoredSession.id);
+        return result;
+      }
       if (path === '/v1/account/encryption')
         return Response.json({ mode: 'plain', updatedAt: 1 });
       if (path === '/v1/account/encryption/currentness')
         return Response.json(createPlainAccountEncryptionCurrentnessFixture());
       if (path === '/v2/account/settings')
         return Response.json({ content: null, version: 0 });
+      if (path === '/v1/account/project-rows/list')
+        return Response.json(createPlainProjectAccountRowListFixture({
+          workspaceRefs: [{ id: 'w1', serverId: workspace.serverId, machineId: 'm1',
+            rootPath: '/repo', createdAtMs: 1, projectKey: 'w1' }],
+        }));
       // The approving Account's Project Trust row (D18 "Until it changes") is an HTTP boundary.
       if (path === '/v1/account/project-trust/read')
         return Response.json({ status: 'absent' });
@@ -261,7 +292,7 @@ async function render(
         shared.trustMutations.push(JSON.parse(String(init?.body)));
         return Response.json({ status: 'updated', revision: 1, cursor: 1 });
       }
-      return Response.json({}, { status: 404 });
+      return null;
     },
   });
   storage.setState({
@@ -283,6 +314,10 @@ async function render(
       relationships: [],
       organizations: [],
       revisionsByPhysicalKey: {},
+      ...(host.authoredSession ? { authoringSessionsByPhysicalKey: {
+        [buildProjectAccountRowPhysicalKeyV1({ kind: 'workspace-ref', serverId: workspace.serverId, id: 'w1' })]:
+          { serverId: workspace.serverId, sessionId: host.authoredSession.id },
+      } } : {}),
     },
   });
   const scripts = (
@@ -349,6 +384,50 @@ function textOf(
 }
 
 describe('ProjectScriptsBody setup affordance', () => {
+  it.each(['available', 'missing'] as const)('reserves cold authoring provenance and reads only its exact Session once per mount, with no idle reads (%s)', async availability => {
+    shared.inspection = { definition: presentDefinition(declared), detection, importCandidates: [] };
+    const borrowers = countReadBorrowers(sessionParts.readSessionParts, params => params.sessionIds);
+    const observeBorrowers = vi.spyOn(sessionParts, 'readSessionParts').mockImplementation(borrowers.request);
+    onTestFinished(() => observeBorrowers.mockRestore());
+    const response = createDeferred<Response>();
+    const reads: string[] = [];
+    const writes: string[] = [];
+    const screen = await render('page', 'scripts.script:test', { authoredSession: { id: 'cold-author', response: response.promise, reads, writes } });
+    expect(screen.findByTestId('project-setup-authored')).not.toBeNull();
+    await vi.waitFor(() => expect(reads).toEqual(['cold-author']));
+    await act(async () => {
+      response.resolve(availability === 'missing' ? Response.json({ error: 'not_found' }, { status: 404 }) : Response.json(createPlainSessionByIdResponseFixture(createSessionFixture({
+        id: 'cold-author', createdAt: 1, updatedAt: 2,
+        metadata: { machineId: 'm1', path: '/repo', host: 'h', summary: { text: 'Checkout setup', updatedAt: 2 },
+          work: { authoringOriginV1: { kind: 'project', accountId: 'account-1', workspace, page: 'scripts' } } },
+      }))));
+    });
+    if (availability === 'available') {
+      await vi.waitFor(() => expect(screen.getTextContent()).toContain('Checkout setup'));
+      await vi.waitFor(() => expect(writes).toEqual(['cold-author']));
+      expect(screen.findByTestId('project-setup-authored.changes')).not.toBeNull();
+    } else {
+      expect(writes).toEqual([]);
+      expect(screen.getTextContent()).not.toContain('Checkout setup');
+      expect(screen.findByTestId('project-setup-authored.changes')).toBeNull();
+    }
+    await act(async () => {
+      storage.getState().applySessions([createSessionFixture({ id: 'unrelated', updatedAt: 100 })]);
+    });
+    expect(reads).toEqual(['cold-author']);
+    vi.useFakeTimers();
+    try { await act(async () => { await vi.advanceTimersByTimeAsync(60_000); }); }
+    finally { vi.useRealTimers(); }
+    expect(reads).toEqual(['cold-author']);
+    expect(borrowers.read()).toEqual([expect.objectContaining({ calls: 1, idCount: 1,
+      provenance: expect.arrayContaining([expect.objectContaining({
+        source: 'apps/ui/sources/sync/engine/sessions/sessionByIdHttp.ts', method: 'readSessionByIdHttp',
+      })]),
+    })]);
+    await screen.unmount();
+    expect(reads).toEqual(['cold-author']);
+  });
+
   it('offers Set up with an agent beside what was found when the checkout has no project file', async () => {
     shared.inspection = {
       definition: { basis: { kind: 'absent' }, document: null },
@@ -408,6 +487,36 @@ describe('ProjectScriptsBody setup affordance', () => {
     expect(screen.findByTestId('scripts.noProjectFile')).toBeTruthy();
     expect(screen.findByTestId('scripts.create')).toBeTruthy();
     expect(screen.findByTestId('scripts.setup')).toBeTruthy();
+  });
+
+  it('shows no authoring line on FirstRun for a checkout without an authoring relationship', async () => {
+    shared.inspection = { definition: { basis: { kind: 'absent' }, document: null }, detection, importCandidates: [] };
+    const screen = await render('page', 'scripts.noProjectFile');
+    expect(screen.findByTestId('project-setup-authored')).toBeNull();
+  });
+
+  it('keeps FirstRun and its setup control while naming the Session that authored a checkout with no project file', async () => {
+    shared.inspection = { definition: { basis: { kind: 'absent' }, document: null }, detection, importCandidates: [] };
+    const reads: string[] = [];
+    const writes: string[] = [];
+    const response = createDeferred<Response>();
+    const screen = await render('page', 'scripts.noProjectFile', { authoredSession: { id: 'first-run-author', response: response.promise, reads, writes } });
+    // Unavailable Session: the line reserves its place but never invents a title or time.
+    expect(screen.findByTestId('project-setup-authored')).not.toBeNull();
+    expect(screen.findByTestId('scripts.setup')).toBeTruthy();
+    expect(screen.findByTestId('scripts.create')).toBeTruthy();
+    await act(async () => {
+      response.resolve(Response.json(createPlainSessionByIdResponseFixture(createSessionFixture({
+        id: 'first-run-author', createdAt: 1, updatedAt: 2,
+        metadata: { machineId: 'm1', path: '/repo', host: 'h', summary: { text: 'Set up happier', updatedAt: 2 },
+          work: { authoringOriginV1: { kind: 'project', accountId: 'account-1', workspace, page: 'scripts' } } },
+      }))));
+    });
+    await vi.waitFor(() => expect(screen.getTextContent()).toContain('Set up happier'));
+    await vi.waitFor(() => expect(writes).toEqual(['first-run-author']));
+    expect(screen.getTextContent()).not.toMatch(/ready/i);
+    expect(screen.findByTestId('scripts.setup')).toBeTruthy();
+    expect(reads).toEqual(['first-run-author']);
   });
 
   it('says an empty checkout once: the Scripts page hero, not a second empty card under it', async () => {
