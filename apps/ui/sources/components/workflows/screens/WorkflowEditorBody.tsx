@@ -1,6 +1,6 @@
 import { focusRingStyle } from '@/components/ui/interactions/interactionFeedback';
 import * as React from 'react';
-import { View, type TextInput, type StyleProp, type ViewStyle } from 'react-native';
+import { View, type TextInput } from 'react-native';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 import { HappierPressable, HAPPIER_PAGE_METRICS, HAPPIER_PRESS_FEEDBACK_V1 } from '@happier-dev/plugin-ui/presentation';
 
@@ -24,7 +24,7 @@ import { PAGE_COLUMN_MAX_WIDTH_PX } from '@/components/ui/layout/contentWidthMod
 import { PageHeader } from '@/components/ui/layout/PageHeader';
 import { WorkspaceDestinationRow } from '@/components/appShell/workspace/WorkspaceDestinationRow';
 import { NavigationBackChromeProvider, useNavigationBackControl } from '@/components/ui/layout/NavigationBackChrome';
-import { DefaultBackButton } from '@/components/navigation/Header';
+import { usePageBackControl } from '@/components/ui/layout/usePageBackControl';
 import { PAGE_HEADER_MARK_SLOT_SIZE_PX, PageHeaderMarkSlot } from '@/components/ui/layout/PageHeaderMarkSlot';
 import { PageHeaderMenu, type PageHeaderMenuAction } from '@/components/ui/layout/PageHeaderEntityParts';
 import { Item } from '@/components/ui/lists/Item';
@@ -106,7 +106,7 @@ import type { WorkflowRunAsTarget, WorkflowRunAsTargetKind } from '../run/workfl
 import { WorkflowAuthoringSessionPane } from '../authoring/WorkflowAuthoringSessionPane';
 import { WorkflowAgentAuthoringDraft, type WorkflowAgentAuthoringDraftProps } from '../authoring/useWorkflowAgentAuthoring';
 import { useNavigation, useRouter } from '@/components/appShell/workspace/destinationRoute';
-import { useDestinationFocus, useDestinationInstanceKey } from '@/components/appShell/workspace/DestinationInstanceHost';
+import { useDestinationInstanceKey } from '@/components/appShell/workspace/DestinationInstanceHost';
 import { Stack } from '@/components/appShell/workspace/destinationRoute';
 import { safeRouterBack } from '@/utils/navigation/safeRouterBack';
 import { useAppShellColumn } from '@/components/navigation/shell/appRail/appShellColumnContext';
@@ -139,17 +139,6 @@ import { buildScopedSessionRouteHref } from '@/hooks/session/sessionRouteServerS
  */
 export const WORKFLOW_EDITOR_PANE_SCOPE_ID = 'workflow-editor';
 const WORKFLOW_FLOW_PANE_DESTINATION_ID = 'workflow-flow';
-
-/** Hosted destinations have no Expo header; their existing Back belongs in the page-header slot. */
-function WorkflowEditorBackControl({ style, onBack }: Readonly<{ style: StyleProp<ViewStyle>; onBack?: () => void }>) {
-    const router = useRouter();
-    const navigation = useNavigation();
-    const focused = useDestinationFocus();
-    const { theme } = useUnistyles();
-    if (!focused) return null;
-    return <View style={style}><DefaultBackButton testID="workflow-back" tintColor={theme.colors.text.primary}
-        onPress={onBack ?? (() => safeRouterBack({ router, navigation, fallbackHref: '/workflows' }))} /></View>;
-}
 
 /** The Agent & model chips the header shows; every field is in Workflow settings. */
 const HEADER_ENGINE_FIELDS = ['agentTarget', 'modelSelection'] as const;
@@ -532,13 +521,16 @@ export function WorkflowEditorBody(props: WorkflowEditorBodyProps): React.ReactE
     const chromeOptions = React.useMemo(() => ({ headerTitle: chromeTitle }), [chromeTitle]);
     const inheritedBackControl = useNavigationBackControl();
     const { present: appShellPresent, columnVisible } = useAppShellColumn();
-    const pageBackControl = React.useCallback(({ style }: Readonly<{ style: StyleProp<ViewStyle> }>) => (
-        <WorkflowEditorBackControl style={style} onBack={props.onBack} />
-    ), [props.onBack]);
+    // Hosted destinations have no Expo header; their existing Back belongs in the page-header slot.
+    const router = useRouter();
+    const backNavigation = useNavigation();
+    const { onBack: onEditorBack } = props;
+    const pageBackControl = usePageBackControl('workflow-back', () => onEditorBack
+        ? onEditorBack()
+        : safeRouterBack({ router, navigation: backNavigation, fallbackHref: '/workflows' }));
     const whereRef = React.useRef<WorkflowProjectTargetControlHandle | null>(null);
     const [settingsOpen, setSettingsOpen] = React.useState(false);
     const [detailsTab, setDetailsTab] = React.useState<'settings' | 'agent'>('settings');
-    const router = useRouter();
     const authoringDraftId = props.authoringDraft?.draftId ?? null;
     const hasAgentTab = Boolean(props.authoringSessionId) || authoringDraftId !== null;
     React.useEffect(() => {
