@@ -3523,6 +3523,7 @@
     "src/scm/workspace/workspaceExportPackaging/hashWorkspaceFile.test.ts",
     "src/scm/workspace/workspaceExportPackaging/normalizeWorkspacePath.test.ts",
     "src/scm/workspace/workspaceExportPackaging/resolveWorkspaceRelativePath.test.ts",
+    "src/scm/workspace/workspaceExportPackaging/resolveWorkspaceRelativePath.windows.test.ts",
     "src/scm/workspace/workspaceExportPackaging/scanWorkspaceManifest.test.ts",
     "src/scm/workspace/workspaceExportStaging/applyWorkspaceMetadata.test.ts",
     "src/scm/workspace/workspaceExportStaging/promoteStagedWorkspace.test.ts",
