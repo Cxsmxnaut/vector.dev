@@ -28,7 +28,7 @@ import { ManagedMachineActionIdV1Schema } from '../machines/managed/actionsV1.js
 import { MachinePresetActionIdV1Schema } from '../machines/managed/machinePresetActionsV1.js';
 import { MachinePoolActionIdV1Schema } from '../machines/pools/actionsV1.js';
 import { ProjectWorkerActionIdV1Schema } from './specs/projectWorkers.js';
-import { MachineAccessActionIdSchema } from './specs/machineAccess.js';
+import { MachineAccessActionIdSchema } from './specs/machine/access.js';
 import { UsageSourceActionIdSchema } from '../usage/usageSources.js';
 import { ConnectedServiceConfigurationActionIdV1Schema } from '../connect/configurationActionsV1.js';
 import { EphemeralRunnerActionIdV1Schema } from '../ephemeralRunner/actionIdsV1.js';

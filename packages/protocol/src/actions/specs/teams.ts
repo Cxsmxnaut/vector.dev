@@ -272,6 +272,7 @@ export const TEAM_ACTION_SPECS = Object.freeze([
   },
   {
     id: 'teams.members.history.prepare', title: 'Prepare member history encryption',
+    irreversible: true,
     description: 'Ask a person to prepare existing encrypted history through the answering app’s captured encryption owner.',
     executionPlacement: 'client', requiredAuthority: 'present_user', safety: 'danger', sideEffectClass: 'write',
     surfaces: { ui: true, voice: false, agent: true, mcp: true, cli: false, rpc: false }, placements: [],
@@ -474,6 +475,7 @@ export const TEAM_ACTION_SPECS = Object.freeze([
   }),
   homeDomainActionRow({
     id: 'teams.archive', approval: {result: 'required',flow: 'deferred'},
+    irreversible: true,
     mcp: true,
     title: 'Archive Team',
     description: 'Archive a Team, ending ordinary member access until it is restored. Waiting invitations are permanently revoked.',
@@ -590,6 +592,7 @@ export const TEAM_ACTION_SPECS = Object.freeze([
   }),
   homeDomainActionRow({
     id: 'teams.members.remove', approval: {result: 'required',flow: 'deferred'},
+    irreversible: true,
     title: 'Remove Team member',
     description: 'End one membership lifetime. Repeating the request answers unchanged rather than failing.',
     safety: 'danger',
@@ -602,6 +605,7 @@ export const TEAM_ACTION_SPECS = Object.freeze([
   }),
   homeDomainActionRow({
     id: 'teams.members.leave', approval: {result: 'required',flow: 'deferred'},
+    irreversible: true,
     title: 'Leave Team',
     description: 'End your own membership lifetime. Directory-managed members and the final active owner of a live Team cannot leave.',
     safety: 'danger',
@@ -961,6 +965,7 @@ export const TEAM_ACTION_SPECS = Object.freeze([
   }),
   teamProvisioningActionRow({
     id: 'teams.identity.connections.remove', approval: {result: 'required',flow: 'deferred'},
+    irreversible: true,
     path: TEAM_IDENTITY_ACTION_PATHS_V1['teams.identity.connections.remove'],
     inputSchema: TEAM_IDENTITY_ACTION_INPUT_SCHEMAS_V1['teams.identity.connections.remove'],
     outputSchema: TEAM_IDENTITY_ACTION_OUTPUT_SCHEMAS_V1['teams.identity.connections.remove'],
@@ -1225,6 +1230,7 @@ export const TEAM_ACTION_SPECS = Object.freeze([
   }),
   teamProvisioningActionRow({
     id: 'teams.directory.sources.remove', approval: {result: 'required',flow: 'deferred'},
+    irreversible: true,
     method: 'DELETE',
     path: TEAM_DIRECTORY_ACTION_PATHS_V1['teams.directory.sources.remove'],
     inputSchema: TEAM_DIRECTORY_ACTION_INPUT_SCHEMAS_V1['teams.directory.sources.remove'],

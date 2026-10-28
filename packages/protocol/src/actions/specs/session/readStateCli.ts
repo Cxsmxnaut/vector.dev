@@ -1,8 +1,8 @@
-import { lazyZodSchema } from '../../lazyZodSchema.js';
+import { lazyZodSchema } from '../../../lazyZodSchema.js';
 import { z } from 'zod/mini';
 
-import { actionCliDerivedDefault, type ActionCliBindContext, type ActionCliProjection } from '../actionCliProjection.js';
-import type { ActionInputHints } from '../metadata.js';
+import { actionCliDerivedDefault, type ActionCliBindContext, type ActionCliProjection } from '../../actionCliProjection.js';
+import type { ActionInputHints } from '../../metadata.js';
 
 /**
  * Friendly `session read <session> [--unread]` spelling for

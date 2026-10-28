@@ -1,4 +1,4 @@
-import { lazyZodSchema } from '../../lazyZodSchema.js';
+import { lazyZodSchema } from '../../../lazyZodSchema.js';
 import { z } from 'zod/mini';
 
 import {
@@ -7,13 +7,13 @@ import {
   SessionListScopeV1Schema,
   SessionBotFilterV1Schema,
   type SessionAudienceSelectionV1,
-} from '../../sessions/listing/query.js';
+} from '../../../sessions/listing/query.js';
 import {
   SESSION_LIST_AWARENESS_VIEW_V1,
   SESSION_LIST_SUMMARY_VIEW_V1,
   SessionListViewV1Schema,
-} from '../../sessions/awareness/action.js';
-import { actionCliDerivedDefault, type ActionCliBindContext, type ActionCliProjection } from '../actionCliProjection.js';
+} from '../../../sessions/awareness/action.js';
+import { actionCliDerivedDefault, type ActionCliBindContext, type ActionCliProjection } from '../../actionCliProjection.js';
 
 const SelectorSchema = lazyZodSchema(() => z.string().check(z.trim(), z.minLength(1)));
 const GroupSelectorSchema = lazyZodSchema(() => SelectorSchema.check(z.refine((value) => {

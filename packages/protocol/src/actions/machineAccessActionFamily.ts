@@ -1,6 +1,6 @@
 import { getActionSpec } from './actionSpecs.js';
 import { bindHomeDomainHttpRequestV1 } from './homeDomainHttpBinding.js';
-import type { MachineAccessActionId } from './specs/machineAccess.js';
+import type { MachineAccessActionId } from './specs/machine/access.js';
 import { z } from 'zod/mini';
 
 /** Transport comes exclusively from the declared Action row, with Home consumed by the host. */

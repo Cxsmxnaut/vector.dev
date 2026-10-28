@@ -1,5 +1,5 @@
 import type { SessionFollowActionIdV1 } from '../../sessions/follow/actions.js';
-import type { SessionPendingNextOutput } from '../specs/sessionPendingNext.js';
+import type { SessionPendingNextOutput } from '../specs/session/pendingNext.js';
 import type { DaemonLocalServiceLauncherStartRequestV1, LocalServiceStartApprovalReviewV1 } from '../../local/services/launcher/v1.js';
 import type { DaemonLspApplyRequest, DaemonLspApplyResponse, DaemonLspQueryRequest, DaemonLspQueryResponse, DaemonLspRestartRequest, DaemonLspRestartResponse } from '../../machines/languageIntelligence.js';
 import type { WorkspaceFilesReplacePreviewActionInput, WorkspaceFilesReplaceActionInput, WorkspaceFilesReplaceActionOutput } from '../actionSpecs.js';
@@ -69,7 +69,7 @@ import type {
 } from '../../projects/sources/projectSourceV1.js';
 import type { SessionAuthoringOpenV1, SessionAuthoringOpenResultV1 } from '../../plugins/ui/hostApiRequests.js';
 import type { MachineAddSshActionId, MachinePageActionId, MachinePageActionInput } from '../specs/machineConnection.js';
-import type { MachineAccessActionId } from '../specs/machineAccess.js';
+import type { MachineAccessActionId } from '../specs/machine/access.js';
 import type { MachineVitalsActionId, MachineVitalsActionInput } from '../specs/machineVitals.js';
 import type { MachineTerminalActionId, MachineTerminalActionInput } from '../specs/machineTerminal.js';
 import type { HomeConnectInputSchema, HomeConnectOutputSchema, HomeReconnectInputSchema, HomeReconnectOutputSchema, MachineAddCommandInputSchema, MachineAddCommandOutputSchema, MachinePairingCreateInputSchema, MachinePairingCreateOutputSchema, MachineTerminalOpenInputSchema, MachineTerminalListInputSchema } from '../specs/machineConnection.js';

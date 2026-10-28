@@ -11,6 +11,8 @@ import {
   BROWSER_RUNTIME_ACTION_INPUT_SCHEMAS,
   BROWSER_RUNTIME_ACTION_OUTPUT_SCHEMAS,
   BROWSER_RUNTIME_ACTION_SPEC_FAMILY,
+  BROWSER_RUNTIME_ACTION_INPUT_HINT_FIELDS,
+  BROWSER_ANNOTATION_DRAFT_ACTION_IDS,
 } from './browser.js';
 import type { RuntimeActionSpecFamily, RuntimeActionSpecTextMap } from './common.js';
 import {
@@ -164,7 +166,8 @@ function createRuntimeActionSpecFor<
     sideEffectClass,
     outputSchema: params.outputSchema,
     inputSchema: params.inputSchema,
-    ...(actionId === 'browser.context.annotation.attachDraft' ? { executionPlacement: 'client' as const } : {}),
+    ...(actionId === 'browser.context.annotation.attachDraft' || (BROWSER_ANNOTATION_DRAFT_ACTION_IDS as readonly string[]).includes(actionId)
+      ? { executionPlacement: 'client' as const } : {}),
     ...(actionId === 'browser.context.attachToComposer' ? {
       executionPlacements: ['client', 'machine'] as const,
       executionPlacementForInput: (input: unknown) => typeof input === 'object' && input !== null
@@ -236,7 +239,7 @@ function createRuntimeActionSpecFor<
     inputHints: {
       title,
       description: executorReal ? humanDescription : RUNTIME_ACTION_PROJECTION_CONTRACT_HINT_DESCRIPTION,
-      fields: [],
+      fields: BROWSER_RUNTIME_ACTION_INPUT_HINT_FIELDS[actionId] ?? [],
     },
   };
 }

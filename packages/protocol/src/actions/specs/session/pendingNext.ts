@@ -1,6 +1,6 @@
-import { lazyZodSchema } from '../../lazyZodSchema.js';
+import { lazyZodSchema } from '../../../lazyZodSchema.js';
 import { z } from 'zod/mini';
-import type { PreNormalizedActionSpec } from '../actionSpecs.js';
+import type { PreNormalizedActionSpec } from '../../actionSpecs.js';
 
 export const SessionPendingNextInputSchema = lazyZodSchema(() => z.strictObject({}));
 export const SessionPendingNextOutputSchema = lazyZodSchema(() => z.union([

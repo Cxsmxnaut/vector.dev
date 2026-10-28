@@ -1,11 +1,11 @@
 import { z } from 'zod/mini';
-import { lazyZodSchema } from '../../lazyZodSchema.js';
+import { lazyZodSchema } from '../../../lazyZodSchema.js';
 import {
   SessionAccessCandidatesInspectRequestV1Schema, SessionAccessCandidatesInspectResponseV1Schema,
   ResolveSessionAccessPrincipalsRequestV1Schema, ResolveSessionAccessPrincipalsResponseV1Schema,
-} from '../../sessions/access/sessionAccessOperationsV1.js';
-import { UsersSearchQueryV1Schema, UsersSearchResponseSchema } from '../../social/friends.js';
-import type { PreNormalizedActionSpec } from '../actionSpecs.js';
+} from '../../../sessions/access/sessionAccessOperationsV1.js';
+import { UsersSearchQueryV1Schema, UsersSearchResponseSchema } from '../../../social/friends.js';
+import type { PreNormalizedActionSpec } from '../../actionSpecs.js';
 
 export const SESSION_ACCESS_DISCOVERY_ACTION_SPECS_V1 = Object.freeze([
   {

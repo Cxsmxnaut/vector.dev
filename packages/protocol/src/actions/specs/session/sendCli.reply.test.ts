@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { bindSessionSendCliInput, SessionSendCliInputSchema } from './sessionSendCli.js';
+import { bindSessionSendCliInput, SessionSendCliInputSchema } from './sendCli.js';
 
 describe('Session send CLI reply projection', () => {
   it('preserves explicit reply intent and its observation budget without a coordination ceiling', () => {

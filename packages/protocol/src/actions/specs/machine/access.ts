@@ -1,4 +1,6 @@
-import { lazyZodSchema } from '../../lazyZodSchema.js';
+import { MACHINE_ACCESS_ACTION_IDS } from './accessActionIdsV1.js';
+export { MACHINE_ACCESS_ACTION_IDS, MACHINE_WORK_SUMMARY_ACTION_IDS } from './accessActionIdsV1.js';
+import { lazyZodSchema } from '../../../lazyZodSchema.js';
 import { z } from 'zod/mini';
 import {
   MachineAccessGrantsListInputV1Schema, MachineAccessGrantsListResultV1Schema,
@@ -6,23 +8,17 @@ import {
   MachineAccessLeaveInputV1Schema, MachineAccessPrepareKeysInputV1Schema,
   MachineAccessMutationResultV1Schema, MachineKeyPreparationResultV1Schema,
   MachineAccessGrantsListResponseV1Schema,
-} from '../../machines/machineAccessV1.js';
-import type { PreNormalizedActionSpec } from '../actionSpecs.js';
-import { MachineWorkSummaryGetInputV1Schema, MachineWorkSummaryGetResultV1Schema } from '../../machines/machineWorkSummaryV1.js';
-import { asProtocolZod } from '../../plugins/actions/internalProtocolZodAdapter.js';
-import { RPC_METHODS } from '../../rpc/methods.js';
-
-export const MACHINE_WORK_SUMMARY_ACTION_IDS = ['machines.work.summary.get'] as const;
-
-export const MACHINE_ACCESS_ACTION_IDS = [
-  'machines.access.grants.list', 'machines.access.grant.set', 'machines.access.grant.remove',
-  'machines.access.leave', 'machines.access.prepareKeys',
-] as const;
+} from '../../../machines/machineAccessV1.js';
+import type { PreNormalizedActionSpec } from '../../actionSpecs.js';
+import { MachineWorkSummaryGetInputV1Schema, MachineWorkSummaryGetResultV1Schema } from '../../../machines/machineWorkSummaryV1.js';
+import { asProtocolZod } from '../../../plugins/actions/internalProtocolZodAdapter.js';
+import { RPC_METHODS } from '../../../rpc/methods.js';
+import { presentMachineAuthorityV1 } from '../../../machines/machineAuthorityV1.js';
 export type MachineAccessActionId = typeof MACHINE_ACCESS_ACTION_IDS[number];
 export const MachineAccessActionIdSchema = lazyZodSchema(() => z.enum(MACHINE_ACCESS_ACTION_IDS));
 
 export function machineAccessTrustedOsDisclosure(machineId: string): string {
-  return `People with terminal or agent access to ${machineId} run as your operating-system user and can obtain your local credentials and Account encryption key, if present. No Happier API reads or exports owner credentials or keys; anything a shared shell prints can contain them. We recommend sharing a dedicated team machine.`;
+  return `The owner of ${machineId} can inspect keys and selected credential material delivered there, including after members have separate operating-system users. Until member separation is observed effective, members and the owner's isolated Agent share an Agent user and can copy selected credentials, Direct-delivered keys and readable Session context. Enabled or pending setup is not proof of separation. Can manage includes trusted administration that can defeat isolation. Use a dedicated team machine and trust its administrators.`;
 }
 
 export function machineAccessApprovalDisclosure(actionId: string, input: unknown) {
@@ -31,9 +27,12 @@ export function machineAccessApprovalDisclosure(actionId: string, input: unknown
     input && typeof input === 'object' ? { serverId: Reflect.get(input, 'serverId'), machineId: Reflect.get(input, 'machineId') } : input,
   );
   if (!parsed.success) return null;
+  const visibility = presentMachineAuthorityV1({ sharedMachine: true }).deliveredMaterial;
   return {
-    machineId: parsed.data.machineId, sameOsUser: true, localCredentialsExposed: true,
-    accountEncryptionKeyExposedIfPresent: true, dedicatedMachineRecommended: true,
+    machineId: parsed.data.machineId, ownerCanInspectDeliveredMaterial: visibility.ownerVisible,
+    sharedAgentUidExposesSelectedMaterial: visibility.sharedUserPeerVisible,
+    isolationRequiresObservedReadiness: true, trustedAdministrationCanDefeatIsolation: true,
+    dedicatedMachineRecommended: true,
     description: machineAccessTrustedOsDisclosure(parsed.data.machineId),
   } as const;
 }

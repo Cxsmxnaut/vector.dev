@@ -1,9 +1,9 @@
-import { lazyZodSchema } from '../../lazyZodSchema.js';
+import { lazyZodSchema } from '../../../lazyZodSchema.js';
 import { z } from 'zod/mini';
 
-import { parseAgentPermissionIntentV1Alias } from '../../runtime/permissionIntentV1.js';
-import { actionCliDerivedDefault, type ActionCliBindContext, type ActionCliProjection } from '../actionCliProjection.js';
-import type { ActionInputHints } from '../metadata.js';
+import { parseAgentPermissionIntentV1Alias } from '../../../runtime/permissionIntentV1.js';
+import { actionCliDerivedDefault, type ActionCliBindContext, type ActionCliProjection } from '../../actionCliProjection.js';
+import type { ActionInputHints } from '../../metadata.js';
 
 /**
  * The explicit Agent-native model source. The Action contract represents it as a
