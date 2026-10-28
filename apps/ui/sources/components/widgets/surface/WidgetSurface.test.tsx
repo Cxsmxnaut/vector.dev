@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { t } from '@/text';
 import * as Unistyles from 'react-native-unistyles';
 import { expect, it, vi } from 'vitest';
 import { WidgetDefinitionV1Schema, type WidgetInputBindingsV1, type WidgetInstanceV1, type WidgetSurfaceRefV1 } from '@happier-dev/protocol/widgets';
@@ -64,6 +65,24 @@ vi.mock('@/components/browser/frame/BrowserViewFrame.web', () => ({
 }));
 
 installDisconnectedServerSocketBoundary();
+
+it('says another Account\u2019s saved definition is unavailable as one durable sentence, never as a start-up state', async () => {
+    const http = createHomeHubArtifactHttpBoundary('viewer');
+    const connection = await restoreServerAccountForTest({ serverUrl: 'https://private-definition.test', accountId: 'viewer', request: http.request });
+    const viewer = getActiveServerAccountScope()!;
+    const runtime = { pluginUiProjection: EMPTY_PLUGIN_UI_PROJECTION, pluginBrowserProjection: null, phase: 'current' as const, interactionEnabled: true,
+        machineId: 'machine-1', serverId: viewer.serverId, platform: 'web' as const, accountLifetime: captureActiveServerAccountScopeLifetime(),
+        clientExecutableActivation: { status: 'ready' as const }, reloadClientExecutables: () => {}, reloadConnectedAccountProjection: () => {} };
+    const screen = await renderScreen(<WidgetSurface scope={{ serverId: viewer.serverId, accountId: 'dashboard-owner', owner: { kind: 'home' } }}
+        instance={{ v: 1, id: 'private-copy', definition: { kind: 'artifact', artifactId: 'owner-private-definition' }, bindings: {} }} descriptor={null}
+        providedContext={{}} appRuntime={runtime} recordRevision="private:1" presentation="content" testID="private-definition" />);
+    try {
+        const cards = screen.tree.root.findAllByType(SurfaceStateCard);
+        expect(cards).toHaveLength(1);
+        expect(cards[0]!.props).toMatchObject({ kind: 'unavailable', title: t('projects.widgets.definitionUnavailable') });
+        expect(cards[0]!.props.reason).toBeUndefined();
+    } finally { await screen.unmount(); await connection.dispose(); }
+});
 
 it('mounts the exact installed app widget from a multi-machine Home union and retires on viewer loss', async () => {
     const http = createHomeHubArtifactHttpBoundary('viewer');

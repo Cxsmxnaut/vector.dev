@@ -82,7 +82,8 @@ it('does not publish a late owner lookup after the requesting Account retires', 
     } finally { pending.resolve(); }
 });
 
-it('supplies the admitted shared dashboard owner’s meaningful profile to the identity line', async () => {
+/** The recipient's view of the owner's shared dashboard: exact stored bytes, read-only access, no widgets placed. */
+async function renderViewedEmptyDashboard() {
     const surface = { serverId: runtime.serverId, accountId: ownerAccountId,
         owner: { kind: 'project' as const, projectId: 'project-key', layoutId: 'release' } };
     const artifactId = buildWidgetSurfaceArtifactIdV1(surface);
@@ -96,11 +97,15 @@ it('supplies the admitted shared dashboard owner’s meaningful profile to the i
         artifactDataKeys: new Map(), addArtifact: () => {},
     });
     expect(artifacts.readPlainBody(artifactId)).toBe(JSON.stringify(layout));
-    const screen = await renderScreen(<runtime.Wrapper><ProjectOverviewWidgets
+    return await renderScreen(<runtime.Wrapper><ProjectOverviewWidgets
         workspaceRef={{ id: 'w1', serverId: runtime.serverId, machineId: 'm1', rootPath: '/repo', createdAtMs: 1, projectKey: 'project-key' }}
         activeRootPath="/repo" projectName="happier" layoutId="release" artifactId={artifactId} ownerAccountId={ownerAccountId}
         onSelectDashboard={() => {}} bar={<React.Fragment />}
     /></runtime.Wrapper>);
+}
+
+it('supplies the admitted shared dashboard owner’s meaningful profile to the identity line', async () => {
+    const screen = await renderViewedEmptyDashboard();
     try {
         await vi.waitFor(() => expect(screen.findAllByType(ProjectDashboardIdentityLine), screen.getTextContent()).toHaveLength(1));
         // The admitted document title/access remain distinct from safe owner display facts.
@@ -112,5 +117,15 @@ it('supplies the admitted shared dashboard owner’s meaningful profile to the i
         // The line names whose dashboard it is in words, not only by an avatar keyed on an opaque id.
         await vi.waitFor(() => expect(screen.getTextContent()).toContain('Dashboard author'));
         expect(artifacts.list()).toHaveLength(1);
+    } finally { await screen.unmount(); }
+});
+
+it('draws no empty side area for a read-only viewer of a shared dashboard, and still says the dashboard is empty once', async () => {
+    const screen = await renderViewedEmptyDashboard();
+    try {
+        await vi.waitFor(() => expect(screen.findAllByType(ProjectDashboardIdentityLine)).toHaveLength(1));
+        await vi.waitFor(() => expect(screen.findByTestId('project-overview-main.empty')).not.toBeNull());
+        expect(screen.findByTestId('project-overview.aside')).toBeNull();
+        expect(screen.findByTestId('project-overview-aside.empty')).toBeNull();
     } finally { await screen.unmount(); }
 });

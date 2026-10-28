@@ -121,6 +121,10 @@ export function ProjectOverviewDocument(props: Readonly<{
             detail={t(dashboardFacts.access === 'view' ? 'shareSheet.documents.levels.canRead' : 'shareSheet.documents.levels.canEdit')} />
         // An edited preset says so once, with Reset to preset (lab wgsaved R).
         : preset?.isEdited && presetSurface ? <WidgetAreaPresetLine preset={preset} surface={presetSurface} testID="project-overview.preset" /> : null;
+    // A viewer who cannot edit has nothing to add or drop into an empty side area, so it draws nothing
+    // (stacked it would otherwise lead the page with an empty line above the widgets that exist).
+    const quietAside = layout.state.status === 'ready' && !layout.state.canEdit
+        && projections.aside.state.status === 'ready' && projections.aside.state.placements.length === 0;
     // Side by side, each area's quiet "Add widget" ends its own column. Stacked (and on a phone) the areas
     // read as one column, so it ends with one "Add widget" (lab HOMEp) whose gallery offers both areas
     // (plan 12 §§2,5: each area stays directly reachable), starting with the main area.
@@ -138,7 +142,7 @@ export function ProjectOverviewDocument(props: Readonly<{
                 dashboard={dashboard('main')} testID="project-overview-main" />
             {stacked ? trailingAdd : null}
         </> : null}
-        aside={projections.ready ? <WidgetArea {...shared} layout={projections.aside} area="aside" {...(stacked ? { display: 'widgets' as const } : {})}
+        aside={projections.ready && !quietAside ? <WidgetArea {...shared} layout={projections.aside} area="aside" {...(stacked ? { display: 'widgets' as const } : {})}
             columnLayout={{ columns: arrangement === 'pairs' ? 2 : 1, gap: PROJECT_OVERVIEW_AREA_GAP_PX }}
             dashboard={dashboard('aside')} testID="project-overview-aside" /> : null}
         phone={phone && projections.ready ? <>

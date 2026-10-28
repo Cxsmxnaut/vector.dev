@@ -12,6 +12,7 @@ import { presentSharePrincipal } from '../sharePrincipalPresentation';
 import { useShareViewerProfile } from '../useShareViewerProfile';
 import { createFrontDoorActionExecute } from '@/sync/ops/actions/frontDoorRuntimeActionExecutor';
 import { t } from '@/text';
+import { resolveWidgetInstanceTitle } from '@/components/widgets/widgetCatalog';
 import { getConnectedServiceRegistrySnapshot } from '@/sync/domains/connectedServices/connectedServiceRegistry';
 import { resolveQualifiedConnectedServiceRegistryDisplayName } from '@/components/settings/connectedServices/model/resolveConnectedServiceDisplayName';
 import type { DocumentPrivateChoice, DocumentShareKind } from './documentShareAdapter';
@@ -156,8 +157,7 @@ export function useDocumentShareController(input: Readonly<{ artifactId: string;
             const descriptor = issues.some(issue => issue.inputPath)
                 ? await import('@/sync/ops/actions/widgetInputActionDeps').then(owner => owner.readWidgetShareInputDescriptorV1({ ref, instance, scope })).catch(() => null)
                 : null;
-            const widget = instance.displayName ?? descriptor?.title
-                ?? (instance.definition.kind === 'inline' ? instance.definition.definition.name : instance.id);
+            const widget = resolveWidgetInstanceTitle(instance, descriptor);
             return issues.map(issue => {
                 const declared = issue.inputPath && descriptor ? readWidgetConnectedAccountPurposeV1({
                     descriptor, resources: descriptor.resourceDeclarations ?? [], path: issue.inputPath,
