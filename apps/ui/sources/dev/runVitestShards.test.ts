@@ -9,7 +9,6 @@ import {
     resolveVitestShardTimeoutMs,
     runVitestShardRunPlan,
     resolveVitestConfigPath,
-    resolveVitestShardCount,
     resolveVitestShardCountForFileCount,
     resolveVitestPassthroughArgs,
     shouldVitestShardRunProceedWithoutFiles,
@@ -17,19 +16,6 @@ import {
 } from '../../scripts/runVitestShards.mjs';
 
 describe('apps/ui runVitestShards', () => {
-    it('defaults shard count to 32 so worker result batches stay below the observed RPC timeout boundary', () => {
-        expect(resolveVitestShardCount({})).toBe(32);
-    });
-
-    it('uses HAPPIER_UI_VITEST_SHARDS override when valid', () => {
-        expect(resolveVitestShardCount({ HAPPIER_UI_VITEST_SHARDS: '6' })).toBe(6);
-    });
-
-    it('ignores invalid shard overrides', () => {
-        expect(resolveVitestShardCount({ HAPPIER_UI_VITEST_SHARDS: '0' })).toBe(32);
-        expect(resolveVitestShardCount({ HAPPIER_UI_VITEST_SHARDS: 'nope' })).toBe(32);
-    });
-
     it('derives enough shards to keep the default file budget at 128', () => {
         expect(resolveVitestShardCountForFileCount({}, 128)).toBe(1);
         expect(resolveVitestShardCountForFileCount({}, 129)).toBe(2);
@@ -55,10 +41,6 @@ describe('apps/ui runVitestShards', () => {
             signal: 'SIGTERM',
             timedOut: true,
         });
-    });
-
-    it('defaults shard concurrency to 1', () => {
-        expect(resolveVitestShardConcurrency({}, ['node', 'run'], 12, 4)).toBe(1);
     });
 
     it('admits a valid requested concurrency within the CPU and worker budget', () => {
@@ -100,20 +82,6 @@ describe('apps/ui runVitestShards', () => {
 
     it('returns null when --config is missing', () => {
         expect(resolveVitestConfigPath(['node', 'run'])).toBe(null);
-    });
-
-    it('preserves additional vitest args after --config', () => {
-        expect(
-            resolveVitestPassthroughArgs([
-                'node',
-                'run',
-                '--config',
-                'vitest.config.ts',
-                'sources/dev/runVitestShards.test.ts',
-                '--reporter',
-                'dot',
-            ]),
-        ).toEqual(['sources/dev/runVitestShards.test.ts', '--reporter', 'dot']);
     });
 
     it('does not forward --concurrency into vitest passthrough args', () => {

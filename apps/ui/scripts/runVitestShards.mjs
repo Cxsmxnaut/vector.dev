@@ -61,11 +61,6 @@ function resolveConcurrencyFlagValue(argv) {
 // worker retention.
 const DEFAULT_MAX_FILES_PER_SHARD = 128;
 
-export function resolveVitestShardCount(env) {
-  const override = parsePositiveInt(env?.HAPPIER_UI_VITEST_SHARDS);
-  return override ?? 32;
-}
-
 export function resolveVitestShardCountForFileCount(env, fileCount) {
   const override = parsePositiveInt(env?.HAPPIER_UI_VITEST_SHARDS);
   // Bound each process's module-graph retention by the measured file budget above.
