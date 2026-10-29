@@ -215,14 +215,14 @@ pub struct TrayLabels {
 impl Default for TrayLabels {
     fn default() -> Self {
         Self {
-            title: "Happier".into(),
-            open: "Open Happier".into(),
-            open_in_happier: "Open in Happier".into(),
+            title: "vector.dev".into(),
+            open: "Open vector.dev".into(),
+            open_in_happier: "Open in vector.dev".into(),
             settings: "Settings…".into(),
             start_at_login: "Start at login".into(),
-            quit: "Quit Happier".into(),
-            quit_keep_services: "Quit Happier (keep background services running)".into(),
-            quit_stop_services: "Quit Happier and stop background services".into(),
+            quit: "Quit vector.dev".into(),
+            quit_keep_services: "Quit vector.dev (keep background services running)".into(),
+            quit_stop_services: "Quit vector.dev and stop background services".into(),
             stop_services_and_quit: "Stop background services and quit".into(),
             connected: "Connected".into(),
             offline: "Offline".into(),
@@ -230,25 +230,25 @@ impl Default for TrayLabels {
             start: "Start".into(),
             restart: "Restart".into(),
             stop: "Stop".into(),
-            user_owned: "Set up outside Happier".into(),
+            user_owned: "Set up outside vector.dev".into(),
             sessions: "Sessions: {count}".into(),
             checking: "Checking background services…".into(),
             read_failed: "Couldn’t read background services".into(),
             incomplete: "Some background services couldn’t be read".into(),
             no_services: "This computer isn’t set up yet".into(),
             working: "Working…".into(),
-            stop_confirm_title: "Stop Happier’s background service for {relay}?".into(),
+            stop_confirm_title: "Stop vector.dev’s background service for {relay}?".into(),
             stop_confirm_body:
                 "Agent sessions running on this computer for {relay} will end, and your phone and browser can’t reach it there until it starts again."
                     .into(),
-            stop_all_confirm_title: "Stop Happier’s background services and quit?".into(),
+            stop_all_confirm_title: "Stop vector.dev’s background services and quit?".into(),
             stop_all_confirm_body:
-                "Agent sessions running on this computer will end, and your phone and browser can’t reach it until you open Happier again."
+                "Agent sessions running on this computer will end, and your phone and browser can’t reach it until you open vector.dev again."
                     .into(),
             stop_confirm_action: "Stop".into(),
             cancel: "Cancel".into(),
             action_failed_title: "That didn’t go through".into(),
-            login_item_failed: "Couldn’t update Happier’s login item".into(),
+            login_item_failed: "Couldn’t update vector.dev’s login item".into(),
         }
     }
 }
@@ -621,20 +621,20 @@ fn service_submenu(model: &TrayMenuModel, row: &ServiceRow) -> MenuEntry {
 /// The whole tray menu, top to bottom:
 ///
 /// ```text
-/// Happier                                  (title, disabled)
+/// vector.dev                                  (title, disabled)
 /// Connected · Online · 2/2                 (web UI status line, when it runs)
 /// ───
-/// ● relay.example.com · Connected    ▸ Open in Happier / ─ / Restart / Stop
-/// ○ work.example.com · Offline       ▸ Open in Happier / ─ / Start / Stop (disabled)
-/// ▲ other.example.com · Needs attention ▸ Set up outside Happier (user-owned)
+/// ● relay.example.com · Connected    ▸ Open in vector.dev / ─ / Restart / Stop
+/// ○ work.example.com · Offline       ▸ Open in vector.dev / ─ / Start / Stop (disabled)
+/// ▲ other.example.com · Needs attention ▸ Set up outside vector.dev (user-owned)
 /// ───
-/// Open Happier                  ⌘O
+/// Open vector.dev                  ⌘O
 /// Updates available (2)…
 /// Settings…                     ⌘,
 /// ───
 /// ✓ Start at login
 /// ───
-/// Quit Happier                  ⌘Q
+/// Quit vector.dev                  ⌘Q
 /// Stop background services and quit
 /// ```
 pub fn build_menu_entries(model: &TrayMenuModel) -> Vec<MenuEntry> {
@@ -972,7 +972,7 @@ mod tests {
         );
         assert!(matches!(
             &entries[0],
-            MenuEntry::Item { text, enabled: false, .. } if text == "Happier"
+            MenuEntry::Item { text, enabled: false, .. } if text == "vector.dev"
         ));
         assert!(matches!(
             find_item(&entries, QUIT_APP_MENU_ID),
@@ -1018,7 +1018,7 @@ mod tests {
                 _ => None,
             })
             .expect("the user-owned service still has its row");
-        assert_eq!(user_owned, vec![disabled("Set up outside Happier")]);
+        assert_eq!(user_owned, vec![disabled("Set up outside vector.dev")]);
     }
 
     #[test]
@@ -1209,18 +1209,18 @@ mod tests {
     #[test]
     fn labels_come_from_the_web_ui_and_fall_back_to_english_one_by_one() {
         let labels: TrayLabels = serde_json::from_value(json!({
-            "open": "Happier öffnen",
+            "open": "vector.dev öffnen",
             "quit": "",
-            "stopConfirmTitle": "Happier-Hintergrunddienst für {relay} stoppen?"
+            "stopConfirmTitle": "vector.dev-Hintergrunddienst für {relay} stoppen?"
         }))
         .expect("partial labels parse");
         let labels = labels.with_fallbacks();
-        assert_eq!(labels.open, "Happier öffnen");
-        assert_eq!(labels.quit, "Quit Happier");
+        assert_eq!(labels.open, "vector.dev öffnen");
+        assert_eq!(labels.quit, "Quit vector.dev");
         assert_eq!(labels.settings, "Settings…");
         assert_eq!(
             fill_relay(&labels.stop_confirm_title, "a.example.com"),
-            "Happier-Hintergrunddienst für a.example.com stoppen?"
+            "vector.dev-Hintergrunddienst für a.example.com stoppen?"
         );
     }
 

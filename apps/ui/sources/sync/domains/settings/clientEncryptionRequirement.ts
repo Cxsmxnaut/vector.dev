@@ -30,7 +30,7 @@ export function assertUiAccountEncryptionModeAllowed(params: Readonly<{
     const requirement = resolveUiClientEncryptionRequirement(params);
     if (isAccountEncryptionModeAllowedByClientRequirement(requirement, params.mode)) return;
     throw Object.assign(
-        new Error('This Happier client requires end-to-end encryption, but the Account settings are stored as plaintext.'),
+        new Error('This vector.dev client requires end-to-end encryption, but the Account settings are stored as plaintext.'),
         { code: 'CLIENT_E2EE_REQUIRED' },
     );
 }
@@ -48,7 +48,7 @@ export function assertUiSessionEncryptionModeAllowed(params: Readonly<{
 }>): void {
     if (isUiSessionEncryptionModeAllowed(params)) return;
     throw Object.assign(
-        new Error('This Happier client requires end-to-end encryption and will not write to a plaintext session.'),
+        new Error('This vector.dev client requires end-to-end encryption and will not write to a plaintext session.'),
         { code: 'CLIENT_E2EE_REQUIRED' },
     );
 }

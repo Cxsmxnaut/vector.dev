@@ -456,7 +456,7 @@ fn run_service_task(app: &AppHandle, kind: &str, extra: &[(&str, Value)]) -> Nat
     let Some(params) = crate::tray::native_task_params(app) else {
         return NativeTaskOutcome::Failed {
             code: "task_params_unknown".to_string(),
-            message: "Open Happier once so the tray can manage this computer's services."
+            message: "Open vector.dev once so the tray can manage this computer's services."
                 .to_string(),
         };
     };

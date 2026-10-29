@@ -80,13 +80,13 @@ mod tests {
         .unwrap();
         let replacement = consume_update_relaunch_marker(dir.path(), "0.2.11").unwrap();
         assert!(!launched_in_menu_bar_mode(
-            ["Happier", "--menu-bar"],
+            ["vector.dev", "--menu-bar"],
             replacement
         ));
         assert!(!dir.path().join(UPDATE_RELAUNCH_FILE).exists());
         let later_login = consume_update_relaunch_marker(dir.path(), "0.2.11").unwrap();
         assert!(launched_in_menu_bar_mode(
-            ["Happier", "--menu-bar"],
+            ["vector.dev", "--menu-bar"],
             later_login
         ));
     }

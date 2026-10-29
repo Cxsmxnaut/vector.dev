@@ -98,7 +98,7 @@ export const HAPPIER_DIAGNOSE_BODY: string = ${serializedDiagnoseSkill};
 export const BUILT_IN_PROMPTS: ReadonlyArray<BuiltInPrompt> = Object.freeze([
     Object.freeze({
         token: '/happier-diagnose',
-        title: 'Diagnose Happier Issue',
+        title: 'Diagnose vector.dev Issue',
         body: HAPPIER_DIAGNOSE_BODY,
         allowArgs: true,
     }),

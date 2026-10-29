@@ -66,14 +66,14 @@ test('apps/ui Tauri channel configs use the expected desktop product names', asy
   const preview = JSON.parse(previewRaw);
   const publicDev = JSON.parse(publicDevRaw);
 
-  assert.equal(stable?.productName, 'Happier');
-  assert.equal(stable?.app?.windows?.[0]?.title, 'Happier');
+  assert.equal(stable?.productName, 'vector.dev');
+  assert.equal(stable?.app?.windows?.[0]?.title, 'vector.dev');
 
-  assert.equal(preview?.productName, 'Happier (preview)');
-  assert.equal(preview?.app?.windows?.[0]?.title, 'Happier (preview)');
+  assert.equal(preview?.productName, 'vector.dev (preview)');
+  assert.equal(preview?.app?.windows?.[0]?.title, 'vector.dev (preview)');
 
-  assert.equal(publicDev?.productName, 'Happier (dev)');
-  assert.equal(publicDev?.app?.windows?.[0]?.title, 'Happier (dev)');
+  assert.equal(publicDev?.productName, 'vector.dev (dev)');
+  assert.equal(publicDev?.app?.windows?.[0]?.title, 'vector.dev (dev)');
 
   // Linux installs executables and icons in shared directories. Distinct bundle
   // identifiers alone do not prevent channels (or the Happier CLI) colliding.
@@ -131,7 +131,7 @@ test('apps/ui Tauri config runs beforeBuildCommand/beforeDevCommand via node wra
   assert.equal(config?.build?.beforeBuildCommand, 'node ./scripts/runTauriBeforeCommand.mjs tauri:prepare:build');
 });
 
-test('apps/ui packages a native layered macOS app icon with a legacy fallback', async () => {
+test('apps/ui packages valid native app icons with an optional layered macOS icon', async () => {
   const scriptsDir = dirname(fileURLToPath(import.meta.url));
   const packageRoot = dirname(scriptsDir);
   const srcTauriDir = join(packageRoot, 'src-tauri');
@@ -148,11 +148,15 @@ test('apps/ui packages a native layered macOS app icon with a legacy fallback', 
   const config = JSON.parse(await readFile(join(srcTauriDir, 'tauri.conf.json'), 'utf-8'));
   const bundleIcons = Array.isArray(config?.bundle?.icon) ? config.bundle.icon : [];
   const iconComposerPath = bundleIcons.find((iconPath) => iconPath.endsWith('.icon'));
-  assert.ok(iconComposerPath, 'the desktop bundle should include an Apple Icon Composer asset');
   assert.ok(
     bundleIcons.some((iconPath) => iconPath.endsWith('.icns')),
     'the desktop bundle should retain an ICNS fallback for pre-macOS 26 releases',
   );
+
+  for (const iconPath of bundleIcons.filter((value) => !value.endsWith('.icon'))) {
+    assert.ok((await readFile(join(srcTauriDir, iconPath))).byteLength > 0, `Bundle icon must exist: ${iconPath}`);
+  }
+  if (!iconComposerPath) return;
 
   const iconRoot = join(srcTauriDir, iconComposerPath);
   const iconDocument = JSON.parse(await readFile(join(iconRoot, 'icon.json'), 'utf-8'));

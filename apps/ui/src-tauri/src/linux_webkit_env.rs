@@ -71,7 +71,7 @@ fn disable_nvidia_explicit_sync() {
     std::env::set_var(NVIDIA_EXPLICIT_SYNC_VAR, "1");
     // Tauri's logger is not installed yet; stderr also reaches desktop session logs.
     eprintln!(
-        "Happier: applying NVIDIA Wayland startup mitigation (__NV_DISABLE_EXPLICIT_SYNC=1); \
+        "vector.dev: applying NVIDIA Wayland startup mitigation (__NV_DISABLE_EXPLICIT_SYNC=1); \
          an explicit user value overrides this default (tauri-apps/tauri#10702)"
     );
 }

@@ -46,7 +46,7 @@ pub(crate) fn build_pet_overlay_window_spec(always_on_top: bool) -> DesktopPetOv
     DesktopPetOverlayWindowSpec {
         label: PET_OVERLAY_WINDOW_LABEL,
         route: PET_OVERLAY_WINDOW_ROUTE,
-        title: "Happier Pet Overlay",
+        title: "vector.dev Pet Overlay",
         transparent: true,
         visible: false,
         decorations: false,

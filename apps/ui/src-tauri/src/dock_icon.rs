@@ -1,7 +1,7 @@
 //! Running-app Dock icon on macOS.
 //!
 //! Since macOS 26 every bundled app icon is drawn on the system's square tile,
-//! so the notch in Happier's mark shows the tile colour instead of the Dock
+//! so the notch in vector.dev's mark shows the tile colour instead of the Dock
 //! behind it. An image set at runtime through
 //! `NSApplication.applicationIconImage` is drawn as-is, which keeps the notch
 //! transparent while the app runs. Tauri already does this for dev builds only

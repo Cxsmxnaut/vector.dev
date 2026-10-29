@@ -117,7 +117,7 @@ export const ACCOUNT_DISPLAY_SETTING_DEFINITIONS = defineSettingDefinitions({
     executionRunsGuidanceEnabled: {
         schema: z.boolean(),
         default: true,
-        description: 'Include native-first routing and Happier run mechanics in coding-agent system prompts',
+        description: 'Include native-first routing and vector.dev run mechanics in coding-agent system prompts',
         storageScope: 'account',
         analytics: { trackCurrentState: true, trackChanges: true, valueKind: 'boolean', privacy: 'safe', identityScope: 'person' },
     },

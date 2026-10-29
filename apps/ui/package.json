@@ -39,7 +39,7 @@
     "ios:publicdev-dev-client": "yarn -s ensure:workspace:built && node ./scripts/runPublicdevDevClientIos.mjs",
     "submit": "eas submit --platform ios",
     "web": "yarn -s ensure:workspace:built && cross-env EXPO_UNSTABLE_WEB_MODAL=1 expo start --web",
-    "test": "yarn -s test:unit && yarn -s test:built-in-prompts && node --test ./scripts/tauri_deep_link_config.test.mjs ./scripts/installFreshnessInputs.contract.test.mjs ./tools/ensureNohoistPeerLinks.test.mjs ./tools/postinstall/reactNativeUnistylesWebOrientation.test.mjs ./tools/postinstall/reactNativeUnistylesWebLifecycle.test.mjs ./tools/postinstall/reactNativeGlogModuleMap.test.mjs ./tools/postinstall/verifyNativePatchCompilation.test.mjs ./tools/postinstall/verifyReactNativeEnrichedMarkdownPatch.test.mjs ./tools/postinstall/verifyVendoredLegendPatchMarkers.test.mjs ./tools/postinstall/verifyVendoredReanimatedPatchMarkers.test.mjs ./tools/postinstall/workletsRemoteFunctionLifetime.test.mjs",
+    "test": "yarn -s test:unit && yarn -s test:built-in-prompts && node --test ./scripts/desktop_updater_env.test.mjs ./scripts/tauri_deep_link_config.test.mjs ./scripts/installFreshnessInputs.contract.test.mjs ./tools/ensureNohoistPeerLinks.test.mjs ./tools/postinstall/reactNativeUnistylesWebOrientation.test.mjs ./tools/postinstall/reactNativeUnistylesWebLifecycle.test.mjs ./tools/postinstall/reactNativeGlogModuleMap.test.mjs ./tools/postinstall/verifyNativePatchCompilation.test.mjs ./tools/postinstall/verifyReactNativeEnrichedMarkdownPatch.test.mjs ./tools/postinstall/verifyVendoredLegendPatchMarkers.test.mjs ./tools/postinstall/verifyVendoredReanimatedPatchMarkers.test.mjs ./tools/postinstall/workletsRemoteFunctionLifetime.test.mjs",
     "test:unit": "yarn -s ensure:workspace:built && node ./scripts/runVitestShards.mjs --config vitest.config.ts",
     "test:built-in-prompts": "node --test ../../scripts/generateBuiltInPrompts.test.mjs",
     "test:integration": "yarn -s ensure:workspace:built && vitest run --config vitest.integration.config.ts && yarn -s test:integration:legend-native && yarn -s test:integration:legend-fabric",
@@ -77,17 +77,17 @@
     "start:production": "yarn -s ensure:workspace:built && cross-env EXPO_UNSTABLE_WEB_MODAL=1 APP_ENV=production expo start",
     "// ==== macOS Desktop (Tauri) Variants ====": "",
     "tauri:prepare:sidecar": "node ./scripts/prepareTauriSidecar.mjs",
-    "tauri:prepare:dev": "node ./scripts/prepareTauriSidecar.mjs && cross-env EXPO_UNSTABLE_WEB_MODAL=1 expo start",
-    "tauri:prepare:build": "node ./scripts/prepareTauriSidecar.mjs && cross-env EXPO_UNSTABLE_WEB_MODAL=1 expo export --platform web --output-dir dist",
+    "tauri:prepare:dev": "node ./scripts/prepareTauriSidecar.mjs && cross-env EXPO_UNSTABLE_WEB_MODAL=1 EXPO_PUBLIC_HAPPIER_DESKTOP_UPDATES_ENABLED=0 expo start",
+    "tauri:prepare:build": "node ./scripts/prepareTauriSidecar.mjs && cross-env EXPO_UNSTABLE_WEB_MODAL=1 EXPO_PUBLIC_HAPPIER_DESKTOP_UPDATES_ENABLED=0 expo export --platform web --output-dir dist",
     "ui:tauri": "node ../stack/scripts/tauri_dev.mjs",
     "tauri:dev": "node ../stack/scripts/tauri_dev.mjs",
     "tauri:qa": "node ./scripts/tauriMcpQa.mjs",
     "tauri:mcp:server": "npx -y @hypothesi/tauri-mcp-server",
     "tauri:mcp:cli": "npx -y -p @hypothesi/tauri-mcp-cli tauri-mcp",
     "tauri:mcp:session:start": "npx -y -p @hypothesi/tauri-mcp-cli tauri-mcp driver-session start --port 9223",
-    "tauri:build:dev": "node ./scripts/runTauriCli.mjs build --config src-tauri/tauri.publicdev.conf.json",
-    "tauri:build:preview": "node ./scripts/runTauriCli.mjs build --config src-tauri/tauri.preview.conf.json",
-    "tauri:build:production": "node ./scripts/runTauriCli.mjs build"
+    "tauri:build:dev": "cross-env APP_ENV=publicdev tauri build --config src-tauri/tauri.publicdev.conf.json",
+    "tauri:build:preview": "cross-env APP_ENV=preview tauri build --config src-tauri/tauri.preview.conf.json",
+    "tauri:build:production": "cross-env APP_ENV=production tauri build"
   },
   "jest": {
     "preset": "jest-expo"

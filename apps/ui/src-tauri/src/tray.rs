@@ -1,4 +1,4 @@
-//! The tray: the Happier mark in the menu bar / notification area, and its native menu.
+//! The tray: the vector.dev mark in the menu bar / notification area, and its native menu.
 //!
 //! One menu builder for every source (R16 c). The web UI pushes its facts while it runs
 //! (`desktop_set_tray_state`); in menu-bar mode `crate::menu_bar` reads the background services
@@ -38,7 +38,7 @@ use model::{
 
 #[cfg(desktop)]
 const TRAY_ICON_ID: &str = "main";
-/// The tray shows only the Happier mark; status lives in the menu it opens, so the icon never
+/// The tray shows only the vector.dev mark; status lives in the menu it opens, so the icon never
 /// grows a title. macOS gets a template image the menu bar tints for light and dark bars
 /// (tray-icon draws it 18pt tall; 36px is its @2x). Windows and Linux get 32px images picked by the
 /// tray's own theme: the full-colour mark on a light tray, a white silhouette on a dark one, where
@@ -51,7 +51,7 @@ const TRAY_ICON_FOR_LIGHT_TRAY: Image<'static> = tauri::include_image!("./icons/
 #[cfg(all(desktop, not(target_os = "macos")))]
 const TRAY_ICON_FOR_DARK_TRAY: Image<'static> = tauri::include_image!("./icons/tray/tray-dark.png");
 #[cfg(desktop)]
-const TRAY_TOOLTIP: &str = "Happier";
+const TRAY_TOOLTIP: &str = "vector.dev";
 /// The tray is how Windows and Linux reach Quit at all: they get no app menu, and closing the main
 /// window only hides it. It is also the only way to bring that window back on those platforms, and
 /// in menu-bar mode it is all that remains of the app.
@@ -635,14 +635,14 @@ mod tests {
     #[test]
     fn the_web_ui_push_parses_its_rows_labels_and_setting_and_defaults_the_rest() {
         let pushed: DesktopTrayStatePayload = serde_json::from_str(
-            r#"{"label":"Verbunden","detail":"Online","labels":{"quit":"Happier beenden"},
+            r#"{"label":"Verbunden","detail":"Online","labels":{"quit":"vector.dev beenden"},
                 "services":{"status":"listed","complete":true,"rows":[{"relayUrl":"https://a.example.com","name":"Work","state":"offline","appManaged":true}]},
                 "serviceAutostart":"at-login","taskParams":{"target":{"kind":"local"}}}"#,
         )
         .expect("payload parses");
         assert_eq!(
             pushed.labels.unwrap().with_fallbacks().quit,
-            "Happier beenden"
+            "vector.dev beenden"
         );
         assert!(matches!(
             pushed.services,

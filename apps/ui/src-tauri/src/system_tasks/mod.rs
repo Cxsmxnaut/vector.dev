@@ -23,7 +23,7 @@ use tauri::{AppHandle, Emitter, State};
 const MAX_STDOUT_LINE_BYTES: usize = 16 * 1024;
 
 /// R16 — tells hsetup which desktop app launched it (the bundle identifier), so the services it
-/// installs for that app name it and macOS Login Items attributes them to Happier.
+/// installs for that app name it and macOS Login Items attributes them to vector.dev.
 const DESKTOP_BUNDLE_ID_ENV: &str = "HAPPIER_DESKTOP_BUNDLE_ID";
 static DESKTOP_BUNDLE_ID: std::sync::OnceLock<String> = std::sync::OnceLock::new();
 
@@ -444,7 +444,7 @@ fn normalize_system_task_log_path(path: &str) -> Result<PathBuf, String> {
         .map_err(|error| format!("Log path does not exist: {error}"))?;
 
     let allowed_root = resolve_happier_log_root_dir().ok_or_else(|| {
-        "Unable to resolve the Happier log root directory for this platform.".to_string()
+        "Unable to resolve the vector.dev log root directory for this platform.".to_string()
     })?;
     let allowed_root = std::fs::canonicalize(&allowed_root).unwrap_or(allowed_root);
 

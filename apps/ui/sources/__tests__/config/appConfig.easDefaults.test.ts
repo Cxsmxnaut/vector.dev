@@ -97,6 +97,11 @@ function withCleanEnv<T>(fn: () => T): T {
 }
 
 describe('app.config.js', () => {
+    it('does not load upstream mobile application updates in the fork', () => {
+        const exp = withCleanEnv(() => getPublicConfig());
+        expect(exp.updates?.enabled).toBe(false);
+    });
+
     it('allows tailnet HTTP only for explicitly configured development clients', () => {
         const regular = withCleanEnv(() => {
             process.env.APP_ENV = 'publicdev';
@@ -154,7 +159,7 @@ describe('app.config.js', () => {
 
         expect(exp.extra?.app?.variant).toBe('preview');
         expect(exp.extra?.app?.identityVariant).toBe('publicdev');
-        expect(exp.name).toBe('Happier (dev)');
+        expect(exp.name).toBe('vector.dev (dev)');
         expect(exp.ios?.bundleIdentifier).toBe('dev.happier.app.publicdev');
         expect(exp.android?.package).toBe('dev.happier.app.publicdev');
         expect(exp.scheme).toBe('happier-dev');
@@ -227,7 +232,7 @@ describe('app.config.js', () => {
 
         expect(exp.extra?.app?.variant).toBe('preview');
         expect(exp.extra?.app?.identityVariant).toBe('internalpreview');
-        expect(exp.name).toBe('Happier (internal preview)');
+        expect(exp.name).toBe('vector.dev (internal preview)');
         expect(exp.ios?.bundleIdentifier).toBe('dev.happier.app.internalpreview');
         expect(exp.android?.package).toBe('dev.happier.app.internalpreview');
         expect(exp.scheme).toBe('happier-internalpreview');

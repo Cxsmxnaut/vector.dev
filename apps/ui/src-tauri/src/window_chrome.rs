@@ -65,7 +65,7 @@ pub(crate) enum DesktopMainWindowLifecycleEvent {
     MacOsReopen {
         has_visible_windows: bool,
     },
-    /// Happier was launched again while it runs (single instance).
+    /// vector.dev was launched again while it runs (single instance).
     SecondLaunch,
 }
 

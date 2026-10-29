@@ -200,6 +200,7 @@ const updatesNativeDebugEnabled =
 const updatesUrl = (process.env.EXPO_UPDATES_URL || '').trim() || `https://u.expo.dev/${easProjectId}`;
 const updatesChannel = (process.env.EXPO_UPDATES_CHANNEL || '').trim() || appEnvironmentConfig.updatesChannel;
 const updatesConfig = {
+    enabled: false,
     url: updatesUrl,
     requestHeaders: {
         "expo-channel-name": updatesChannel

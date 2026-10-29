@@ -43,31 +43,31 @@ function buildProductionConfig(overrides) {
 
 const APP_ENVIRONMENT_CONFIGS = {
     internaldev: buildRingBackedConfig('internaldev', {
-        name: 'Happier (internal dev)',
+        name: 'vector.dev (internal dev)',
         iosBundleId: 'dev.happier.app.dev.internal',
         androidPackage: 'dev.happier.app.internaldev',
         enableAssociatedDomains: false,
     }),
     internalpreview: buildRingBackedConfig('internalpreview', {
-        name: 'Happier (internal preview)',
+        name: 'vector.dev (internal preview)',
         iosBundleId: 'dev.happier.app.internalpreview',
         androidPackage: 'dev.happier.app.internalpreview',
         enableAssociatedDomains: false,
     }),
     publicdev: buildRingBackedConfig('publicdev', {
-        name: 'Happier (dev)',
+        name: 'vector.dev (dev)',
         iosBundleId: 'dev.happier.app.publicdev',
         androidPackage: 'dev.happier.app.publicdev',
         enableAssociatedDomains: false,
     }),
     preview: buildRingBackedConfig('preview', {
-        name: 'Happier (preview)',
+        name: 'vector.dev (preview)',
         iosBundleId: 'dev.happier.app.preview',
         androidPackage: 'dev.happier.app.preview',
         enableAssociatedDomains: false,
     }),
     production: buildProductionConfig({
-        name: 'Happier',
+        name: 'vector.dev',
         iosBundleId: 'dev.happier.app',
         androidPackage: 'dev.happier.app',
         enableAssociatedDomains: true,

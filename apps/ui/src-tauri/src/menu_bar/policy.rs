@@ -47,7 +47,7 @@ where
             .any(|arg| arg.as_ref() == MENU_BAR_ARG)
 }
 
-/// A second launch while Happier runs (single instance) opens its window — except the login item
+/// A second launch while vector.dev runs (single instance) opens its window — except the login item
 /// firing again, which asks for nothing the running app is not already doing.
 pub fn second_launch_opens_main_window<I, S>(args: I) -> bool
 where
@@ -358,11 +358,11 @@ mod tests {
     #[test]
     fn the_login_item_argument_selects_menu_bar_mode_and_the_binary_path_never_does() {
         assert!(launched_in_menu_bar_mode(
-            ["/Applications/Happier.app/x", "--menu-bar"],
+            ["/Applications/vector.dev.app/x", "--menu-bar"],
             false
         ));
         assert!(!launched_in_menu_bar_mode(
-            ["/Applications/Happier.app/x"],
+            ["/Applications/vector.dev.app/x"],
             false
         ));
         assert!(!launched_in_menu_bar_mode(["--menu-bar"], false));
@@ -370,18 +370,18 @@ mod tests {
 
     #[test]
     fn an_update_relaunch_opens_the_window_even_when_originally_started_at_login() {
-        assert!(!launched_in_menu_bar_mode(["Happier", "--menu-bar"], true));
-        assert!(!launched_in_menu_bar_mode(["Happier"], true));
+        assert!(!launched_in_menu_bar_mode(["vector.dev", "--menu-bar"], true));
+        assert!(!launched_in_menu_bar_mode(["vector.dev"], true));
     }
 
     #[test]
     fn a_second_launch_opens_the_window_unless_it_is_the_login_item_again() {
         assert!(second_launch_opens_main_window([
-            "/Applications/Happier.app/x"
+            "/Applications/vector.dev.app/x"
         ]));
-        // The login item firing while Happier already runs: it is already in the menu bar.
+        // The login item firing while vector.dev already runs: it is already in the menu bar.
         assert!(!second_launch_opens_main_window([
-            "/Applications/Happier.app/x",
+            "/Applications/vector.dev.app/x",
             "--menu-bar"
         ]));
     }
@@ -520,19 +520,19 @@ mod tests {
     #[test]
     fn persisted_state_survives_garbage_and_keeps_english_for_missing_labels() {
         let empty = parse_persisted_tray_state(Some(b"not json"));
-        assert_eq!(empty.labels.quit, "Quit Happier");
+        assert_eq!(empty.labels.quit, "Quit vector.dev");
         assert_eq!(empty.task_params, None);
-        assert_eq!(parse_persisted_tray_state(None).labels.open, "Open Happier");
+        assert_eq!(parse_persisted_tray_state(None).labels.open, "Open vector.dev");
 
         let saved = serde_json::to_vec(&json!({
-            "labels": { "quit": "Happier beenden" },
+            "labels": { "quit": "vector.dev beenden" },
             "taskParams": { "target": { "kind": "local" }, "channel": "preview" },
             "relayNames": { "https://a.example.com": "Work" }
         }))
         .unwrap();
         let state = parse_persisted_tray_state(Some(&saved));
-        assert_eq!(state.labels.quit, "Happier beenden");
-        assert_eq!(state.labels.open, "Open Happier");
+        assert_eq!(state.labels.quit, "vector.dev beenden");
+        assert_eq!(state.labels.open, "Open vector.dev");
         assert_eq!(state.relay_names["https://a.example.com"], "Work");
         assert!(state.task_params.is_some());
         // State written before login-start persistence must remain unknown, not OFF.

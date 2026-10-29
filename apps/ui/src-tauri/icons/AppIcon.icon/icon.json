@@ -1,14 +1,14 @@
 {
   "fill": {
-    "solid": "extended-srgb:1.00000,1.00000,1.00000,1.00000"
+    "solid": "extended-srgb:0.12549,0.18824,0.09804,1.00000"
   },
   "groups": [
     {
       "layers": [
         {
           "glass": false,
-          "image-name": "HappierSmile.svg",
-          "name": "Happier smile",
+          "image-name": "Vector.svg",
+          "name": "vector.dev",
           "position": {
             "scale": 1,
             "translation-in-points": [
@@ -20,38 +20,12 @@
       ],
       "shadow": {
         "kind": "none",
-        "opacity": 0.5
+        "opacity": 0
       },
       "specular": false,
       "translucency": {
         "enabled": false,
-        "value": 0.5
-      }
-    },
-    {
-      "layers": [
-        {
-          "glass": false,
-          "image-name": "HappierBag.svg",
-          "name": "Happier bag",
-          "position": {
-            "scale": 1,
-            "translation-in-points": [
-              0,
-              0
-            ]
-          }
-        }
-      ],
-      "lighting": "individual",
-      "shadow": {
-        "kind": "none",
-        "opacity": 0.5
-      },
-      "specular": false,
-      "translucency": {
-        "enabled": false,
-        "value": 0.5
+        "value": 0
       }
     }
   ],

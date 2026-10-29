@@ -2,10 +2,10 @@ import type { TranslationStructure } from "../_types";
 
 const mcpServersUxTranslationExtension = {
   mcpServersConfiguredEmptySubtitle: 'Crea un servidor, importa JSON del host o instala un preajuste recomendado.',
-  mcpServersHeroSubtitle: ({ configuredCount }: { configuredCount: number }) => `${configuredCount} configurados en Happier`,
+  mcpServersHeroSubtitle: ({ configuredCount }: { configuredCount: number }) => `${configuredCount} configurados en vector.dev`,
   mcpServersHeroSubtitleEmpty: 'Crea servidores una vez, previsualiza dónde se aplican e importa lo que ya usan otras herramientas.',
   mcpServersSegmentConfigured: 'Configurado',
-  mcpServersSegmentConfiguredSubtitle: 'Tu catálogo de Happier',
+  mcpServersSegmentConfiguredSubtitle: 'Tu catálogo de vector.dev',
   mcpServersSegmentDetected: 'Detectado',
   mcpServersSegmentDetectedSubtitle: 'Encontrado en archivos de configuración del proveedor',
   mcpServersSegmentPreview: 'Vista previa',
@@ -22,12 +22,12 @@ const mcpServersUxTranslationExtension = {
   mcpServersPreviewDirectorySubtitle: 'Elige la carpeta en la que piensas iniciar la sesión',
   mcpServersPreviewDirectoryPlaceholder: '/ruta/al/workspace',
   mcpServersPreviewRefreshTitle: 'Actualizar vista previa',
-  mcpServersPreviewRefreshSubtitle: 'Resolver los servidores MCP de Happier y los nativos del proveedor para este contexto',
+  mcpServersPreviewRefreshSubtitle: 'Resolver los servidores MCP de vector.dev y los nativos del proveedor para este contexto',
   mcpServersPreviewEmptyTitle: 'Aún no hay vista previa',
   mcpServersPreviewEmptySubtitle: 'Elige un backend, una máquina y un directorio, y luego actualiza para inspeccionar el conjunto MCP efectivo.',
   mcpServersPreviewDirectoryRequired: 'Elige un directorio para previsualizar esta sesión.',
-  mcpServersBuiltInDescription: 'Siempre disponible en sesiones de Happier.',
-  mcpServersSourceHappier: 'Happier',
+  mcpServersBuiltInDescription: 'Siempre disponible en sesiones de vector.dev.',
+  mcpServersSourceHappier: 'vector.dev',
   mcpServersSourceBuiltIn: 'Integrado',
   mcpServersSourceDetected: 'Detectado',
   mcpServersQuickInstallTitle: 'Instalación rápida',
@@ -88,17 +88,17 @@ const mcpServersUxTranslationExtension = {
   mcpServersStatusDetected: ({ provider }: { provider: string }) => `Habilitado en ${provider}`,
   mcpServersStatusDisabledInProvider: ({ provider }: { provider: string }) => `Deshabilitado en ${provider}`,
   mcpServersEditorAppliesTo: 'Se aplica a',
-  mcpServersEditorAppliesToSubtitle: 'Elige dónde debe añadir Happier este servidor de forma predeterminada.',
+  mcpServersEditorAppliesToSubtitle: 'Elige dónde debe añadir vector.dev este servidor de forma predeterminada.',
   mcpServersAddApplyRule: 'Añadir regla de aplicación',
   mcpServersAddApplyRuleSubtitle: 'Elige dónde debe aplicarse este servidor de forma predeterminada.',
   mcpServersAddApplyRuleHelp: 'Guarda esta regla de aplicación para incluirla en esta configuración de servidor.',
   mcpServersAddApplyRuleSave: 'Guardar regla de aplicación',
   mcpServersDeliveryNativeTitle: 'MCP nativo',
-  mcpServersDeliveryNativeSubtitle: 'Este backend recibe las herramientas de Happier como servidores MCP nativos.',
-  mcpServersDeliveryShellBridgeTitle: 'Puente de shell de Happier',
-  mcpServersDeliveryShellBridgeSubtitle: 'Este backend llama a las herramientas de Happier a través del puente `happier tools`.',
+  mcpServersDeliveryNativeSubtitle: 'Este backend recibe las herramientas de vector.dev como servidores MCP nativos.',
+  mcpServersDeliveryShellBridgeTitle: 'Puente de shell de vector.dev',
+  mcpServersDeliveryShellBridgeSubtitle: 'Este backend llama a las herramientas de vector.dev a través del puente `happier tools`.',
   mcpServersDeliveryUnsupportedTitle: 'No compatible',
-  mcpServersDeliveryUnsupportedSubtitle: 'Este backend todavía no recibe herramientas de Happier.',
+  mcpServersDeliveryUnsupportedSubtitle: 'Este backend todavía no recibe herramientas de vector.dev.',
 } as const;
 
 const newSessionMcpTranslationExtension = {
@@ -121,9 +121,9 @@ const newSessionMcpTranslationExtension = {
   mcpDetectedEmptyTitle: 'No se detectaron servidores MCP',
   mcpDetectedEmptySubtitle: 'Actualiza para escanear los archivos de configuración del proveedor en esta máquina.',
   mcpDetectedUnsupportedTitle: 'Los servidores MCP detectados no están disponibles',
-  mcpDetectedUnsupportedSubtitle: 'Actualiza Happier en esta máquina para habilitar el escaneo de la configuración del proveedor.',
-  mcpHappierSectionTitle: 'Servidores MCP de Happier',
-  mcpHappierEmptyTitle: 'No hay servidores MCP definidos en Happier',
+  mcpDetectedUnsupportedSubtitle: 'Actualiza vector.dev en esta máquina para habilitar el escaneo de la configuración del proveedor.',
+  mcpHappierSectionTitle: 'Servidores MCP de vector.dev',
+  mcpHappierEmptyTitle: 'No hay servidores MCP definidos en vector.dev',
   mcpHappierEmptySubtitle: 'Define servidores MCP en los ajustes para usarlos en las sesiones.',
   mcpReasonActiveByDefault: 'Incluidos por defecto',
   mcpReasonForcedIncluded: 'Requeridos por la configuración',
@@ -145,7 +145,7 @@ const settingsAppearanceTranslationExtension = {
     customGroup: 'Custom themes',
     customFooter: 'Tap a theme to activate it, or use row actions to edit, duplicate, or delete it.',
     defaultTheme: 'Default theme',
-    defaultThemeSubtitle: 'Use Happier theme colors without a custom profile',
+    defaultThemeSubtitle: 'Use vector.dev theme colors without a custom profile',
     active: 'Active',
     customProfileSubtitle: 'Custom local theme profile',
     tapToActivate: 'Tap to activate',
@@ -153,7 +153,7 @@ const settingsAppearanceTranslationExtension = {
     createProfile: 'Create theme',
     createProfileSubtitle: 'Start from any built-in or custom theme',
     importProfile: 'Import theme',
-    importProfileSubtitle: 'Paste JSON or choose a Happier theme profile file',
+    importProfileSubtitle: 'Paste JSON or choose a vector.dev theme profile file',
     exportProfile: 'Export theme',
     exportProfileSubtitle: 'Export this theme as JSON',
     presetsGroup: 'Built-in presets',
@@ -356,7 +356,7 @@ const memoryEmbeddingsTranslationExtension = {
       title: 'Proveedor',
       options: {
         localTitle: 'Modelo local',
-        localSubtitle: 'Gestionado por Happier y descargado en el primer uso',
+        localSubtitle: 'Gestionado por vector.dev y descargado en el primer uso',
         openAiCompatibleTitle: 'Punto final compatible con OpenAI',
         openAiCompatibleSubtitle: 'Usa tu propio servidor de embeddings y tu clave de API',
       },
@@ -451,7 +451,7 @@ const promptLibraryUxRefinementTranslationExtension = {
     externalAssetsInstallMethodCopySubtitle: 'Escribe una copia independiente en el destino seleccionado',
     externalAssetsInstallMethodSymlink: 'Enlace simbólico (recomendado)',
     externalAssetsInstallMethodSymlinkSubtitle:
-      'Vincula el destino a una copia gestionada por Happier para facilitar las actualizaciones',
+      'Vincula el destino a una copia gestionada por vector.dev para facilitar las actualizaciones',
     registriesAddGitSourceSubtitle: 'Añade un repositorio Git o una copia local como fuente de registro',
     registriesSourceTitleLabel: 'Título de la fuente',
     registriesSourceUrlLabel: 'URL del repositorio o ruta local',
@@ -463,7 +463,7 @@ const promptLibraryUxRefinementTranslationExtension = {
     registriesItemPreview: 'Vista previa de SKILL.md',
     registriesItemPreviewUnavailable:
       'No hay una vista previa de SKILL.md disponible para este elemento del registro.',
-    registriesItemImportSubtitle: 'Importa este paquete de habilidad a la biblioteca de Happier',
+    registriesItemImportSubtitle: 'Importa este paquete de habilidad a la biblioteca de vector.dev',
     registriesItemInstallAction: 'Instalar en la máquina',
     registriesItemInstallConfirmTitle: '¿Instalar elemento del registro?',
     registriesItemInstallConfirmBody:
@@ -487,7 +487,7 @@ const sessionHandoffTranslationExtensions = {
       subtitle: "Copia el historial de conversación de esta sesión a la otra máquina. Desactívalo si ya está allí.",
       checking: "Comprobando la compatibilidad de ambas máquinas…",
       agentRequiresTransfer: "Este Agente requiere transferir los datos de la sesión entre máquinas.",
-      updateRequired: "Actualiza Happier en ambas máquinas para desactivar esta opción.",
+      updateRequired: "Actualiza vector.dev en ambas máquinas para desactivar esta opción.",
       sessionMissing: "El historial de esta sesión no está en la máquina de destino. Activa «Transferir datos de la sesión» e inténtalo de nuevo.",
       workspaceRequiresTransfer: "Activa «Transferir datos de la sesión» para copiar o sincronizar archivos del espacio de trabajo.",
     },
@@ -519,7 +519,7 @@ const sessionHandoffTranslationExtensions = {
     recovery: {
       title: 'La sesión se detuvo aquí antes de completar la transferencia',
       messageAfterSourceStop:
-        'Happier ya detuvo esta sesión en esta máquina, pero no pudo terminar de iniciarla en la máquina de destino. Reiníciala aquí o mantenla detenida mientras recuperas la máquina de destino.',
+        'vector.dev ya detuvo esta sesión en esta máquina, pero no pudo terminar de iniciarla en la máquina de destino. Reiníciala aquí o mantenla detenida mientras recuperas la máquina de destino.',
       restartOnSource: 'Reiniciar en el origen',
       keepStopped: 'Mantener detenida',
     },
@@ -572,8 +572,8 @@ const settingsSessionHandoffTranslationExtensions = {
       groupFooter: 'Solo se aplica cuando la sesion de origen es actualmente directa.',
       keepDirectTitle: 'Mantener directa',
       keepDirectSubtitle: 'Reanuda el destino como una sesion directa cuando el proveedor lo permita.',
-      convertToPersistedTitle: 'Convertir a Happier',
-      convertToPersistedSubtitle: 'Importa la transcripción y continúa como una sesión de Happier.',
+      convertToPersistedTitle: 'Convertir a vector.dev',
+      convertToPersistedSubtitle: 'Importa la transcripción y continúa como una sesión de vector.dev.',
     },
   },
 } as const;
@@ -1164,7 +1164,7 @@ export const es: TranslationStructure = {
   appCrash: {
     title: "Algo salió mal",
     subtitle:
-      "Happier tuvo un error inesperado. Puedes reiniciar la interfaz de la app o copiar los detalles para soporte.",
+      "vector.dev tuvo un error inesperado. Puedes reiniciar la interfaz de la app o copiar los detalles para soporte.",
     detailsTitle: "Detalles del error",
     restart: "Reiniciar app",
     restartAndReportIssue: "Reiniciar y abrir informe de error",
@@ -1381,11 +1381,11 @@ export const es: TranslationStructure = {
     scanComputerQrUnavailableTitle: "Escaneo de QR del ordenador no disponible",
     scanComputerQrUnavailableBody:
       "Este método de inicio de sesión está deshabilitado en este servidor. Usa otra opción a continuación para restaurar tu cuenta.",
-    scanComputerQrInstructions: "Escanea el código QR que se muestra en Happier en tu computadora (Configuración → Añade tu teléfono).",
+    scanComputerQrInstructions: "Escanea el código QR que se muestra en vector.dev en tu computadora (Configuración → Añade tu teléfono).",
     scanComputerQrButton: "Escanear QR para iniciar sesión",
     waitingForApproval: "Esperando aprobación…",
     showQrInstead: "Mostrar un código QR en su lugar",
-    addPhoneQrInstructions: "Escanea este código QR con la app móvil de Happier para iniciar sesión en tu teléfono.",
+    addPhoneQrInstructions: "Escanea este código QR con la app móvil de vector.dev para iniciar sesión en tu teléfono.",
     serverUrlNotEmbeddedTitle: "Configura el servidor en tu teléfono",
     serverUrlNotEmbeddedBody:
       "Este código QR no puede incluir la dirección del servidor porque está configurada como localhost. En tu teléfono, ve a Configuración → Servidores y agrega una URL a la que el teléfono pueda acceder (IP de la LAN o Tailscale) y luego vuelve a escanear.",
@@ -1407,14 +1407,14 @@ export const es: TranslationStructure = {
     externalAuthVerifiedTitle: ({ provider }: { provider: string }) =>
       `${provider} verificado`,
     externalAuthVerifiedBody: ({ provider }: { provider: string }) =>
-      `Encontramos una cuenta existente de Happier vinculada a ${provider}. Para terminar de iniciar sesión en este dispositivo, restaura tu clave de cuenta con el código QR o tu clave secreta.`,
+      `Encontramos una cuenta existente de vector.dev vinculada a ${provider}. Para terminar de iniciar sesión en este dispositivo, restaura tu clave de cuenta con el código QR o tu clave secreta.`,
     restoreWithSecretKeyInstead: "Restaurar con clave secreta",
     restoreWithSecretKeyDescription:
       "Ingresa tu clave secreta para recuperar el acceso a tu cuenta.",
     lostAccessLink: "¿Sin acceso?",
     lostAccessTitle: "¿Perdiste el acceso a tu cuenta?",
     lostAccessBody:
-      "Si ya no tienes ningún dispositivo vinculado a esta cuenta y perdiste tu clave secreta, puedes restablecer tu cuenta con tu proveedor de identidad. Esto crea una nueva cuenta de Happier. No se puede recuperar tu historial cifrado anterior.",
+      "Si ya no tienes ningún dispositivo vinculado a esta cuenta y perdiste tu clave secreta, puedes restablecer tu cuenta con tu proveedor de identidad. Esto crea una nueva cuenta de vector.dev. No se puede recuperar tu historial cifrado anterior.",
     lostAccessContinue: ({ provider }: { provider: string }) =>
       `Continuar con ${provider}`,
     lostAccessConfirmTitle: "¿Restablecer cuenta?",
@@ -1424,7 +1424,7 @@ export const es: TranslationStructure = {
     secretKeyPlaceholder: "XXXXX-XXXXX-XXXXX...",
     linkNewDeviceTitle: "Vincular Nuevo Dispositivo",
     linkNewDeviceSubtitle: "Escanea el código QR que se muestra en tu nuevo dispositivo para vincularlo a esta cuenta",
-    linkNewDeviceQrInstructions: "Abre Happier en tu nuevo dispositivo y muestra el código QR",
+    linkNewDeviceQrInstructions: "Abre vector.dev en tu nuevo dispositivo y muestra el código QR",
     scanQrCodeOnDevice: "Escanear Código QR",
     unsupported: {
       connectTitle: ({ name }: { name: string }) => `Conectar ${name}`,
@@ -1514,7 +1514,7 @@ export const es: TranslationStructure = {
         expectedBehaviorPlaceholder: "¿Qué debería ocurrir en su lugar?",
         reproductionStepsLabel: "Pasos de reproducción (opcional)",
         reproductionStepsPlaceholder:
-          "1. Abre Happier\n2. Inicia una sesión\n3. ...",
+          "1. Abre vector.dev\n2. Inicia una sesión\n3. ...",
         whatChangedLabel: "Qué cambió recientemente (opcional)",
         whatChangedPlaceholder:
           "Actualizaciones, cambios de configuración, nuevos pasos de configuración...",
@@ -1598,7 +1598,7 @@ export const es: TranslationStructure = {
       title: "Activado",
       subtitle: "Crear y mantener un índice local en esta máquina",
       footer:
-        "Cuando está activado, Happier crea un índice local en el dispositivo a partir de transcripciones descifradas para facilitar el recuerdo y la búsqueda.",
+        "Cuando está activado, vector.dev crea un índice local en el dispositivo a partir de transcripciones descifradas para facilitar el recuerdo y la búsqueda.",
     },
     budgets: {
       groupTitle: "Presupuesto de disco",
@@ -1861,8 +1861,8 @@ export const es: TranslationStructure = {
         backendsSubtitle: "Backends configurados y destinos de lanzamiento personalizados.",
       },
       enableInjection: {
-        title: "Instrucciones de ejecuciones de Happier",
-        subtitle: "Al desactivarlas, se eliminan el enrutamiento nativo primero y la mecánica de ejecuciones de Happier de los prompts del sistema del agente de código.",
+        title: "Instrucciones de ejecuciones de vector.dev",
+        subtitle: "Al desactivarlas, se eliminan el enrutamiento nativo primero y la mecánica de ejecuciones de vector.dev de los prompts del sistema del agente de código.",
       },
       notifyParentOnCompletion: { title: 'Notificar al agente principal al finalizar', subtitle: 'Envía al agente principal un evento de finalización estructurado.' },
       characterBudget: {
@@ -1941,7 +1941,7 @@ export const es: TranslationStructure = {
     addYourPhoneSubtitle: "Muestra un código QR para iniciar sesión en tu teléfono",
     addMachine: "Agregar una máquina",
     machineSetupCurrentMachineTitle: "Esta computadora",
-    machineSetupCurrentMachineSubtitle: "Inicializa Happier directamente en este dispositivo",
+    machineSetupCurrentMachineSubtitle: "Inicializa vector.dev directamente en este dispositivo",
     machineSetupAdoptExistingTitle: "Adoptar instalación existente",
     machineSetupAdoptExistingSubtitle: "Usa una configuración existente del daemon/servicio en esta computadora",
     machineSetupAdoptExistingProgressTitle: "Comprobando instalación existente",
@@ -1950,7 +1950,7 @@ export const es: TranslationStructure = {
     machineSetupSshMachineSubtitle: "Conecta un equipo de desarrollo, una VM o un servidor mediante SSH",
     machineSetupStagesTitle: "Qué ocurre",
     machineSetupStageConnect: "Conectar y validar el acceso",
-    machineSetupStageInstall: "Instalar Happier y emparejar la máquina",
+    machineSetupStageInstall: "Instalar vector.dev y emparejar la máquina",
     machineSetupStageFinish: "Finalizar la configuración en la terminal integrada",
     machineSetupComingSoon: "La inicialización de máquinas llegará pronto.",
     machineSetupTaskWaitingForInput: "Esperando entrada",
@@ -1969,7 +1969,7 @@ export const es: TranslationStructure = {
     machineSetupRemoteRelaySwitchSubtitle: "Cambia ahora y continúa la configuración con el nuevo Relay.",
     machineSetupRemoteRelaySwitchConfirmTitle: "¿Cambiar de Relay?",
     machineSetupRemoteRelaySwitchConfirmBody: ({ relayUrl }: { relayUrl: string }) =>
-      `Cambiar Happier a ${relayUrl} y continuar la configuración?`,
+      `Cambiar vector.dev a ${relayUrl} y continuar la configuración?`,
     machineSetupRemotePromptTrustAction: "Confiar en la clave del host",
     machineSetupRemotePromptReplaceAction: "Reemplazar la clave guardada",
     machineSetupRemotePromptApproveAction: "Aprobar emparejamiento",
@@ -2061,13 +2061,13 @@ export const es: TranslationStructure = {
     actionsSettingsAboutSubtitle:
       "Habilita o deshabilita acciones globalmente, por superficie (UI/voz/MCP) y por ubicación (dónde aparecen en la interfaz). Las acciones deshabilitadas se bloquean de forma segura en tiempo de ejecución.",
     aboutFooter:
-      "Happier Coder es un cliente móvil para Codex y Claude Code. Usa cifrado de extremo a extremo por defecto, con restauración de la cuenta en tus otros dispositivos. No está afiliado con Anthropic.",
+      "vector.dev Coder es un cliente móvil para Codex y Claude Code. Usa cifrado de extremo a extremo por defecto, con restauración de la cuenta en tus otros dispositivos. No está afiliado con Anthropic.",
     whatsNew: "Novedades",
     whatsNewSubtitle: "Ve las últimas actualizaciones y mejoras",
     reportIssue: "Reportar un problema",
     privacyPolicy: "Política de privacidad",
     termsOfService: "Términos de servicio",
-    rateUs: "Califica Happier",
+    rateUs: "Califica vector.dev",
     rateUsSubtitle: "Si te gusta la app, una calificación rápida nos ayuda mucho",
     eula: "EULA",
     supportUs: "Apóyanos",
@@ -2650,23 +2650,23 @@ export const es: TranslationStructure = {
             `The daemon could not verify ${agentId} resume state because required resume inputs were missing. Reported reason: ${reason}. Start fresh under the selected account or continue with the current account.`,
         metadata_update_failed: "La sesión no pudo guardar la nueva selección de autenticación. Vuelve a intentarlo cuando la sesión termine de sincronizar.",
         no_eligible_group_member: "Ninguna cuenta de este Pool es apta actualmente para respaldo. Revisa las cuentas conectadas y reconecta un perfil si es necesario.",
-        recovery_retry_scheduled: "Happier programó un reintento de recuperación del proveedor. Puedes reintentar ahora o revisar las cuentas conectadas.",
-        recovery_dead_lettered: "Happier agotó los reintentos automáticos de recuperación del proveedor. Revisa las cuentas conectadas o reconecta el perfil seleccionado.",
-        runtime_auth_recovery_superseded: "Este intento de recuperación del proveedor fue reemplazado por un estado más reciente del servicio conectado. Happier no seguirá reintentando la cuenta obsoleta.",
+        recovery_retry_scheduled: "vector.dev programó un reintento de recuperación del proveedor. Puedes reintentar ahora o revisar las cuentas conectadas.",
+        recovery_dead_lettered: "vector.dev agotó los reintentos automáticos de recuperación del proveedor. Revisa las cuentas conectadas o reconecta el perfil seleccionado.",
+        runtime_auth_recovery_superseded: "Este intento de recuperación del proveedor fue reemplazado por un estado más reciente del servicio conectado. vector.dev no seguirá reintentando la cuenta obsoleta.",
         runtime_auth_generation_stale: "Este intento de recuperación del proveedor pertenece a una generación anterior del servicio conectado. Espera el último cambio o revisa las cuentas conectadas.",
-        hot_apply_unavailable: "Este proveedor no puede cambiar la autenticación de forma segura en la sesión en curso. Happier esperará un reinicio seguro o la siguiente ruta de recuperación elegible.",
+        hot_apply_unavailable: "Este proveedor no puede cambiar la autenticación de forma segura en la sesión en curso. vector.dev esperará un reinicio seguro o la siguiente ruta de recuperación elegible.",
         app_server_unavailable: "El servidor de la app del proveedor no estaba disponible para verificar o aplicar el cambio de autenticación. Vuelve a intentarlo cuando la sesión esté lista.",
         provider_account_adoption_mismatch: "El proveedor permaneció en otra cuenta después del cambio. Revisa las cuentas conectadas o reintenta el cambio.",
-        provider_account_identity_unverified: "Happier no pudo comprobar la identidad de la cuenta activa del proveedor. Evitará distribuir al mismo tipo de cuenta hasta que haya una prueba más sólida.",
-        post_switch_verification_failed: "Happier no pudo verificar que el proveedor adoptara la cuenta seleccionada. Revisa las cuentas conectadas o reintenta el cambio.",
-        quota_snapshot_stale: "La última instantánea de cuota es demasiado antigua para impulsar un cambio proactivo. Happier seguirá usando recuperación reactiva hasta que haya una cuota actualizada.",
-        quota_fetch_disabled: "Las comprobaciones de cuota están desactivadas actualmente para este proveedor. Happier seguirá usando recuperación reactiva.",
-        quota_fetch_backoff: "Las comprobaciones de cuota están temporalmente en espera tras una respuesta del proveedor o de la red. Happier volverá a actualizar la cuota más tarde.",
-        auth_surface_weakly_verified: "Happier verificó que los archivos de autenticación seleccionados se reescribieron, pero este proveedor no expone la identidad exacta de la cuenta activa.",
-        connected_service_restart_requested: "Happier solicitó un reinicio seguro de la sesión para aplicar la cuenta conectada seleccionada.",
+        provider_account_identity_unverified: "vector.dev no pudo comprobar la identidad de la cuenta activa del proveedor. Evitará distribuir al mismo tipo de cuenta hasta que haya una prueba más sólida.",
+        post_switch_verification_failed: "vector.dev no pudo verificar que el proveedor adoptara la cuenta seleccionada. Revisa las cuentas conectadas o reintenta el cambio.",
+        quota_snapshot_stale: "La última instantánea de cuota es demasiado antigua para impulsar un cambio proactivo. vector.dev seguirá usando recuperación reactiva hasta que haya una cuota actualizada.",
+        quota_fetch_disabled: "Las comprobaciones de cuota están desactivadas actualmente para este proveedor. vector.dev seguirá usando recuperación reactiva.",
+        quota_fetch_backoff: "Las comprobaciones de cuota están temporalmente en espera tras una respuesta del proveedor o de la red. vector.dev volverá a actualizar la cuota más tarde.",
+        auth_surface_weakly_verified: "vector.dev verificó que los archivos de autenticación seleccionados se reescribieron, pero este proveedor no expone la identidad exacta de la cuenta activa.",
+        connected_service_restart_requested: "vector.dev solicitó un reinicio seguro de la sesión para aplicar la cuenta conectada seleccionada.",
         connected_service_credential_reconnect_required: "La cuenta conectada seleccionada debe volver a conectarse antes de poder reanudar esta sesión. Vuelve a conectar el perfil y vuelve a intentarlo.",
         claude_subscription_missing_claude_code_scope: "Este perfil de Claude se conectó antes de que se concedieran los permisos de Claude Code. Vuelve a conectarlo y reintenta la sesión o el cambio de Pool.",
-        claude_subscription_native_auth_materialization_failed: "Happier no pudo crear el archivo de credenciales nativas de Claude Code para este perfil. Vuelve a conectar el perfil o elige otro miembro del Pool.",
+        claude_subscription_native_auth_materialization_failed: "vector.dev no pudo crear el archivo de credenciales nativas de Claude Code para este perfil. Vuelve a conectar el perfil o elige otro miembro del Pool.",
         claude_subscription_setup_token_not_supported_for_unified: "El modo Claude Unified debe iniciar la CLI de Claude con credenciales OAuth nativas. Vuelve a conectar este perfil con OAuth en lugar de un token de configuración.",
       },
       actions: {
@@ -2814,7 +2814,7 @@ export const es: TranslationStructure = {
       invalidConfig: "Configuración de servicio conectado no válida.",
       connectWebGroupTitle: "Conectar (web)",
       connectWebDescription:
-        "Abre la URL de autorización, completa OAuth en tu navegador y luego copia/pega la URL final redirigida de vuelta en Happier.",
+        "Abre la URL de autorización, completa OAuth en tu navegador y luego copia/pega la URL final redirigida de vuelta en vector.dev.",
       openAuthorizationUrl: "Abrir URL de autorización",
       opensInNewTab: "Se abre en una nueva pestaña",
       preparing: "Preparando…",
@@ -2925,7 +2925,7 @@ export const es: TranslationStructure = {
       connectAccessTokenTitle: "Conectar con token de acceso",
       connectAccessTokenSubtitle: "Pega un token de acceso personal de GitHub",
       openGithubTokenTemplateTitle: "Crear token de GitHub",
-      openGithubTokenTemplateSubtitle: "Abre GitHub con los permisos que Happier necesita ya rellenados",
+      openGithubTokenTemplateSubtitle: "Abre GitHub con los permisos que vector.dev necesita ya rellenados",
       disconnectConfirmBody: ({ service, profileId }: { service: string; profileId: string }) =>
         `¿Desconectar ${service} (${profileId})?`,
       disconnectGroupCleanupConfirmBody: ({ service, profileId, groups }: { service: string; profileId: string; groups: string }) =>
@@ -3093,13 +3093,13 @@ export const es: TranslationStructure = {
         softSwitchThresholdTitle: "Umbral de cambio suave",
         softSwitchThresholdSubtitle: ({ percent }: { percent: string }) => `Cambiar por debajo del ${percent}% restante cuando este Pool tenga otro miembro con cuota utilizable más reciente.`,
         softSwitchThresholdPromptTitle: "Umbral de cambio suave",
-        softSwitchThresholdPromptBody: "Introduce el porcentaje restante en el que Happier debería preferir un miembro más seguro de este Pool con varias cuentas. Usa 0 para desactivar el cambio preventivo.",
+        softSwitchThresholdPromptBody: "Introduce el porcentaje restante en el que vector.dev debería preferir un miembro más seguro de este Pool con varias cuentas. Usa 0 para desactivar el cambio preventivo.",
         invalidSoftSwitchThresholdTitle: "Umbral no válido",
         invalidSoftSwitchThresholdBody: "Introduce un número de 0 a 100.",
         staleProbeTitle: "Comprobar cuota antigua después de",
         staleProbeSubtitle: ({ minutes }: { minutes: string }) => `Volver a comprobar cuando los datos de cuota tengan más de ${minutes} min.`,
         staleProbePromptTitle: "Comprobar cuota antigua después de",
-        staleProbePromptBody: "Introduce cuántos minutos se pueden reutilizar los datos de cuota antes de que Happier vuelva a comprobar.",
+        staleProbePromptBody: "Introduce cuántos minutos se pueden reutilizar los datos de cuota antes de que vector.dev vuelva a comprobar.",
         invalidStaleProbeTitle: "Intervalo de comprobación no válido",
         invalidStaleProbeBody: "Introduce al menos 1 minuto.",
         switchBudgetTitle: "Límites de cambio automático",
@@ -3232,7 +3232,7 @@ export const es: TranslationStructure = {
       groupUnknownSubtitle: "La disponibilidad aún se está sincronizando",
       groupUnsupportedSubtitle: "Este runtime no puede cambiar Pools de cuentas",
       connectedServicesTitle: "Usar servicios conectados",
-      connectedServicesSubtitle: "Obtener y materializar desde la nube de Happier",
+      connectedServicesSubtitle: "Obtener y materializar desde la nube de vector.dev",
       notConnectedTitle: "No hay servicios conectados",
       notConnectedSubtitle: "Toca para abrir configuración",
       profileLabel: "Perfil",
@@ -3452,7 +3452,7 @@ export const es: TranslationStructure = {
               "Mejor renderizado de diffs en web/escritorio. Usa una canalización con worker y hace fallback de forma segura si no está disponible.",
           },
           happier: {
-            title: "Renderizador de diff: Happier",
+            title: "Renderizador de diff: vector.dev",
             subtitle:
               "Renderizador de respaldo para compatibilidad y solución de problemas.",
           },
@@ -3528,44 +3528,44 @@ export const es: TranslationStructure = {
 
   settingsDesktop: {
     title: 'Escritorio',
-    footer: 'Controla cómo se comporta Happier en este ordenador.',
+    footer: 'Controla cómo se comporta vector.dev en este ordenador.',
     backgroundServiceTitle: 'Seguir disponible en segundo plano',
-    backgroundServiceSubtitle: 'Este ordenador sigue respondiendo después de que salgas de Happier, en cada relay al que está conectado: Happier se inicia al acceder y se queda en la barra de menús o en la bandeja del sistema. Si lo desactivas, salir de Happier detiene el servicio en segundo plano, y tu teléfono y tu navegador no podrán alcanzar este ordenador hasta que vuelvas a abrir la app.',
-    backgroundServiceUnknown: 'La línea de comandos de Happier de este ordenador no indica si el servicio en segundo plano se inicia al acceder.',
+    backgroundServiceSubtitle: 'Este ordenador sigue respondiendo después de que salgas de vector.dev, en cada relay al que está conectado: vector.dev se inicia al acceder y se queda en la barra de menús o en la bandeja del sistema. Si lo desactivas, salir de vector.dev detiene el servicio en segundo plano, y tu teléfono y tu navegador no podrán alcanzar este ordenador hasta que vuelvas a abrir la app.',
+    backgroundServiceUnknown: 'La línea de comandos de vector.dev de este ordenador no indica si el servicio en segundo plano se inicia al acceder.',
     backgroundServiceNotSetUp: 'Disponible cuando este ordenador esté configurado.',
     backgroundServiceChangeFailed: 'No se pudo aplicar el cambio. Inténtalo de nuevo.',
-    trayOpen: 'Abrir Happier',
-    trayQuit: 'Salir de Happier',
-    trayQuitKeepServices: 'Salir de Happier (los servicios en segundo plano siguen en marcha)',
-    trayQuitStopServices: 'Salir de Happier y detener los servicios en segundo plano',
-    trayOpenInHappier: 'Abrir en Happier',
+    trayOpen: 'Abrir vector.dev',
+    trayQuit: 'Salir de vector.dev',
+    trayQuitKeepServices: 'Salir de vector.dev (los servicios en segundo plano siguen en marcha)',
+    trayQuitStopServices: 'Salir de vector.dev y detener los servicios en segundo plano',
+    trayOpenInHappier: 'Abrir en vector.dev',
     traySettings: 'Ajustes…',
     trayStartAtLogin: 'Iniciar al acceder',
     trayStopAndQuit: 'Detener los servicios en segundo plano y salir',
     trayStart: 'Iniciar',
     trayRestart: 'Reiniciar',
     trayStop: 'Detener',
-    trayUserOwned: 'Configurado fuera de Happier',
+    trayUserOwned: 'Configurado fuera de vector.dev',
     trayChecking: 'Comprobando los servicios en segundo plano…',
     trayReadFailed: 'No se pudieron leer los servicios en segundo plano',
     trayIncomplete: 'Algunos servicios en segundo plano no se pudieron leer',
     trayNoServices: 'Este ordenador aún no está configurado',
     trayWorking: 'Trabajando…',
-    trayStopConfirmTitle: ({ relay }: { relay: string }) => `¿Detener el servicio en segundo plano de Happier para ${relay}?`,
+    trayStopConfirmTitle: ({ relay }: { relay: string }) => `¿Detener el servicio en segundo plano de vector.dev para ${relay}?`,
     trayStopConfirmBody: ({ relay }: { relay: string }) => `Las sesiones de agentes que se ejecutan en este ordenador para ${relay} terminarán, y tu teléfono y tu navegador no podrán alcanzarlo allí hasta que se vuelva a iniciar.`,
-    trayStopAllConfirmTitle: '¿Detener los servicios en segundo plano de Happier y salir?',
-    trayStopAllConfirmBody: 'Las sesiones de agentes que se ejecutan en este ordenador terminarán, y tu teléfono y tu navegador no podrán alcanzarlo hasta que vuelvas a abrir Happier.',
+    trayStopAllConfirmTitle: '¿Detener los servicios en segundo plano de vector.dev y salir?',
+    trayStopAllConfirmBody: 'Las sesiones de agentes que se ejecutan en este ordenador terminarán, y tu teléfono y tu navegador no podrán alcanzarlo hasta que vuelvas a abrir vector.dev.',
     trayStopConfirmAction: 'Detener',
     trayActionFailedTitle: 'No se ha podido hacer',
-    trayLoginItemFailed: 'No se pudo actualizar el elemento de inicio de Happier',
+    trayLoginItemFailed: 'No se pudo actualizar el elemento de inicio de vector.dev',
     traySessions: ({ count }: { count: string }) => `Sesiones: ${count}`,
     closeStopTitle: 'Todavía hay sesiones de agente en curso',
-    closeStopBody: 'Cerrar Happier detiene el servicio en segundo plano de este ordenador y termina las sesiones que se ejecutan aquí.',
+    closeStopBody: 'Cerrar vector.dev detiene el servicio en segundo plano de este ordenador y termina las sesiones que se ejecutan aquí.',
     closeStopUnknownTitle: '¿Detener el servicio en segundo plano?',
-    closeStopUnknownBody: 'Happier no puede ver qué sesiones se están ejecutando en este ordenador. Al cerrarlo se detiene el servicio en segundo plano y terminan las que haya.',
+    closeStopUnknownBody: 'vector.dev no puede ver qué sesiones se están ejecutando en este ordenador. Al cerrarlo se detiene el servicio en segundo plano y terminan las que haya.',
     closeStopConfirm: 'Detener de todos modos',
     closeStopKeep: 'Dejarlo en marcha',
-    closeStopFailedBody: 'Happier no pudo detener los servicios en segundo plano, así que se queda en la barra de menús o en la bandeja del sistema, donde puedes volver a intentarlo.',
+    closeStopFailedBody: 'vector.dev no pudo detener los servicios en segundo plano, así que se queda en la barra de menús o en la bandeja del sistema, donde puedes volver a intentarlo.',
   },
 
   settingsPets: {
@@ -3585,7 +3585,7 @@ export const es: TranslationStructure = {
     deviceOverrideTitle: 'Usar en este dispositivo',
     deviceOverrideSubtitle: 'Reemplaza localmente el ajuste de mascota de la cuenta.',
     sourceTitle: 'Origen de la mascota',
-    builtInSubtitle: 'Incluido en Happier.',
+    builtInSubtitle: 'Incluido en vector.dev.',
     builtInBlinkSubtitle: 'Convierte señales de sesión en pequeñas luces de estado tranquilas.',
     builtInFurySubtitle: 'Prueba flujos complicados antes de que lleguen a producción.',
     builtInMiloSubtitle: 'Mantiene la UI ordenada y duerme sobre tests fallidos.',
@@ -3594,7 +3594,7 @@ export const es: TranslationStructure = {
     localLibraryTitle: 'Este dispositivo',
     localLibraryFooter: 'Las mascotas locales permanecen en este dispositivo salvo que las importes a tu cuenta.',
     helpDocsTitle: 'Ayuda de mascotas',
-    helpDocsSubtitle: 'Abre la documentación de Happier para configuración y solución de problemas.',
+    helpDocsSubtitle: 'Abre la documentación de vector.dev para configuración y solución de problemas.',
     detectCodexPetsTitle: 'Detectar mascotas de Codex',
     detectCodexPetsSubtitle: 'Busca mascotas compatibles en los Codex homes locales.',
     detectedCodexPetsTileSubtitle: 'Encontrada en Codex y lista para unirse a este dispositivo.',
@@ -3603,7 +3603,7 @@ export const es: TranslationStructure = {
     detectedCodexPetsErrorTitle: 'No se pudieron detectar mascotas de Codex',
     detectedCodexPetsErrorSubtitle: 'Comprueba que el daemon esté conectado e inténtalo de nuevo.',
     detectedCodexPetsNoTargetTitle: 'No hay ningún daemon disponible',
-    detectedCodexPetsNoTargetSubtitle: 'Inicia Happier en este ordenador y vuelve a detectar mascotas de Codex.',
+    detectedCodexPetsNoTargetSubtitle: 'Inicia vector.dev en este ordenador y vuelve a detectar mascotas de Codex.',
     detectedCodexPetsDaemonMismatchTitle: 'Actualiza el daemon para detectar mascotas',
     detectedCodexPetsDaemonMismatchSubtitle: 'Este daemon aún no expone la detección de mascotas. Actualiza el stack e inténtalo de nuevo.',
     useOnThisDeviceTitle: 'Usar en este dispositivo',
@@ -3650,7 +3650,7 @@ export const es: TranslationStructure = {
 
   settingsNotifications: {
         mutePhoneWhenComputerFocusedTitle: "Silenciar el teléfono al usar el ordenador",
-        mutePhoneWhenComputerFocusedSubtitle: "Silencia las notificaciones de sesión lista y las solicitudes de permiso o acción mientras alguna ventana de Happier en un ordenador tiene el foco. Se reanudan cuando ninguna ventana del ordenador tiene el foco.",
+        mutePhoneWhenComputerFocusedSubtitle: "Silencia las notificaciones de sesión lista y las solicitudes de permiso o acción mientras alguna ventana de vector.dev en un ordenador tiene el foco. Se reanudan cuando ninguna ventana del ordenador tiene el foco.",
     badges: {
       title: 'Insignias en este dispositivo',
       footer: 'Elige qué actividad contribuye a la insignia del icono de la app en este dispositivo.',
@@ -3708,7 +3708,7 @@ export const es: TranslationStructure = {
       footer: "Controla las notificaciones de cambio de cuenta y recuperación de cuota.",
       accountSwitch: {
         title: "Cambios de cuenta",
-        subtitle: "Notificar cuando Happier cambie automáticamente un proveedor a otra cuenta conectada",
+        subtitle: "Notificar cuando vector.dev cambie automáticamente un proveedor a otra cuenta conectada",
       },
       quotaBlocked: {
         title: "Cuota bloqueada",
@@ -3721,7 +3721,7 @@ export const es: TranslationStructure = {
     },
     pushPriming: {
         title: '¿Activar las notificaciones?',
-        body: 'Happier puede avisarte cuando un agente termina, necesita una decisión de permiso o está esperándote. Puedes cambiarlo cuando quieras en Ajustes.',
+        body: 'vector.dev puede avisarte cuando un agente termina, necesita una decisión de permiso o está esperándote. Puedes cambiarlo cuando quieras en Ajustes.',
         accept: 'Activar',
         decline: 'Ahora no',
         blockedTitle: 'Las notificaciones están bloqueadas',
@@ -3984,7 +3984,7 @@ export const es: TranslationStructure = {
       cliSourcePreference: {
         title: "Preferencia del origen de la CLI",
         subtitle:
-          "Elige si Happier debe priorizar la CLI del sistema o la instalación gestionada cuando ambas existan.",
+          "Elige si vector.dev debe priorizar la CLI del sistema o la instalación gestionada cuando ambas existan.",
         options: {
           systemFirst: {
             title: "Priorizar instalación del sistema",
@@ -3992,7 +3992,7 @@ export const es: TranslationStructure = {
           },
           managedFirst: {
             title: "Priorizar instalación gestionada",
-            subtitle: "Prioriza la CLI instalada por Happier para este proveedor.",
+            subtitle: "Prioriza la CLI instalada por vector.dev para este proveedor.",
           },
         },
       },
@@ -4074,15 +4074,15 @@ export const es: TranslationStructure = {
                 sections: {
                     claudeModelDiscovery: {
                         title: "Detección de modelos",
-                        footer: "Controla si Happier consulta a Anthropic qué modelos están disponibles para la cuenta de Claude seleccionada."
+                        footer: "Controla si vector.dev consulta a Anthropic qué modelos están disponibles para la cuenta de Claude seleccionada."
                     },
                     claudeUnifiedTerminal: {
                         title: "Runtime de terminal unificado",
-                        footer: "Cuando está activado, Happier envía los prompts a la misma sesión de terminal de Claude Code en lugar de iniciar un ejecutor Agent SDK separado."
+                        footer: "Cuando está activado, vector.dev envía los prompts a la misma sesión de terminal de Claude Code en lugar de iniciar un ejecutor Agent SDK separado."
                     },
                     claudeCodeExperiments: {
                         title: "Experimentos de Claude Code",
-                        footer: "Estos ajustes se aplican tanto a Claude local (terminal) como a Claude remoto (Agent SDK) iniciados por Happier."
+                        footer: "Estos ajustes se aplican tanto a Claude local (terminal) como a Claude remoto (Agent SDK) iniciados por vector.dev."
                     },
                     claudeRemoteSdk: {
                         title: "Runtime clásico (respaldo Agent SDK)",
@@ -4092,7 +4092,7 @@ export const es: TranslationStructure = {
                 fields: {
                     claudeDynamicModelProbeEnabled: {
                         title: "Detectar modelos disponibles",
-                        subtitle: "Permite que Happier consulte a Anthropic con la cuenta de Claude seleccionada. Desactívalo para usar el catálogo integrado de Happier sin leer las credenciales nativas de Claude Code."
+                        subtitle: "Permite que vector.dev consulte a Anthropic con la cuenta de Claude seleccionada. Desactívalo para usar el catálogo integrado de vector.dev sin leer las credenciales nativas de Claude Code."
                     },
                     claudeUnifiedTerminalEnabled: {
                         title: "Usar runtime de terminal unificado",
@@ -4100,7 +4100,7 @@ export const es: TranslationStructure = {
                     },
                     claudeUnifiedTerminalHost: {
                         title: "Host de terminal",
-                        subtitle: "Elige cómo Happier aloja la sesión de terminal compartida de Claude.",
+                        subtitle: "Elige cómo vector.dev aloja la sesión de terminal compartida de Claude.",
                         options: {
                             auto: {
                                 title: "Automático",
@@ -4112,13 +4112,13 @@ export const es: TranslationStructure = {
                             },
                             zellij: {
                                 title: "zellij",
-                                subtitle: "Usa el host zellij incluido con Happier."
+                                subtitle: "Usa el host zellij incluido con vector.dev."
                             }
                         }
                     },
                     claudeUnifiedTerminalResumeChoice: {
                         title: "Reanudacion de sesiones grandes",
-                        subtitle: "Elige como responde Happier cuando Claude pregunta como reanudar una sesion grande.",
+                        subtitle: "Elige como responde vector.dev cuando Claude pregunta como reanudar una sesion grande.",
                         options: {
                             ask_every_time: {
                                 title: "Preguntar cada vez",
@@ -4136,33 +4136,33 @@ export const es: TranslationStructure = {
                     },
                     claudeUnifiedTerminalWorkspaceTrust: {
                         title: "Confianza del espacio de trabajo",
-                        subtitle: "Elige cómo responde Happier cuando Claude pregunta si debe confiar en un espacio de trabajo.",
+                        subtitle: "Elige cómo responde vector.dev cuando Claude pregunta si debe confiar en un espacio de trabajo.",
                         options: {
                             ask_every_time: {
                                 title: "Preguntar siempre",
                                 subtitle: "Muestra en la sesión la pregunta exacta sobre la confianza del espacio de trabajo."
                             },
                             always_trust_happier_workspaces: {
-                                title: "Confiar siempre en los espacios de trabajo de Happier",
-                                subtitle: "Confía en la solicitud actual de Claude recuperada para los espacios de trabajo abiertos por Happier."
+                                title: "Confiar siempre en los espacios de trabajo de vector.dev",
+                                subtitle: "Confía en la solicitud actual de Claude recuperada para los espacios de trabajo abiertos por vector.dev."
                             },
                             always_reject_happier_workspaces: {
-                                title: "Rechazar siempre los espacios de trabajo de Happier",
-                                subtitle: "Rechaza la solicitud actual de Claude recuperada para los espacios de trabajo abiertos por Happier."
+                                title: "Rechazar siempre los espacios de trabajo de vector.dev",
+                                subtitle: "Rechaza la solicitud actual de Claude recuperada para los espacios de trabajo abiertos por vector.dev."
                             }
                         }
                     },
                     claudeCodeIncludeInNativeHistory: {
                         title: "Mostrar sesiones en Claude Code",
-                        subtitle: "Usar la atribución de Happier para nuevas sesiones de Claude, incluidas las del Agent SDK. Desactivado conserva los valores predeterminados."
+                        subtitle: "Usar la atribución de vector.dev para nuevas sesiones de Claude, incluidas las del Agent SDK. Desactivado conserva los valores predeterminados."
                     },
                     claudeCodeExperimentalAgentTeamsEnabled: {
                         title: "Forzar activación de Agent Teams",
-                        subtitle: "Activa Agent Teams experimental de Claude Code (enjambre de agentes) en todas las sesiones de Claude iniciadas por Happier."
+                        subtitle: "Activa Agent Teams experimental de Claude Code (enjambre de agentes) en todas las sesiones de Claude iniciadas por vector.dev."
                     },
                     claudeRemoteAgentSdkEnabled: {
                         title: "Usar respaldo Agent SDK",
-                        subtitle: "Cuando el runtime de terminal unificado está desactivado, enruta las sesiones de Claude controladas por Happier a través del Agent SDK."
+                        subtitle: "Cuando el runtime de terminal unificado está desactivado, enruta las sesiones de Claude controladas por vector.dev a través del Agent SDK."
                     },
                     claudeRemoteDebugEnabled: {
                         title: "Modo debug",
@@ -4218,15 +4218,15 @@ export const es: TranslationStructure = {
                     },
                     claudeLocalPermissionBridgeEnabled: {
                         title: "Experimental: puente de permisos local",
-                        subtitle: "Reenvía las solicitudes de permiso del modo local de Claude a Happier para que puedas aprobarlas o denegarlas desde la interfaz."
+                        subtitle: "Reenvía las solicitudes de permiso del modo local de Claude a vector.dev para que puedas aprobarlas o denegarlas desde la interfaz."
                     },
                     claudeLocalPermissionBridgeWaitIndefinitely: {
                         title: "Mantener solicitudes abiertas hasta responder",
-                        subtitle: "Cuando está activado, Happier mantiene las solicitudes de permiso local de Claude pendientes hasta que las apruebes o rechaces desde la interfaz."
+                        subtitle: "Cuando está activado, vector.dev mantiene las solicitudes de permiso local de Claude pendientes hasta que las apruebes o rechaces desde la interfaz."
                     },
                     claudeLocalPermissionBridgeTimeoutSeconds: {
                         title: "Tiempo de espera opcional de permisos (segundos)",
-                        subtitle: "Solo se usa cuando la espera indefinida está desactivada. Tras este tiempo, Happier vuelve al prompt del terminal de Claude."
+                        subtitle: "Solo se usa cuando la espera indefinida está desactivada. Tras este tiempo, vector.dev vuelve al prompt del terminal de Claude."
                     },
                     claudeRemoteEnableFileCheckpointing: {
                         title: "Checkpoints de archivos + /rewind",
@@ -4255,7 +4255,7 @@ export const es: TranslationStructure = {
                 sections: {
                     cliGeneration: {
                         title: "Versión de OpenCode",
-                        footer: "Automático prefiere opencode, recurre a opencode2 y detecta la API del servidor después del inicio. Estable siempre selecciona opencode, pero igualmente detecta V1 o V2. V2 prefiere opencode2 y, si no está disponible, usa opencode con V2 seleccionado. Las herramientas MCP de Happier funcionan con V2 en modo ACP; su API de servidor aún no admite registro MCP dinámico."
+                        footer: "Automático prefiere opencode, recurre a opencode2 y detecta la API del servidor después del inicio. Estable siempre selecciona opencode, pero igualmente detecta V1 o V2. V2 prefiere opencode2 y, si no está disponible, usa opencode con V2 seleccionado. Las herramientas MCP de vector.dev funcionan con V2 en modo ACP; su API de servidor aún no admite registro MCP dinámico."
                     },
                     backendMode: {
                         title: "Modo de backend",
@@ -4263,13 +4263,13 @@ export const es: TranslationStructure = {
                     },
                     server: {
                         title: "Conexión del servidor",
-                        footer: "Déjalo vacío para usar el ciclo de vida del servidor OpenCode gestionado por Happier. Define una URL http(s) absoluta para conectarte a un servidor OpenCode existente."
+                        footer: "Déjalo vacío para usar el ciclo de vida del servidor OpenCode gestionado por vector.dev. Define una URL http(s) absoluta para conectarte a un servidor OpenCode existente."
                     }
                 },
                 fields: {
                     opencodeCliGeneration: {
                         title: "Generación de CLI",
-                        subtitle: "Elige qué comando de OpenCode instalado inicia Happier.",
+                        subtitle: "Elige qué comando de OpenCode instalado inicia vector.dev.",
                         options: {
                             auto: { title: "Automático (recomendado)", subtitle: "Prefiere opencode y recurre a opencode2." },
                             stable: { title: "Estable", subtitle: "Inicia siempre opencode y detecta la API después del inicio." },
@@ -4307,7 +4307,7 @@ export const es: TranslationStructure = {
                 sections: {
                     cli: {
                         title: "CLI de Cursor",
-                        footer: "Usa un binario de Cursor específico cuando la detección automática no sea suficiente. Happier prefiere cursor-agent y puede usar agent como alternativa cuando esté activado."
+                        footer: "Usa un binario de Cursor específico cuando la detección automática no sea suficiente. vector.dev prefiere cursor-agent y puede usar agent como alternativa cuando esté activado."
                     }
                 },
                 fields: {
@@ -4712,14 +4712,14 @@ export const es: TranslationStructure = {
       expConnectedServicesQuotasSubtitle:
         "Mostrar insignias de cuota y medidores de uso para servicios conectados",
       expChannelBridges: "Puentes de canal",
-      expChannelBridgesSubtitle: "Conecta Telegram y otros canales de chat a sesiones de Happier (experimental)",
+      expChannelBridgesSubtitle: "Conecta Telegram y otros canales de chat a sesiones de vector.dev (experimental)",
       expMemorySearch: "Búsqueda de memoria",
       expMemorySearchSubtitle:
         "Habilitar pantallas y ajustes de búsqueda de memoria local",
     expSessionsDirect: "Sesiones directas",
     expSessionsDirectSubtitle: "Muestra y abre en la barra lateral sesiones directas respaldadas por el proveedor",
     expSessionsFolders: "Carpetas de sesiones",
-    expSessionsFoldersSubtitle: "Organiza las sesiones Happier de la barra lateral en carpetas de espacio de trabajo",
+    expSessionsFoldersSubtitle: "Organiza las sesiones vector.dev de la barra lateral en carpetas de espacio de trabajo",
     expPetsCompanion: "Mascotas",
     expPetsCompanionSubtitle: "Activa las superficies de compañía de Blink y la selección local de mascotas",
     expFriends: "Amigos",
@@ -4765,7 +4765,7 @@ export const es: TranslationStructure = {
       "Organiza los chats inactivos por proyecto",
       environmentBadge: "Insignia de entorno",
       environmentBadgeSubtitle:
-        "Mostrar una pequeña insignia junto al título Happier indicando el entorno actual de la app",
+        "Mostrar una pequeña insignia junto al título vector.dev indicando el entorno actual de la app",
     enhancedSessionWizard: "Asistente de sesión mejorado",
     enhancedSessionWizardEnabled: "Lanzador de sesión con perfil activo",
     enhancedSessionWizardDisabled: "Usando el lanzador de sesión estándar",
@@ -4802,7 +4802,7 @@ export const es: TranslationStructure = {
       failedToForkSession: "No se pudo bifurcar la sesión",
       daemonUnavailableTitle: "Daemon no disponible",
       daemonUnavailableBody:
-        "Happier no puede comunicarse con el daemon en esta máquina. Puede estar sin conexión, iniciándose o desconectado del servidor.",
+        "vector.dev no puede comunicarse con el daemon en esta máquina. Puede estar sin conexión, iniciándose o desconectado del servidor.",
       tryAgain: "Intenta de nuevo",
       contactSupport: "Contacta soporte si el problema persiste",
       sessionNotFound: "Sesión no encontrada",
@@ -4820,7 +4820,7 @@ export const es: TranslationStructure = {
     tokenStorageFailed: "Falló al almacenar los tokens de autenticación",
     oauthStateMismatch: "Falló la validación de seguridad. Inténtalo de nuevo",
     providerAlreadyLinked: ({ provider }: { provider: string }) =>
-      `${provider} ya está vinculado a una cuenta de Happier existente. Para iniciar sesión en este dispositivo, vincúlalo desde un dispositivo que ya haya iniciado sesión.`,
+      `${provider} ya está vinculado a una cuenta de vector.dev existente. Para iniciar sesión en este dispositivo, vincúlalo desde un dispositivo que ya haya iniciado sesión.`,
     tokenExchangeFailed: "Falló al intercambiar el código de autorización",
     oauthAuthorizationDenied: "La autorización fue denegada",
     webViewLoadFailed: "Falló al cargar la página de autenticación",
@@ -4883,7 +4883,7 @@ export const es: TranslationStructure = {
 
   deps: {
     installNotSupported:
-      "Actualiza Happier CLI para instalar esta dependencia.",
+      "Actualiza vector.dev CLI para instalar esta dependencia.",
     installFailed: "Instalación fallida",
     installed: "Instalado",
     installLog: ({ path }: { path: string }) =>
@@ -5023,7 +5023,7 @@ export const es: TranslationStructure = {
       "Elige una sesión simple o una vinculada a un worktree de Git.",
     searchPathsPlaceholder: "Buscar rutas...",
     noMachinesFound:
-      "No se encontraron máquinas. Inicia una sesión de Happier en tu computadora primero.",
+      "No se encontraron máquinas. Inicia una sesión de vector.dev en tu computadora primero.",
     allMachinesOffline: "Todas las máquinas están desconectadas",
     machineOfflineInlineTitle: "La máquina está sin conexión",
     machineOfflineInlineBody:
@@ -5051,12 +5051,12 @@ export const es: TranslationStructure = {
       "No conectado al servidor. Verifica tu conexión a internet.",
     daemonRpcUnavailableTitle: "Daemon no disponible",
     daemonRpcUnavailableBody:
-      "Happier no puede comunicarse con el daemon en esta máquina. Puede estar sin conexión, iniciándose o desconectado del servidor.",
+      "vector.dev no puede comunicarse con el daemon en esta máquina. Puede estar sin conexión, iniciándose o desconectado del servidor.",
     launchStillPendingTitle: "El inicio sigue en curso",
     createdWithSetupIssueTitle: "Sesión creada",
     createdWithSetupIssueBody: "La sesión se creó, pero la configuración inicial no terminó. Puedes volver a intentarlo desde esta pantalla sin crear otra sesión.",
     launchStillPendingBody:
-      "Happier aún no ha confirmado la nueva sesión. La solicitud de inicio sigue guardada. Vuelve a intentarlo para continuar el mismo inicio sin crear una sesión duplicada.",
+      "vector.dev aún no ha confirmado la nueva sesión. La solicitud de inicio sigue guardada. Vuelve a intentarlo para continuar el mismo inicio sin crear una sesión duplicada.",
     connectedServiceSwitchUnavailable: {
       title: "Cambio no disponible",
       body: ({ reason, agentId }: { reason: string; agentId: string }) =>
@@ -5196,7 +5196,7 @@ export const es: TranslationStructure = {
       helpText:
         "Puedes encontrar los IDs de sesión en la pantalla de información de sesión.",
       cannotApplyBody:
-        "Este ID de reanudación no se puede aplicar ahora. Happier iniciará una nueva sesión en su lugar.",
+        "Este ID de reanudación no se puede aplicar ahora. vector.dev iniciará una nueva sesión en su lugar.",
     },
     codexResumeBanner: {
       title: "Servidor de reanudación de Codex",
@@ -5257,7 +5257,7 @@ export const es: TranslationStructure = {
       updateTitle: "¿Actualizar GitHub CLI?",
       reinstallTitle: "¿Reinstalar GitHub CLI?",
       description:
-        "Esto instala GitHub CLI para que Happier pueda usar tu autenticación local de GitHub en flujos de pull request.",
+        "Esto instala GitHub CLI para que vector.dev pueda usar tu autenticación local de GitHub en flujos de pull request.",
     },
   },
 
@@ -5444,8 +5444,8 @@ export const es: TranslationStructure = {
           empty: "No se transfirió nada. No había conversación anterior que reproducir.",
           unavailableOperation: "Actualiza o reconecta la CLI en esta máquina para reconstruirlo.",
           notRebuildable: "Aquí se transfirió contexto, pero la transcripción de esta sesión ya no lo contiene, así que no se puede reconstruir.",
-          unavailableSource: "Happier no pudo leer la transcripción de esta sesión, así que no se puede reconstruir.",
-          unreachable: "Happier no pudo contactar con la máquina que aloja esta sesión.",
+          unavailableSource: "vector.dev no pudo leer la transcripción de esta sesión, así que no se puede reconstruir.",
+          unreachable: "vector.dev no pudo contactar con la máquina que aloja esta sesión.",
           retryAction: "Reintentar",
           jumpAction: "Ir al último mensaje incluido",
       },
@@ -5474,7 +5474,7 @@ export const es: TranslationStructure = {
         badgeLabel: 'Cambio de Agente',
         /** Delegates to the Session’s existing resume owner; never a second start path. */
         resumeAction: 'Reanudar sesión',
-        unknown: 'Happier no pudo confirmar qué ocurrió. Revisa esta sesión antes de volver a enviar.',
+        unknown: 'vector.dev no pudo confirmar qué ocurrió. Revisa esta sesión antes de volver a enviar.',
       },
     },
     sourceContext: {
@@ -5487,7 +5487,7 @@ export const es: TranslationStructure = {
         removeAction: "Quitar",
         removeA11y: "Quitar la conversación de origen",
         keepAction: "Mantenerla",
-        serverMismatch: "Esa conversación está en otro servidor de Happier. Vuelve a él o quita la conversación de origen para empezar de cero.",
+        serverMismatch: "Esa conversación está en otro servidor de vector.dev. Vuelve a él o quita la conversación de origen para empezar de cero.",
     },
     forking: {
       dividerTitle: "Bifurcado desde un contexto anterior",
@@ -5507,7 +5507,7 @@ export const es: TranslationStructure = {
           },
           replay: {
               title: "Bifurcación con Replay",
-              subtitle: "Happier reproduce la conversación hasta ahora como contexto de la nueva sesión.",
+              subtitle: "vector.dev reproduce la conversación hasta ahora como contexto de la nueva sesión.",
           },
           configure: {
               title: "Configurar una sesión nueva",
@@ -5528,7 +5528,7 @@ export const es: TranslationStructure = {
               openAction: "Abrir bifurcación",
           },
           unknown: {
-              title: "Happier no pudo confirmar la bifurcación",
+              title: "vector.dev no pudo confirmar la bifurcación",
               body: "La solicitud salió, así que puede que ya exista una bifurcación. Compruébalo en lugar de volver a bifurcar, porque un segundo intento podría crear un duplicado.",
               checkAction: "Buscar la bifurcación",
               checking: "Buscando tu bifurcación…",
@@ -5537,7 +5537,7 @@ export const es: TranslationStructure = {
           },
           failure: {
               updateRequired: "Actualiza o reconecta la CLI de esta máquina para bifurcar esta sesión.",
-              generic: "Happier no pudo crear la bifurcación.",
+              generic: "vector.dev no pudo crear la bifurcación.",
           },
       },
 	    },
@@ -5570,13 +5570,13 @@ export const es: TranslationStructure = {
 	    },
 	    staleRunner: {
 	      title: "La sesión sigue ejecutándose con una CLI anterior",
-	      body: "Reinicia el runner de esta sesión para continuar con la CLI actualizada del daemon. La sesión de Happier se mantiene.",
+	      body: "Reinicia el runner de esta sesión para continuar con la CLI actualizada del daemon. La sesión de vector.dev se mantiene.",
 	      busyBody: "El runner de la sesión está ocupado. Reintenta cuando termine la actividad actual.",
-	      failureBody: "Happier no pudo reiniciar este runner de sesión. Reintenta después de que la sesión se actualice.",
+	      failureBody: "vector.dev no pudo reiniciar este runner de sesión. Reintenta después de que la sesión se actualice.",
 	      identityChangedBody: "El runner de la sesión cambió mientras se solicitaba el reinicio. Actualiza la sesión y reintenta.",
 	      ineligibleBody: "Este runner de sesión ya no es apto para un reinicio planificado.",
 	      unsupportedBody: "Este daemon todavía no expone la operación de reinicio del runner de sesión.",
-	      versionUnknownBody: "Happier todavía no puede confirmar qué versión de la CLI usa este runner.",
+	      versionUnknownBody: "vector.dev todavía no puede confirmar qué versión de la CLI usa este runner.",
 	      restartAction: "Reiniciar runner",
 	      restartPendingAction: "Reiniciando...",
 	      statusBadge: "CLI anterior",
@@ -5588,7 +5588,7 @@ export const es: TranslationStructure = {
 	    mcpRestartRequired: {
 	        title: "Reinicia para aplicar los cambios de MCP",
 	        body: "Los servidores MCP se aplican al iniciar una sesión. Reinicia este ejecutor para usar la selección actualizada.",
-	        failureBody: "Happier no pudo reiniciar este ejecutor. Tu selección de MCP está guardada y se aplicará la próxima vez que se inicie.",
+	        failureBody: "vector.dev no pudo reiniciar este ejecutor. Tu selección de MCP está guardada y se aplicará la próxima vez que se inicie.",
 	        restartAction: "Reiniciar sesión",
 	        restartPendingAction: "Reiniciando…",
 	        badgeLabel: "Cambios de MCP",
@@ -5600,9 +5600,9 @@ export const es: TranslationStructure = {
 	    invalidLinkTitle: "Enlace de sesión no válido",
 	    invalidLinkDescription: "Falta el enlace de la sesión o no es válido. Comprueba la URL y vuelve a intentarlo.",
 	    resumeSupportNoteChecking:
-	      "Nota: Happier todavía está comprobando si esta máquina puede reanudar la sesión del proveedor.",
+	      "Nota: vector.dev todavía está comprobando si esta máquina puede reanudar la sesión del proveedor.",
 	    resumeSupportNoteUnverified:
-	      "Nota: Happier no pudo verificar la compatibilidad de reanudación para esta máquina.",
+	      "Nota: vector.dev no pudo verificar la compatibilidad de reanudación para esta máquina.",
     resumeSupportDetails: {
       cliNotDetected: "No se detectó la CLI en la máquina.",
       capabilityProbeFailed: "Falló la comprobación de capacidades.",
@@ -5617,7 +5617,7 @@ export const es: TranslationStructure = {
       `Esta sesión terminó y no se puede reanudar porque ${provider} no admite restaurar su contexto aquí. Inicia una nueva sesión para continuar.`,
     machineOfflineNoticeTitle: "La máquina está sin conexión",
     machineOfflineNoticeBody: ({ machine }: { machine: string }) =>
-      `“${machine}” está sin conexión. Puedes poner un mensaje en cola ahora; Happier continuará cuando la máquina vuelva a conectarse.`,
+      `“${machine}” está sin conexión. Puedes poner un mensaje en cola ahora; vector.dev continuará cuando la máquina vuelva a conectarse.`,
       machineOfflineCannotResume:
         "La máquina está sin conexión. Vuelve a conectarla para reanudar esta sesión.",
           openRuns: "Abrir ejecuciones de la sesión",
@@ -5943,15 +5943,15 @@ export const es: TranslationStructure = {
         },
         discardConfirm: {
           title: "¿Descartar mensaje pendiente?",
-          body: "Esto conserva una copia descartada e impide que Happier entregue este mensaje pendiente.",
+          body: "Esto conserva una copia descartada e impide que vector.dev entregue este mensaje pendiente.",
         },
         markHandledConfirm: {
           title: "¿Marcar el mensaje pendiente como gestionado?",
-          body: "Úsalo solo si el proveedor ya gestionó el mensaje o ya no quieres que Happier lo entregue.",
+          body: "Úsalo solo si el proveedor ya gestionó el mensaje o ya no quieres que vector.dev lo entregue.",
         },
         dismissDeliveryConfirm: {
           title: "¿Descartar la entrega incierta?",
-          body: "Esto archiva el mensaje original sin volver a enviarlo. Si el proveedor confirma la entrega más adelante, Happier aún puede añadir el mensaje original a la transcripción.",
+          body: "Esto archiva el mensaje original sin volver a enviarlo. Si el proveedor confirma la entrega más adelante, vector.dev aún puede añadir el mensaje original a la transcripción.",
         },
         sendAsNewConfirm: {
           title: "¿Enviar este mensaje como nuevo?",
@@ -5989,7 +5989,7 @@ export const es: TranslationStructure = {
           retrySendFailed: 'No se pudo reintentar el envío del mensaje',
           markHandledFailed: "No se pudo marcar la entrega pendiente como gestionada",
           clearTerminalComposerFailed: "No se pudo borrar el compositor del terminal",
-          clearTerminalComposerUnsupported: "Esta sesión no permite borrar el compositor del terminal desde Happier.",
+          clearTerminalComposerUnsupported: "Esta sesión no permite borrar el compositor del terminal desde vector.dev.",
           clearTerminalComposerUnsafe: "El compositor del terminal no se puede borrar con seguridad ahora mismo.",
         },
       },
@@ -6261,7 +6261,7 @@ export const es: TranslationStructure = {
     // Used by Server Configuration screen (app/(app)/server.tsx)
     serverConfiguration: "Configuración del Relay",
     enterServerUrl: "Ingresa una URL de Relay",
-    notValidHappyServer: "No es un Relay Happier válido",
+    notValidHappyServer: "No es un Relay vector.dev válido",
     changeServer: "Cambiar Relay",
     continueWithServer: "¿Continuar con este Relay?",
     resetToDefault: "Restablecer por defecto",
@@ -6290,10 +6290,10 @@ export const es: TranslationStructure = {
     removeServerDisconnectsThisComputer: ({ name }: { name: string }) => `Este ordenador también se desconectará de "${name}" y se detendrán las sesiones de agente que se ejecuten aquí para él.`,
     removeServerMayDisconnectThisComputer: ({ name }: { name: string }) => `Si este ordenador está conectado a "${name}", también se desconectará y se detendrán las sesiones de agente que se ejecuten aquí para él.`,
     removeServerEndsSessions: ({ count }: { count: number }) => count === 1 ? 'Ahora hay 1 sesión de agente en curso aquí.' : `Ahora hay ${count} sesiones de agente en curso aquí.`,
-    removeServerKeepsUserService: ({ name }: { name: string }) => `El servicio en segundo plano de este ordenador para "${name}" se configuró fuera de Happier, así que se queda como está.`,
+    removeServerKeepsUserService: ({ name }: { name: string }) => `El servicio en segundo plano de este ordenador para "${name}" se configuró fuera de vector.dev, así que se queda como está.`,
     removeServerDisconnectFailed: 'Este ordenador no pudo desconectarse de este relay, así que se conservó. Inténtalo de nuevo.',
     removeServerAnywayTitle: '¿Eliminar de todos modos?',
-    removeServerAnywayBody: ({ name }: { name: string }) => `No se pudieron comprobar los servicios en segundo plano de este ordenador, así que un servicio para "${name}" podría seguir funcionando aquí después de eliminarlo. Puedes quitarlo más tarde con la CLI de Happier.`,
+    removeServerAnywayBody: ({ name }: { name: string }) => `No se pudieron comprobar los servicios en segundo plano de este ordenador, así que un servicio para "${name}" podría seguir funcionando aquí después de eliminarlo. Puedes quitarlo más tarde con la CLI de vector.dev.`,
     removeServerAnywayConfirm: 'Eliminar de todos modos',
     removeServerGroup: "Eliminar grupo de Relays",
     removeServerGroupConfirm: ({ name }: { name: string }) =>
@@ -6424,7 +6424,7 @@ export const es: TranslationStructure = {
   },
   sessionsList: {
     serverHeader: ({ server }: { server: string }) => `Servidor: ${server}`,
-    storagePersistedTab: "Happier",
+    storagePersistedTab: "vector.dev",
     storageDirectTab: "Directas",
     renameWorkspace: 'Renombrar espacio de trabajo',
     renameWorkspacePromptTitle: 'Renombrar espacio de trabajo',
@@ -6595,7 +6595,7 @@ export const es: TranslationStructure = {
     killSessionConfirm: "¿Seguro que quieres terminar esta sesión?",
     stopSession: "Detener sesión",
     stopSessionConfirm: "¿Seguro que quieres detener esta sesión?",
-    stopSessionControlUnavailable: "Happier no pudo acceder a los controles de la sesión. Asegúrate de que la máquina de la sesión y el daemon estén conectados e inténtalo de nuevo.",
+    stopSessionControlUnavailable: "vector.dev no pudo acceder a los controles de la sesión. Asegúrate de que la máquina de la sesión y el daemon estén conectados e inténtalo de nuevo.",
     archiveSession: "Archivar sesión",
     archiveSessionConfirm: "¿Seguro que quieres archivar esta sesión?",
     workspaceTitle: "Espacio de trabajo",
@@ -6608,9 +6608,9 @@ export const es: TranslationStructure = {
     createWorktreeSubtitle: "Inicia una nueva sesión que creará un worktree de Git en este espacio de trabajo vinculado.",
     locationLabel: "Ubicación",
     checkoutLabel: "Copia de trabajo",
-    happySessionIdCopied: "ID de sesión de Happier copiado al portapapeles",
-    failedToCopySessionId: "Falló al copiar ID de sesión de Happier",
-    happySessionId: "ID de sesión de Happier",
+    happySessionIdCopied: "ID de sesión de vector.dev copiado al portapapeles",
+    failedToCopySessionId: "Falló al copiar ID de sesión de vector.dev",
+    happySessionId: "ID de sesión de vector.dev",
     claudeCodeSessionId: "ID de sesión de Claude Code",
     claudeCodeSessionIdCopied:
       "ID de sesión de Claude Code copiado al portapapeles",
@@ -6699,7 +6699,7 @@ export const es: TranslationStructure = {
     path: "Ruta",
     operatingSystem: "Sistema operativo",
     processId: "ID del proceso",
-    happyHome: "Directorio de Happier",
+    happyHome: "Directorio de vector.dev",
     attachFromTerminal: "Adjuntar desde la terminal",
     tmuxTarget: "Destino de tmux",
     tmuxFallback: "Fallback de tmux",
@@ -6756,7 +6756,7 @@ export const es: TranslationStructure = {
     emptyMainScreen: {
       // Used by SessionGettingStartedGuidance component
       readyToCode: "¿Listo para programar?",
-      installCli: "Instale el Happier CLI",
+      installCli: "Instale el vector.dev CLI",
       runIt: "Ejecútelo",
       scanQrCode: "Escanee el código QR",
       openCamera: "Abrir cámara",
@@ -7042,7 +7042,7 @@ export const es: TranslationStructure = {
   },
 
   sidebar: {
-    sessionsTitle: "Happier",
+    sessionsTitle: "vector.dev",
   },
 
   toolView: {
@@ -7176,7 +7176,7 @@ export const es: TranslationStructure = {
     acpHistoryImport: {
       title: "¿Importar historial de la sesión?",
       defaultNote:
-        "Este historial de la sesión difiere de lo que ya está en Happier. Importarlo puede crear duplicados.",
+        "Este historial de la sesión difiere de lo que ya está en vector.dev. Importarlo puede crear duplicados.",
       counts: {
         local: ({ count }: { count: number }) => `Local: ${count}`,
         remote: ({ count }: { count: number }) => `Remoto: ${count}`,
@@ -7264,7 +7264,7 @@ export const es: TranslationStructure = {
     askUserQuestion: {
         submit: "Enviar respuesta",
         submissionFailures: {
-            update: "Actualiza Happier CLI y vuelve a intentarlo.",
+            update: "Actualiza vector.dev CLI y vuelve a intentarlo.",
             reconnect: "Vuelve a conectar esta sesión e inténtalo de nuevo.",
             retry: "No se pudo aceptar la respuesta. Revísala y vuelve a intentarlo.",
         },
@@ -7452,7 +7452,7 @@ export const es: TranslationStructure = {
       },
       indexLock: {
         title: "¿Eliminar bloqueo de Git obsoleto?",
-        body: "Git informó de un bloqueo del índice. Si no hay otro comando de Git ejecutándose, Happier puede eliminar el bloqueo obsoleto y reintentar.",
+        body: "Git informó de un bloqueo del índice. Si no hay otro comando de Git ejecutándose, vector.dev puede eliminar el bloqueo obsoleto y reintentar.",
         confirm: "Eliminar bloqueo y reintentar",
         recoveryFailed: "No se pudo eliminar el bloqueo del índice de Git.",
       },
@@ -7592,7 +7592,7 @@ export const es: TranslationStructure = {
         `Cambios sin preparar (${count})`,
       // File viewer strings
       fileReadFailed: "No se pudo leer el archivo",
-      androidFileActionsUnavailable: "Las acciones de archivos de Android no están disponibles en esta versión de la app. Actualiza Happier e inténtalo de nuevo.",
+      androidFileActionsUnavailable: "Las acciones de archivos de Android no están disponibles en esta versión de la app. Actualiza vector.dev e inténtalo de nuevo.",
       fileSharingUnavailable: "No se pueden compartir archivos en este dispositivo.",
       fileCleanupFailed: "No se pudo eliminar el archivo temporal",
       fileTooLargeToPreview: "El archivo es demasiado grande para previsualizarlo",
@@ -7603,7 +7603,7 @@ export const es: TranslationStructure = {
       frontmatterReadOnly: "Frontmatter (solo lectura)",
     },
       fileEditingUnsupported:
-        "La edición de archivos no es compatible con el daemon conectado. Actualiza Happier en la máquina para habilitar operaciones de escritura.",
+        "La edición de archivos no es compatible con el daemon conectado. Actualiza vector.dev en la máquina para habilitar operaciones de escritura.",
       fileChangedExternally:
         "Este archivo cambió en disco mientras lo editabas. Tu borrador se mantuvo sin cambios; revisa el archivo más reciente antes de guardar.",
       selectionFailed: "No se pudo actualizar la selección",
@@ -7890,7 +7890,7 @@ export const es: TranslationStructure = {
           createFeatureBranch: "Crear rama de funcionalidad",
           createFeatureBranchAndOpen: "Crear rama y abrir PR",
           featureBranchPromptTitle: "Nombre de la rama de funcionalidad",
-          featureBranchPromptBody: "Happier cambiará a esta rama antes de continuar.",
+          featureBranchPromptBody: "vector.dev cambiará a esta rama antes de continuar.",
           defaultBranchRequiresFeature: "Crea una rama de funcionalidad antes de abrir una pull request desde la rama predeterminada.",
           defaultBranchDenied: "No se pueden abrir pull requests directamente desde la rama predeterminada.",
           states: {
@@ -7984,7 +7984,7 @@ export const es: TranslationStructure = {
         crossSession: ({ sessionId }: { sessionId: string }) => `Iniciado desde la sesión ${sessionId}`,
         externalCli: "Iniciado externamente desde la CLI",
         externalMcp: "Iniciado externamente mediante MCP",
-        externalAction: "Iniciado externamente mediante una acción de Happier",
+        externalAction: "Iniciado externamente mediante una acción de vector.dev",
         externalUnknown: "Iniciado externamente (origen desconocido)",
         legacyUnknown: "Origen de inicio desconocido",
       },
@@ -8036,7 +8036,7 @@ export const es: TranslationStructure = {
         },
         spawnPolicy: {
             title: 'Política de creación de sesiones de IA',
-            footer: 'Estos controles solo se aplican cuando un asistente dentro de una sesión de Happier crea otra sesión. La configuración heredada de la sesión padre sigue permitida; los elementos denegados rechazan sustituciones explícitas con un error claro.',
+            footer: 'Estos controles solo se aplican cuando un asistente dentro de una sesión de vector.dev crea otra sesión. La configuración heredada de la sesión padre sigue permitida; los elementos denegados rechazan sustituciones explícitas con un error claro.',
             toggles: {
                 allowCustomDirectory: { title: 'Directorio personalizado', subtitle: 'Permite que el asistente elija otro directorio de trabajo.' },
                 allowCrossMachine: { title: 'Destinos entre máquinas', subtitle: 'Permite crear la sesión en otra máquina disponible.' },
@@ -8141,11 +8141,11 @@ export const es: TranslationStructure = {
             },
             session_agent: {
                 title: 'Sesión de IA',
-                subtitle: 'Controla las herramientas disponibles para el asistente que se ejecuta dentro de una sesión de Happier.',
+                subtitle: 'Controla las herramientas disponibles para el asistente que se ejecuta dentro de una sesión de vector.dev.',
             },
             mcp: {
                 title: 'MCP',
-                subtitle: 'Controla los clientes MCP externos que usan el catálogo de acciones MCP de Happier.',
+                subtitle: 'Controla los clientes MCP externos que usan el catálogo de acciones MCP de vector.dev.',
             },
             cli: {
                 title: 'CLI de control de sesión',
@@ -8368,7 +8368,7 @@ settingsSession: {
       },
       messageSending: {
         inactiveResumePolicyTitle: "Reanudación automática después de enviar",
-        inactiveResumePolicySubtitle: "Elige qué debe hacer Happier después de enviar a una sesión inactiva.",
+        inactiveResumePolicySubtitle: "Elige qué debe hacer vector.dev después de enviar a una sesión inactiva.",
         inactiveResumePolicy: {
           whenAvailableTitle: "Ahora o cuando vuelva la máquina",
           whenAvailableSubtitle: "Reanudar de inmediato si está disponible; si no, procesar cuando el daemon se reconecte.",
@@ -8422,7 +8422,7 @@ settingsSession: {
             "Pon los mensajes primero en Pendientes; envíalos después con \"Dirigir ahora\".",
         },
         nonSteerablePromptTitle: 'Cuando un mensaje no puede dirigir el turno activo',
-        nonSteerablePromptFooter: 'Los cambios de modo de permisos y /clear o /compact no pueden aplicarse a mitad de turno. Elige qué hace Happier con esos mensajes mientras el agente está ocupado.',
+        nonSteerablePromptFooter: 'Los cambios de modo de permisos y /clear o /compact no pueden aplicarse a mitad de turno. Elige qué hace vector.dev con esos mensajes mientras el agente está ocupado.',
         nonSteerablePrompt: {
           askTitle: 'Preguntar cada vez',
           askSubtitle: 'Ofrecer “Interrumpir y enviar ahora” o “Poner en cola para después del turno”.',
@@ -8435,7 +8435,7 @@ settingsSession: {
       usageLimitRecovery: {
         title: "Recuperación del límite de uso",
         footer:
-          "Elige qué hace Happier cuando un proveedor pide esperar antes de continuar.",
+          "Elige qué hace vector.dev cuando un proveedor pide esperar antes de continuar.",
         modeTitle: "Cuando se alcanza un límite de uso",
         askTitle: "Preguntar cada vez",
         askSubtitle: "Muestra acciones de sesión antes de esperar o reintentar.",
@@ -8850,7 +8850,7 @@ settingsSession: {
           "Auto mantiene las secciones cortas como listas y cambia las largas a desplegables con búsqueda.",
         wizardPresentationAutoTitle: "Auto",
         wizardPresentationAutoSubtitle:
-          "Deja que Happier elija el mejor diseño según la cantidad de contenido.",
+          "Deja que vector.dev elija el mejor diseño según la cantidad de contenido.",
         wizardPresentationListTitle: "Lista",
         wizardPresentationListSubtitle: "Muestra todas las filas directamente en el asistente.",
         wizardPresentationDropdownTitle: "Desplegable",
@@ -8858,7 +8858,7 @@ settingsSession: {
       },
           promptPersonalization: {
               title: 'Prompt personalization',
-              footer: 'Choose which built-in instructions Happier adds to new agent sessions. This does not hide options an agent already sends.',
+              footer: 'Choose which built-in instructions vector.dev adds to new agent sessions. This does not hide options an agent already sends.',
               askAgentToRenameSessionsTitle: 'Session title updates',
               askAgentToRenameSessionsNeverTitle: 'Never',
               askAgentToRenameSessionsNeverSubtitle: 'Do not prompt agents to set session titles.',
@@ -8884,9 +8884,9 @@ settingsSession: {
       },
           defaultStorage: {
               title: 'Tipo de sesión predeterminado',
-              footer: 'Elige si las nuevas sesiones comienzan como sesiones de Happier o como sesiones directas respaldadas por el proveedor.',
+              footer: 'Elige si las nuevas sesiones comienzan como sesiones de vector.dev o como sesiones directas respaldadas por el proveedor.',
               globalTitle: 'Predeterminado global',
-              persistedSubtitle: 'Guarda las nuevas sesiones en Happier y sincronízalas entre dispositivos de forma predeterminada.',
+              persistedSubtitle: 'Guarda las nuevas sesiones en vector.dev y sincronízalas entre dispositivos de forma predeterminada.',
               directSubtitle: 'Inicia sesiones directas vinculadas a la máquina cuando el proveedor lo admita.',
               globalSubtitle: ({ label }: { label: string }) => `Predeterminado global: ${label}`,
               useGlobalDefault: 'Usar el predeterminado global',
@@ -9003,7 +9003,7 @@ settingsSession: {
     byo: {
       title: "Usar mi ElevenLabs",
 	      agentReuseDialog: {
-	        title: "El agente de Happier ya existe",
+	        title: "El agente de vector.dev ya existe",
 	        messageWithId: ({ name, id }: { name: string; id: string }) =>
 	          `Encontramos un agente de ElevenLabs existente (“${name}”, id: ${id}).\n\n¿Quieres actualizarlo o crear uno nuevo?`,
 	        messageNoId: ({ name }: { name: string }) =>
@@ -9028,12 +9028,12 @@ settingsSession: {
       apiKeyHelpDialogTitle: "Crear una clave API de ElevenLabs",
       apiKeyHelpDialogBody:
         "Open ElevenLabs → Developers → API Keys → Create API key → Copy the key.",
-      autoprovCreate: "Crear agente Happier",
+      autoprovCreate: "Crear agente vector.dev",
       autoprovCreateSubtitle:
-        "Crea y configura un agente Happier en tu cuenta de ElevenLabs usando tu clave API",
+        "Crea y configura un agente vector.dev en tu cuenta de ElevenLabs usando tu clave API",
       autoprovUpdate: "Actualizar agente",
       autoprovUpdateSubtitle:
-        "Actualiza tu agente al último template de Happier",
+        "Actualiza tu agente al último template de vector.dev",
       autoprovCreated: ({ agentId }: { agentId: string }) =>
         `Agente creado: ${agentId}`,
       autoprovUpdated: "Agente actualizado",
@@ -9281,7 +9281,7 @@ settingsSession: {
         manifest: {
           title: "Manifiesto del paquete de modelo",
           subtitle:
-            "Por defecto usa paquetes de modelos de Happier (se puede sobrescribir con EXPO_PUBLIC_HAPPIER_MODEL_PACK_MANIFESTS).",
+            "Por defecto usa paquetes de modelos de vector.dev (se puede sobrescribir con EXPO_PUBLIC_HAPPIER_MODEL_PACK_MANIFESTS).",
           detailResolved: "Resuelto",
           detailMissing: "Falta",
         },
@@ -9489,7 +9489,7 @@ settingsSession: {
         },
         backend: {
           daemonSubtitle:
-            "Usa tu backend de Happier y admite reanudación del proveedor.",
+            "Usa tu backend de vector.dev y admite reanudación del proveedor.",
           openAiSubtitle: "Conecta a endpoints HTTP compatibles con OpenAI.",
         },
         agentMachine: {
@@ -9618,7 +9618,7 @@ settingsSession: {
       },
       mediatorBackend: "Backend del mediador",
       mediatorBackendSubtitle:
-        "Daemon (usa tu backend de Happier) u OpenAI-compatible HTTP",
+        "Daemon (usa tu backend de vector.dev) u OpenAI-compatible HTTP",
       mediatorBackendDaemon: "Demonio",
       mediatorBackendOpenAi: "HTTP compatible con OpenAI",
       mediatorAgentSource: "Fuente del agente del mediador",
@@ -9738,7 +9738,7 @@ settingsSession: {
       testTts: "Probar TTS",
       testTtsSubtitle:
         "Reproduce una muestra corta usando tu TTS local configurado (TTS del dispositivo o endpoint)",
-      testTtsSample: "Hola desde Happier. Esta es una prueba de tu TTS local.",
+      testTtsSample: "Hola desde vector.dev. Esta es una prueba de tu TTS local.",
       testTtsMissingBaseUrl: "Primero configura una URL base de TTS.",
       testTtsFailed:
         "TTS test failed. Check your base URL, API key, model, and voice.",
@@ -9883,8 +9883,8 @@ settingsSession: {
 
   updates: {
     title: "Actualizaciones",
-    thisAppTitle: "Happier",
-    happierCliTitle: "Happier CLI",
+    thisAppTitle: "vector.dev",
+    happierCliTitle: "vector.dev CLI",
     sections: {
       thisApp: "Esta app",
       thisComputer: "Este ordenador",
@@ -9916,7 +9916,7 @@ settingsSession: {
       updatingBatch: ({ done, total }: { done: number; total: number }) => `Actualizando ${Math.min(done + 1, total)} de ${total}…`,
       updating: "Actualizando…",
       keepWorking: "Puedes seguir trabajando.",
-      ready: "Reinicia para terminar de actualizar Happier",
+      ready: "Reinicia para terminar de actualizar vector.dev",
       failedCount: ({ count }: { count: number }) => plural({ count, singular: "1 actualización no terminó", plural: `${count} actualizaciones no terminaron` }),
       notCheckedYet: "Aún sin comprobar",
       required: "Se necesita una actualización",
@@ -9926,7 +9926,7 @@ settingsSession: {
       uncheckedMeta: "Algunas herramientas aún no se han comprobado.",
       offline: "Algunas máquinas están sin conexión",
       checkedAt: ({ time }: { time: string }) => `Última comprobación: ${time}`,
-      upToDateDescription: "Happier, su línea de comandos y tus agentes están al día.",
+      upToDateDescription: "vector.dev, su línea de comandos y tus agentes están al día.",
       unknownDescription: "Todo lo que se pudo comprobar está al día. El resto se volverá a comprobar cuando esté accesible.",
       offlineDescription: "Todo lo accesible está al día. Las máquinas sin conexión se comprobarán cuando vuelvan.",
     },
@@ -9968,8 +9968,8 @@ settingsSession: {
       restartingService: "Reiniciando el servicio en segundo plano…",
       readyVersion: ({ version }: { version: string }) => `${version} está lista`,
       ready: "Actualización lista",
-      webNewBuild: "Hay una versión más reciente de Happier lista",
-      requiredApp: "Esta versión ya no es compatible. Actualiza para seguir usando Happier.",
+      webNewBuild: "Hay una versión más reciente de vector.dev lista",
+      requiredApp: "Esta versión ya no es compatible. Actualiza para seguir usando vector.dev.",
       appCheckFailed: "No se pudo comprobar si hay una versión más reciente.",
       appDownloadFailed: "La descarga no terminó.",
       appInstallFailed: "No se pudo instalar la actualización.",
@@ -9982,7 +9982,7 @@ settingsSession: {
       checking: "Comprobando…",
       failedGeneric: "La actualización no terminó. Inténtalo de nuevo.",
       remoteUnsupported: "Esta máquina no puede actualizar su línea de comandos a distancia. Actualízala en la propia máquina.",
-      archiveExpandedByteLimit: "El entorno descargado supera el límite de tamaño de extracción. Actualiza Happier antes de volver a intentarlo.",
+      archiveExpandedByteLimit: "El entorno descargado supera el límite de tamaño de extracción. Actualiza vector.dev antes de volver a intentarlo.",
       updateNotVerified: "La actualización se ejecutó, pero la versión no cambió.",
       rolledBackLocal: "La actualización no arrancó, así que este ordenador volvió a la versión anterior.",
       smokeFailed: "La nueva versión no funcionó en este ordenador, así que no cambió nada.",
@@ -9995,11 +9995,11 @@ settingsSession: {
       othersUpToDate: ({ count }: { count: number }) => plural({ count, singular: "1 más está al día", plural: `${count} más están al día` }),
       waitingOffline: ({ count }: { count: number }) => plural({ count, singular: "1 actualización esperando a que vuelva a estar en línea", plural: `${count} actualizaciones esperando a que vuelva a estar en línea` }),
     },
-    footer: "Las actualizaciones se instalan en cada máquina. Tras actualizar la línea de comandos, Happier reinicia el servicio en segundo plano de esa máquina.",
+    footer: "Las actualizaciones se instalan en cada máquina. Tras actualizar la línea de comandos, vector.dev reinicia el servicio en segundo plano de esa máquina.",
     tray: {
       available: ({ count }: { count: number }) => `Actualizaciones disponibles (${count})…`,
       running: "Actualizando…",
-      ready: "Reiniciar para actualizar Happier",
+      ready: "Reiniciar para actualizar vector.dev",
       required: "Actualización necesaria…",
       failed: "Una actualización no terminó…",
     },
@@ -10021,17 +10021,17 @@ settingsSession: {
     },
     defaultTitle: "Novedades",
     onboardingShowcase: {
-                "title": "Bienvenido a Happier",
+                "title": "Bienvenido a vector.dev",
                 "subtitle": "Tus agentes de IA, dondequiera que trabajes.",
                 "cards": {
                     "welcome": {
-                        "title": "Bienvenido a Happier",
+                        "title": "Bienvenido a vector.dev",
                         "everywhereTitle": "Tus agentes de IA, dondequiera que trabajes",
                         "everywhereBody": "Claude Code, Codex, OpenCode, Pi y mucho más: en tu teléfono, tablet, navegador o escritorio.",
                         "cockpitTitle": "Tu cockpit móvil",
                         "cockpitBody": "Chat, archivos, Git, editor, terminal. Todo lo que necesitas para crear y lanzar tu próximo proyecto, al alcance de la mano.",
                         "existingTitle": "Sesiones existentes, ya disponibles",
-                        "existingBody": "Cualquier sesión de Claude, Codex u OpenCode que se esté ejecutando en tu máquina, ábrela en Happier en directo.",
+                        "existingBody": "Cualquier sesión de Claude, Codex u OpenCode que se esté ejecutando en tu máquina, ábrela en vector.dev en directo.",
                         "voiceTitle": "Un asistente de voz para pensar juntos",
                         "voiceBody": "Pregunta qué están haciendo tus agentes, aprueba solicitudes de permiso y envía mensajes. Sin manos.",
                         "reviewTitle": "Revisa diffs y deja comentarios",
@@ -10039,7 +10039,7 @@ settingsSession: {
                         "subagentsTitle": "Subagentes entre proveedores",
                         "subagentsBody": "Lanza subagentes de Codex desde una sesión de Claude. Divide el trabajo entre agentes. Enruta mensajes entre sesiones.",
                         "tuisTitle": "Usa tus TUI favoritas",
-                        "tuisBody": "Ejecuta Claude Code, Codex u OpenCode en su interfaz de terminal nativa. Happier lo captura y lo sincroniza con todos tus dispositivos.",
+                        "tuisBody": "Ejecuta Claude Code, Codex u OpenCode en su interfaz de terminal nativa. vector.dev lo captura y lo sincroniza con todos tus dispositivos.",
                         "inboxTitle": "Una bandeja. Todas las sesiones.",
                         "inboxBody": "Todas las aprobaciones pendientes, solicitudes de permiso y sesiones listas para revisar, de cada máquina, en un solo lugar.",
                         "mcpTitle": "Una configuración MCP. Todos los proveedores.",
@@ -10104,7 +10104,7 @@ settingsSession: {
                     "mcp": {
                         "title": "Una configuración. Todos los proveedores.",
                         "wideTitle": "Una configuración.\nTodos los proveedores.",
-                        "body": "Define MCPs una vez en Happier y funcionan en todos los backends, incluso los que no admiten MCP de forma nativa. Gestiona skills, prompts y más.",
+                        "body": "Define MCPs una vez en vector.dev y funcionan en todos los backends, incluso los que no admiten MCP de forma nativa. Gestiona skills, prompts y más.",
                         "alt": "Abstract placeholder image for shared MCP configuration."
                     },
                     "queue": {
@@ -10149,7 +10149,7 @@ settingsSession: {
       "El enlace de conexión falta o es inválido. Verifica la URL e intenta nuevamente.",
     connectTerminal: "Conectar terminal",
     terminalRequestDescription:
-      "Un terminal está solicitando conectarse a tu cuenta de Happier Coder. Esto permitirá al terminal enviar y recibir mensajes de forma segura.",
+      "Un terminal está solicitando conectarse a tu cuenta de vector.dev Coder. Esto permitirá al terminal enviar y recibir mensajes de forma segura.",
     connectionDetails: "Detalles de conexión",
     publicKey: "Clave pública",
     encryption: "Cifrado",
@@ -10213,9 +10213,9 @@ settingsSession: {
     invalidAuthUrl: "URL de autenticación inválida",
     microphoneAccessRequiredTitle: "Se requiere acceso al micrófono",
     microphoneAccessRequiredRequestPermission:
-      "Happier necesita acceso a tu micrófono para el chat de voz. Concede el permiso cuando se te solicite.",
+      "vector.dev necesita acceso a tu micrófono para el chat de voz. Concede el permiso cuando se te solicite.",
     microphoneAccessRequiredEnableInSettings:
-      "Happier necesita acceso a tu micrófono para el chat de voz. Activa el acceso al micrófono en la configuración de tu dispositivo.",
+      "vector.dev necesita acceso a tu micrófono para el chat de voz. Activa el acceso al micrófono en la configuración de tu dispositivo.",
     microphoneAccessRequiredBrowserInstructions:
       "Permite el acceso al micrófono en la configuración del navegador. Puede que debas hacer clic en el icono de candado en la barra de direcciones y habilitar el permiso del micrófono para este sitio.",
     openSettings: "Abrir configuración",
@@ -10296,12 +10296,12 @@ settingsSession: {
     // Unified onboarding redesign — welcome decision (right pane)
     welcomeQuestionTitle: "Te damos la bienvenida.",
     welcomeQuestionSubtitle: "¿Es tu primera vez aquí?",
-    welcomeQuestionBody: "Happier es el centro de control de tus agentes de codificación con IA. No hace falta correo electrónico. Tu cuenta es una clave privada que se genera en este dispositivo.",
+    welcomeQuestionBody: "vector.dev es el centro de control de tus agentes de codificación con IA. No hace falta correo electrónico. Tu cuenta es una clave privada que se genera en este dispositivo.",
 
     welcomePrimaryButton: "Primera vez aquí — empecemos",
     welcomePrimarySubtitle: "Un toque. Sin formulario. Tu clave vive aquí.",
 
-    welcomeSecondaryButton: "Iniciar sesión — ya uso Happier",
+    welcomeSecondaryButton: "Iniciar sesión — ya uso vector.dev",
     welcomeSecondarySubtitle: "Escanea un código QR o introduce tu clave secreta",
 
     // Unified onboarding redesign — returning-user copy variants.
@@ -10386,8 +10386,8 @@ settingsSession: {
               startDaemon: ({ targetLabel }: { targetLabel: string }) =>
 
                   `Usa el flujo de configuración de escritorio para reconectar el servicio en segundo plano de ${targetLabel}. Abre los pasos manuales solo si ya estás en ese ordenador.`,
-              connectMachineElsewhere: ({ targetLabel }: { targetLabel: string }) => `Abre Happier en el ordenador que quieres conectar a ${targetLabel}, o ejecuta en él los pasos de terminal de abajo.`,
-              startDaemonElsewhere: ({ targetLabel }: { targetLabel: string }) => `Abre Happier en ese ordenador para volver a conectar su servicio en segundo plano a ${targetLabel}, o ejecuta en él los pasos de terminal de abajo.`,
+              connectMachineElsewhere: ({ targetLabel }: { targetLabel: string }) => `Abre vector.dev en el ordenador que quieres conectar a ${targetLabel}, o ejecuta en él los pasos de terminal de abajo.`,
+              startDaemonElsewhere: ({ targetLabel }: { targetLabel: string }) => `Abre vector.dev en ese ordenador para volver a conectar su servicio en segundo plano a ${targetLabel}, o ejecuta en él los pasos de terminal de abajo.`,
 
               createSession: 'Inicia una sesión nueva con el botón + o desde tu terminal.',
 
@@ -10447,7 +10447,7 @@ settingsSession: {
 
                   title: 'Instala el servicio en segundo plano (recomendado)',
 
-                  description: 'Mantiene Happier listo en segundo plano para inicios remotos.',
+                  description: 'Mantiene vector.dev listo en segundo plano para inicios remotos.',
 
                   copyLabel: 'Instalación del daemon',
 
@@ -10495,17 +10495,17 @@ settingsSession: {
 
 
     setupSurface: {
-        acquisitionResolvingReleaseStatus: "Buscando la versión de la línea de comandos de Happier.",
-        acquisitionDownloadingStatus: "Descargando la línea de comandos de Happier.",
+        acquisitionResolvingReleaseStatus: "Buscando la versión de la línea de comandos de vector.dev.",
+        acquisitionDownloadingStatus: "Descargando la línea de comandos de vector.dev.",
         acquisitionVerifyingStatus: "Verificando la descarga.",
-        acquisitionUnpackingStatus: "Descomprimiendo la línea de comandos de Happier.",
-        acquisitionInstallingStatus: "Instalando la línea de comandos de Happier.",
+        acquisitionUnpackingStatus: "Descomprimiendo la línea de comandos de vector.dev.",
+        acquisitionInstallingStatus: "Instalando la línea de comandos de vector.dev.",
         acquisitionFinalizingStatus: "Finalizando la instalación de la línea de comandos.",
-        acquisitionCheckingCliStatus: "Comprobando la línea de comandos de Happier.",
+        acquisitionCheckingCliStatus: "Comprobando la línea de comandos de vector.dev.",
         acquisitionCheckingDaemonStatus: "Comprobando el servicio en segundo plano.",
-        acquisitionReleaseFailed: "Happier no pudo encontrar la versión de la línea de comandos. Inténtalo de nuevo.",
+        acquisitionReleaseFailed: "vector.dev no pudo encontrar la versión de la línea de comandos. Inténtalo de nuevo.",
         acquisitionDownloadFailed: "La descarga de la línea de comandos no terminó. Inténtalo de nuevo.",
-        acquisitionVerificationFailed: "Happier no pudo verificar la descarga. Inténtalo de nuevo.",
+        acquisitionVerificationFailed: "vector.dev no pudo verificar la descarga. Inténtalo de nuevo.",
         acquisitionInstallFailed: "La instalación de la línea de comandos no terminó. Inténtalo de nuevo.",
         acquisitionDownloadBytes: ({ received }: { received: string }) => `${received} descargados`,
         acquisitionDownloadBytesTotal: ({ received, total }: { received: string; total: string }) => `${received} de ${total} descargados`,
@@ -10513,7 +10513,7 @@ settingsSession: {
     checkingStatus: ({ relay }: { relay: string }) => `Estamos viendo qué tiene ya este ordenador para ${relay}.`,
     workingTitle: 'Configurando este ordenador',
     movingTitle: ({ relay }: { relay: string }) => `Moviendo este ordenador a ${relay}`,
-    stagePrepareStatus: 'Preparando la línea de comandos de Happier en este ordenador.',
+    stagePrepareStatus: 'Preparando la línea de comandos de vector.dev en este ordenador.',
     stageConnectStatus: ({ relay }: { relay: string }) => `Conectando este ordenador a ${relay}. No tienes que hacer nada.`,
     stageConnectStatusAs: ({ relay, account }: { relay: string; account: string }) => `Conectando este ordenador a ${relay} como ${account}. No tienes que hacer nada.`,
     stageServiceStatus: 'Instalando el servicio en segundo plano que mantiene tus sesiones accesibles.',
@@ -10523,18 +10523,18 @@ settingsSession: {
     blockedTitle: 'Configuración detenida',
     blockedStatusFallback: 'La configuración no pudo terminar. Tu cuenta y tus sesiones siguen intactas.',
     blockedServiceConflictStatus: 'Primero hay que resolver otro servicio en segundo plano de este ordenador. Se dejó tal cual: abre Detalles para ver cuál es.',
-    blockedServiceManagerUnavailableStatus: 'Happier no puede configurar el servicio en segundo plano en este ordenador. Abre Detalles para obtener ayuda o continúa con tus otras máquinas.',
+    blockedServiceManagerUnavailableStatus: 'vector.dev no puede configurar el servicio en segundo plano en este ordenador. Abre Detalles para obtener ayuda o continúa con tus otras máquinas.',
     blockedConsentDeclinedStatus: 'La configuración se detuvo. El servicio en segundo plano que ya había en este ordenador se dejó tal cual.',
     blockedAccountKeptStatus: 'La configuración se detuvo. Este ordenador sigue conectado a la cuenta con la que tiene la sesión iniciada.',
     blockedAccountChangedStatus: 'Este ordenador inició sesión en otra cuenta mientras se configuraba, así que la configuración se detuvo antes de vincularlo. Inténtalo de nuevo.',
     blockedPairingDeclinedStatus: 'Este ordenador no se aprobó para conectarse. Tu cuenta y tus sesiones siguen intactas.',
     blockedPairingIncompleteStatus: 'La conexión de este ordenador no terminó.',
-    blockedCliOutdatedStatus: 'La línea de comandos de Happier en este ordenador es más antigua de lo que necesita la configuración. Actualiza Happier e inténtalo de nuevo.',
+    blockedCliOutdatedStatus: 'La línea de comandos de vector.dev en este ordenador es más antigua de lo que necesita la configuración. Actualiza vector.dev e inténtalo de nuevo.',
     blockedCliChannelOutdatedStatus: ({ channel }: { channel: string }) => `Este ordenador usa la CLI ${channel}, que es más antigua de lo que necesita esta app.`,
     blockedCliChannelOutdatedVersionStatus: ({ channel, version }: { channel: string; version: string }) => `Este ordenador usa la CLI ${channel}. Su versión más reciente, ${version}, es más antigua de lo que necesita esta app.`,
-    blockedCliUnresponsiveStatus: 'La línea de comandos de Happier dejó de responder.',
-        blockedCliUnavailableStatus: "Happier no pudo iniciar su línea de comandos en este ordenador.",
-    blockedCliFailedStatus: 'Happier no pudo terminar de leer la configuración de este ordenador.',
+    blockedCliUnresponsiveStatus: 'La línea de comandos de vector.dev dejó de responder.',
+        blockedCliUnavailableStatus: "vector.dev no pudo iniciar su línea de comandos en este ordenador.",
+    blockedCliFailedStatus: 'vector.dev no pudo terminar de leer la configuración de este ordenador.',
     blockedStepStatus: ({ step }: { step: string }) => `No se pudo completar: ${step}`,
     unreachableStatus: ({ relay }: { relay: string }) => `Este ordenador todavía no responde en ${relay}.`,
     notConvergedStatus: ({ relay }: { relay: string }) => `El servicio en segundo plano de este ordenador aún no ha terminado de arrancar para ${relay}.`,
@@ -10543,7 +10543,7 @@ settingsSession: {
     stepOfTotal: ({ step, total }: { step: number; total: number }) => `Paso ${step} de ${total}`,
     hideDetails: 'Ocultar detalles',
     consentTitle: '¿Sustituir el servicio en segundo plano de este ordenador?',
-    consentBodyFallback: 'Ya existe un servicio en segundo plano de Happier en este ordenador y esta aplicación no lo gestiona.',
+    consentBodyFallback: 'Ya existe un servicio en segundo plano de vector.dev en este ordenador y esta aplicación no lo gestiona.',
     consentServicesList: ({ services }: { services: string }) => `Servicios afectados: ${services}`,
     consentConfirm: 'Sustituirlo',
     consentKeep: 'Mantener el servicio existente',
@@ -10558,27 +10558,27 @@ settingsSession: {
     accountMoveBody: ({ from, to, relay }: { from: string; to: string; relay: string }) => `Este ordenador tiene la sesión iniciada en ${relay} como ${from}. Al cambiar a ${to}, ${from} ya no podrá acceder a este ordenador.`,
     accountMoveBodyAcrossRelays: ({ from, fromRelay, to, toRelay }: { from: string; fromRelay: string; to: string; toRelay: string }) => `Este ordenador tiene la sesión iniciada en ${fromRelay} como ${from}. Al cambiar a ${to} en ${toRelay}, ${from} ya no podrá acceder a este ordenador.`,
     accountMoveConfirm: 'Cambiar',
-    consentTakeoverTitle: '¿Dejar que Happier gestione aquí el servicio en segundo plano?',
+    consentTakeoverTitle: '¿Dejar que vector.dev gestione aquí el servicio en segundo plano?',
     consentTakeoverConfirm: 'Hacerse cargo',
     continueWithoutAction: 'Continuar sin este ordenador',
     updateCliAction: 'Actualizar',
-    cliChoiceTitle: ({ version }: { version: string }) => `La CLI de Happier ${version} ya está instalada`,
-    cliChoiceTitleUnknownVersion: 'La CLI de Happier ya está instalada',
-    cliChoiceBody: ({ path }: { path: string }) => `Está en ${path}. Happier puede instalar su propia copia, mantenerla al día y ponerla primera en tu PATH, o puedes seguir usando esta.`,
-    cliChoiceBodyOutdated: ({ path }: { path: string }) => `Está en ${path} y es demasiado antigua para la configuración. Happier puede instalar su propia copia actualizada y ponerla primera en tu PATH, o puedes conservar la tuya y actualizarla tú.`,
-    cliChoiceTitleMissing: 'Tu CLI de Happier ya no está instalada',
-    cliChoiceBodyMissing: ({ path }: { path: string }) => `Elegiste conservar la que estaba en ${path}, y ya no está ahí. Happier puede instalar su propia copia y mantenerla al día, o puedes reinstalar la tuya y seguir usándola.`,
-    cliChoiceBodyKeepBlocked: ({ path, link }: { path: string; link: string }) => `Está en ${path}, pero los terminales nuevos ejecutan primero la CLI de Happier a través de ${link}, que Happier no añadió. Deja que Happier gestione la línea de comandos, o elimina ${link} y vuelve a ejecutar la configuración para conservar la tuya.`,
+    cliChoiceTitle: ({ version }: { version: string }) => `La CLI de vector.dev ${version} ya está instalada`,
+    cliChoiceTitleUnknownVersion: 'La CLI de vector.dev ya está instalada',
+    cliChoiceBody: ({ path }: { path: string }) => `Está en ${path}. vector.dev puede instalar su propia copia, mantenerla al día y ponerla primera en tu PATH, o puedes seguir usando esta.`,
+    cliChoiceBodyOutdated: ({ path }: { path: string }) => `Está en ${path} y es demasiado antigua para la configuración. vector.dev puede instalar su propia copia actualizada y ponerla primera en tu PATH, o puedes conservar la tuya y actualizarla tú.`,
+    cliChoiceTitleMissing: 'Tu CLI de vector.dev ya no está instalada',
+    cliChoiceBodyMissing: ({ path }: { path: string }) => `Elegiste conservar la que estaba en ${path}, y ya no está ahí. vector.dev puede instalar su propia copia y mantenerla al día, o puedes reinstalar la tuya y seguir usándola.`,
+    cliChoiceBodyKeepBlocked: ({ path, link }: { path: string; link: string }) => `Está en ${path}, pero los terminales nuevos ejecutan primero la CLI de vector.dev a través de ${link}, que vector.dev no añadió. Deja que vector.dev gestione la línea de comandos, o elimina ${link} y vuelve a ejecutar la configuración para conservar la tuya.`,
     cliChoiceNotNow: 'Ahora no',
-    cliChoiceManage: 'Deja que Happier la gestione',
+    cliChoiceManage: 'Deja que vector.dev la gestione',
     cliChoiceKeep: 'Conservar la mía',
     blockedCliChoiceStatus: 'La configuración se detuvo antes de cambiar nada. Elige quién gestiona la línea de comandos para continuar.',
     blockedCliOwnOutdatedStatus: ({ command }: { command: string }) => `Tu línea de comandos es demasiado antigua para la configuración. Actualízala con ${command}`,
     blockedCliOwnOutdatedUnknownStatus: 'Tu línea de comandos es demasiado antigua para la configuración. Actualízala donde la instalaste.',
-    blockedCliOwnMissingStatus: 'La línea de comandos que conservaste ya no está instalada. Reinstálala o deja que Happier gestione la línea de comandos.',
+    blockedCliOwnMissingStatus: 'La línea de comandos que conservaste ya no está instalada. Reinstálala o deja que vector.dev gestione la línea de comandos.',
     cliTrustTitle: '¿Aprobar esta línea de comandos?',
-    cliTrustBody: ({ command }: { command: string }) => `Happier no instaló la línea de comandos en ${command}. Aprobarla le permite leer y escribir las sesiones de esta cuenta. Aprueba solo la que hayas puesto tú.`,
-    cliTrustBodyUnknownCommand: 'Happier no instaló esta línea de comandos. Aprobarla le permite leer y escribir las sesiones de esta cuenta. Aprueba solo la que hayas puesto tú.',
+    cliTrustBody: ({ command }: { command: string }) => `vector.dev no instaló la línea de comandos en ${command}. Aprobarla le permite leer y escribir las sesiones de esta cuenta. Aprueba solo la que hayas puesto tú.`,
+    cliTrustBodyUnknownCommand: 'vector.dev no instaló esta línea de comandos. Aprobarla le permite leer y escribir las sesiones de esta cuenta. Aprueba solo la que hayas puesto tú.',
     cliTrustApprove: 'Aprobar',
   },
 
@@ -10588,7 +10588,7 @@ settingsSession: {
           webDesktopOnlyBody: 'Abre la app de escritorio para configurar este ordenador. La app web puede mostrar el estado, pero no puede instalar ni configurar el servicio en segundo plano.',
           preAuthTitle: 'Elige tu Relay antes de iniciar sesión',
           preAuthBody: 'Elige el Relay que quieres usar en este ordenador antes de crear, restaurar o iniciar sesión en una cuenta.',
-          preAuthContinueHint: 'Cuando continúes, Happier te devolverá a iniciar sesión contra el Relay seleccionado y luego volverá aquí para terminar la configuración.',
+          preAuthContinueHint: 'Cuando continúes, vector.dev te devolverá a iniciar sesión contra el Relay seleccionado y luego volverá aquí para terminar la configuración.',
     currentRelayTitle: 'Relay seleccionado',
     currentRelayDescription: ({ relayUrl }: { relayUrl: string }) => `Relay seleccionado: ${relayUrl}`,
     savedRelaysTitle: 'Relays guardados',
@@ -10639,7 +10639,7 @@ settingsSession: {
       screenTitle: "Instalables",
       aboutGroupTitle: "Acerca de",
       aboutSubtitle:
-        "Gestiona las herramientas que Happier puede instalar y mantener actualizadas en esta máquina.",
+        "Gestiona las herramientas que vector.dev puede instalar y mantener actualizadas en esta máquina.",
       experimentalGroupTitle: ({ title }: { title: string }) =>
         `${title} (experimental)`,
       autoInstallTitle: "Auto-instalar cuando sea necesario",
@@ -10648,7 +10648,7 @@ settingsSession: {
       autoUpdateTitle: "Auto-actualizar",
       autoUpdatePromptTitle: "Auto-actualizar",
       autoUpdatePromptBody:
-        "Elige cómo debe gestionar Happier las actualizaciones de este instalable.",
+        "Elige cómo debe gestionar vector.dev las actualizaciones de este instalable.",
       autoUpdateModes: {
         off: "Desactivado",
         notify: "Notificar",
@@ -10666,9 +10666,9 @@ settingsSession: {
         notSetUp: 'Este ordenador aún no está configurado.',
         connectedAs: ({ relay, account }: { relay: string; account: string }) => `Conectado a ${relay} como ${account}.`,
         cliTitle: 'Línea de comandos',
-        cliManaged: ({ version }: { version: string }) => `Happier ${version}, instalado por esta app`,
+        cliManaged: ({ version }: { version: string }) => `vector.dev ${version}, instalado por esta app`,
         cliManagedOnChannel: ({ channel, version }: { channel: string; version: string }) => `CLI ${channel} ${version}, instalado por esta app`,
-        cliChoiceManaged: 'Gestionada por Happier',
+        cliChoiceManaged: 'Gestionada por vector.dev',
         cliChoiceOwn: ({ path }: { path: string }) => `La tuya — ${path}`,
         cliChoiceChange: 'Cambiar quién gestiona la línea de comandos',
         cliOldCopyTitle: 'Línea de comandos antigua',
@@ -10680,26 +10680,26 @@ settingsSession: {
         cliManagedUnknownVersion: 'Instalada por esta app',
         cliFromPath: ({ version, path }: { version: string; path: string }) => `${version} desde ${path}`,
         updateCliTitle: 'Actualizar la línea de comandos',
-        updateCliAvailable: ({ version }: { version: string }) => `Happier ${version} está disponible.`,
-        updateCliKept: ({ version, command }: { version: string; command: string }) => `Happier ${version} está disponible. Actualízala con ${command}`,
+        updateCliAvailable: ({ version }: { version: string }) => `vector.dev ${version} está disponible.`,
+        updateCliKept: ({ version, command }: { version: string; command: string }) => `vector.dev ${version} está disponible. Actualízala con ${command}`,
         relayAccount: ({ account }: { account: string }) => `Sesión iniciada como ${account}`,
         updatingCli: 'Actualizando la línea de comandos',
-        cliNotManaged: 'Happier no instaló esta línea de comandos, así que no la sustituirá.',
+        cliNotManaged: 'vector.dev no instaló esta línea de comandos, así que no la sustituirá.',
         cliUpdateFailed: 'La actualización no terminó. Inténtalo de nuevo.',
         cliUpdateRestartNotConverged: 'La línea de comandos se actualizó, pero el servicio en segundo plano sigue ejecutando la versión anterior. Inténtalo de nuevo.',
     },
     cliPath: {
       title: "Terminal",
-      footer: "Happier Desktop solo añade o elimina las entradas del PATH que ha creado; las escritas por el instalador del shell no se tocan.",
+      footer: "vector.dev Desktop solo añade o elimina las entradas del PATH que ha creado; las escritas por el instalador del shell no se tocan.",
       addTitle: "Añadir happier al PATH",
       addSubtitle: "Haz que el comando happier esté disponible en los terminales nuevos.",
       removeTitle: "Quitar happier del PATH",
-      removeSubtitle: "Quita solo las entradas del PATH que Happier Desktop añadió.",
+      removeSubtitle: "Quita solo las entradas del PATH que vector.dev Desktop añadió.",
       added: "Añadido. Abre un terminal nuevo para usar happier.",
       alreadyPresent: "happier ya está en tu PATH.",
       existingCommand: ({ path }: { path: string }) => `Otro happier en ${path} ya responde en tu terminal, así que no se añadió nada.`,
-      removed: "Se quitaron las entradas del PATH que Happier Desktop había añadido.",
-      nothingToRemove: "Happier Desktop no ha añadido ninguna entrada al PATH.",
+      removed: "Se quitaron las entradas del PATH que vector.dev Desktop había añadido.",
+      nothingToRemove: "vector.dev Desktop no ha añadido ninguna entrada al PATH.",
     },
     stopDaemon: "Detener daemon",
     stopDaemonConfirmTitle: "¿Detener daemon?",
@@ -10856,7 +10856,7 @@ settingsSession: {
     switchToRemote: "Cambiar a remoto",
     detachLocalTerminal: "Desconectar terminal",
     directSessionTakeoverAvailable:
-      "Esta sesión directa está disponible en tu máquina. Tómala en Happier para controlarla aquí.",
+      "Esta sesión directa está disponible en tu máquina. Tómala en vector.dev para controlarla aquí.",
     directSessionMachineOffline:
       "Esta sesión directa no está disponible en este momento porque la máquina está sin conexión.",
     switchingToDirectTakeover: "Tomando esta sesión directa…",
@@ -10872,20 +10872,20 @@ settingsSession: {
     directImportCancelled: "Importación detenida. Tu historial se conserva; puedes reintentar.",
     directImportFailed: "La importación falló. Tu historial se conserva; puedes reintentar.",
     directImportStatusUnavailable: "Progreso no disponible. Reconecta o vuelve a comprobar.",
-    directImportRequiresDaemonUpgrade: "Actualiza Happier en esta máquina para importar sesiones con progreso y opción de detener.",
+    directImportRequiresDaemonUpgrade: "Actualiza vector.dev en esta máquina para importar sesiones con progreso y opción de detener.",
     directImportStop: "Detener importación",
     directImportCount: ({ count }: { count: number }) => `${count} mensajes importados`,
     directImportCountWithTotal: ({ count, total }: { count: number; total: number }) => `${count} de ${total} mensajes importados`,
-    directTakeoverDialogTitle: "¿Continuar esta sesión directa en Happier?",
-    directTakeoverDialogBody: "Elige cómo quieres que Happier tome el control. Directo sigue usando la transcripción del proveedor. Importar lleva la transcripción a Happier.",
+    directTakeoverDialogTitle: "¿Continuar esta sesión directa en vector.dev?",
+    directTakeoverDialogBody: "Elige cómo quieres que vector.dev tome el control. Directo sigue usando la transcripción del proveedor. Importar lleva la transcripción a vector.dev.",
     directTakeoverDialogDirectTitle: "Tomar control",
-    directTakeoverDialogDirectBody: "Controla esta sesión en Happier sin importar la transcripción a Happier.",
+    directTakeoverDialogDirectBody: "Controla esta sesión en vector.dev sin importar la transcripción a vector.dev.",
     directTakeoverDialogPersistTitle: "Tomar control + importar",
-    directTakeoverDialogPersistBody: "Importa la transcripción a Happier y continúa con todas las funciones de una sesión Happier.",
+    directTakeoverDialogPersistBody: "Importa la transcripción a vector.dev y continúa con todas las funciones de una sesión vector.dev.",
     directTakeoverDialogForceStopTitle: "Intentar detener primero el proceso local",
-    directTakeoverDialogForceStopBody: "Happier encontró un proceso local de confianza para esta sesión. Activa esto si quieres que Happier lo detenga antes de tomar el control.",
+    directTakeoverDialogForceStopBody: "vector.dev encontró un proceso local de confianza para esta sesión. Activa esto si quieres que vector.dev lo detenga antes de tomar el control.",
     directTakeoverForceStopConfirmTitle: "¿Detener primero el proceso local?",
-    directTakeoverForceStopConfirmBody: "Happier encontró un proceso local de confianza para esta sesión directa. ¿Detenerlo antes de tomar el control aquí?",
+    directTakeoverForceStopConfirmBody: "vector.dev encontró un proceso local de confianza para esta sesión directa. ¿Detenerlo antes de tomar el control aquí?",
     directTakeoverForceStopConfirmAction: "Detener y tomar control",
   },
 
@@ -11367,7 +11367,7 @@ settingsSession: {
     },
     defaultStorage: {
       title: 'Tipo de sesión predeterminado',
-      footer: 'Anula el tipo de sesión predeterminado Happier/directo de la cuenta para las nuevas sesiones cuando se selecciona este perfil.',
+      footer: 'Anula el tipo de sesión predeterminado vector.dev/directo de la cuenta para las nuevas sesiones cuando se selecciona este perfil.',
       accountDefaultSubtitle: ({ label }: { label: string }) => `Predeterminado de la cuenta: ${label}`,
       useAccountDefault: 'Usar el valor predeterminado de la cuenta',
       currently: ({ label }: { label: string }) => `Actualmente: ${label}`,

@@ -92,7 +92,7 @@ pub fn build_app_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> 
         ..Default::default()
     };
 
-    let quit_item = MenuItemBuilder::with_id(QUIT_APP_MENU_ID, "Quit Happier")
+    let quit_item = MenuItemBuilder::with_id(QUIT_APP_MENU_ID, "Quit vector.dev")
         .accelerator("CmdOrCtrl+Q")
         .build(app)?;
 

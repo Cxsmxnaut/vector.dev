@@ -52,7 +52,7 @@ pub fn resolve_desktop_exit_action(request: DesktopExitRequest) -> DesktopExitAc
 /// Which Quit the person chose, carried to the webview with the handoff.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum QuitIntent {
-    /// "Quit Happier": follows the login-start setting.
+    /// "Quit vector.dev": follows the login-start setting.
     #[default]
     Quit,
     /// "Stop background services and quit".

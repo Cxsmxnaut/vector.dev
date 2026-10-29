@@ -1,6 +1,6 @@
 //! The app's own login item, which follows the one login-start setting (R16 b).
 //!
-//! There is no separate "launch Happier at login" setting any more: when this computer's
+//! There is no separate "launch vector.dev at login" setting any more: when this computer's
 //! background service starts at login, the app starts at login too — in menu-bar mode
 //! (`--menu-bar`: tray only, no window, no web UI) — and when the service is on-demand it does not.
 //! Whoever learns the setting (the web UI's push, a native status read, the tray's own check item)

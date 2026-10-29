@@ -205,8 +205,8 @@ mod tests {
     #[test]
     fn packaged_builds_resolve_resources_and_never_the_checkout() {
         let checkout = std::path::Path::new("/checkout/apps/ui/src-tauri");
-        let resources = std::path::Path::new("/opt/Happier/usr/lib/Happier");
-        let exe_dir = std::path::Path::new("/opt/Happier/usr/bin");
+        let resources = std::path::Path::new("/opt/vector.dev/usr/lib/vector.dev");
+        let exe_dir = std::path::Path::new("/opt/vector.dev/usr/bin");
         let name = "hsetup-x86_64-unknown-linux-gnu";
 
         // Release (no checkout): the bundle's resources come first, then beside the executable.

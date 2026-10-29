@@ -99,7 +99,7 @@ const COUNT_PLACEHOLDER = '{count}';
 
 export function buildDesktopTrayLabels(t: Translate): DesktopTrayLabels {
     return {
-        title: 'Happier',
+        title: 'vector.dev',
         open: t('settingsDesktop.trayOpen'),
         openInHappier: t('settingsDesktop.trayOpenInHappier'),
         settings: t('settingsDesktop.traySettings'),

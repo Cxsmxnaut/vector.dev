@@ -1,7 +1,7 @@
 {
   "id": "/",
-  "name": "Happier",
-  "short_name": "Happier",
+  "name": "vector.dev",
+  "short_name": "vector.dev",
   "description": "Monitor and control your coding agents from anywhere.",
   "start_url": "/",
   "scope": "/",
