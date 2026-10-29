@@ -78,7 +78,7 @@
     "// ==== macOS Desktop (Tauri) Variants ====": "",
     "tauri:prepare:sidecar": "node ./scripts/prepareTauriSidecar.mjs",
     "tauri:prepare:dev": "node ./scripts/prepareTauriSidecar.mjs && cross-env EXPO_UNSTABLE_WEB_MODAL=1 EXPO_PUBLIC_HAPPIER_DESKTOP_UPDATES_ENABLED=0 expo start",
-    "tauri:prepare:build": "node ./scripts/prepareTauriSidecar.mjs && cross-env EXPO_UNSTABLE_WEB_MODAL=1 EXPO_PUBLIC_HAPPIER_DESKTOP_UPDATES_ENABLED=0 expo export --platform web --output-dir dist",
+    "tauri:prepare:build": "node ./scripts/prepareTauriSidecar.mjs && cross-env EXPO_UNSTABLE_WEB_MODAL=1 EXPO_PUBLIC_HAPPIER_DESKTOP_UPDATES_ENABLED=0 expo export --clear --platform web --output-dir dist",
     "ui:tauri": "node ../stack/scripts/tauri_dev.mjs",
     "tauri:dev": "node ../stack/scripts/tauri_dev.mjs",
     "tauri:qa": "node ./scripts/tauriMcpQa.mjs",
