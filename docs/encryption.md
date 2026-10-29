@@ -2751,6 +2751,16 @@ or retired RPC material remains a refusal, including for server-origin reads.
 
 ### Machine metadata + daemon state
 
+- In unreleased 0.3 source, the existing Machine census and exact-row projection
+  carry `recipientWorkPending` and `recipientWorkCursor` for current encrypted
+  Manage holders. The access owner derives pending work through the same
+  verified-binding/envelope predicate as the `action_required` recipient page,
+  using one set query per portable database bind chunk. The cursor is the
+  existing `machineRecipientAccess` Account change cursor, not a new queue or
+  durable progress marker. UI refreshes prepare only pending work or an advanced
+  recipient cursor; the per-Machine pass still rechecks its first page and every
+  conditional key write still verifies current access, binding and content
+  versions. These scheduling facts confer no key-transfer authority.
 - In 0.3 development source, `machines/machinePublishedContentV1.ts` owns one
   share-wide opened-content shape for the custodian and recipients. CLI registration,
   daemon publication, and UI metadata, policy, Runner and Account-conversion

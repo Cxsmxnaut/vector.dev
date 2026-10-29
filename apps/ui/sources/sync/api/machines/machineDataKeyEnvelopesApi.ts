@@ -159,7 +159,8 @@ export function prepareMachineDataKeyEnvelopesDetachedForScope(
 }
 
 type MachineRecipientPreparationInput = Pick<Machine, 'id' | 'dataEncryptionKey' | 'keyBasis'
-    | 'access' | 'storageMode' | 'revokedAt' | 'replacedByMachineId'>;
+    | 'access' | 'storageMode' | 'revokedAt' | 'replacedByMachineId'>
+    & Pick<FetchedMachineRow, 'recipientWorkPending' | 'recipientWorkCursor'>;
 
 function recipientPreparationInputs(machine: MachineRecipientPreparationInput, recipientChangeCursor: number | undefined) {
     return { callerDataEncryptionKey: machine.dataEncryptionKey,
@@ -167,6 +168,7 @@ function recipientPreparationInputs(machine: MachineRecipientPreparationInput, r
         custodianAccountId: machine.access?.custodian.accountId, role: machine.access?.role,
         accessState: machine.access?.accessState, resourceMode: machine.access?.resourceMode,
         storageMode: machine.storageMode, revokedAt: machine.revokedAt,
+        recipientWorkPending: machine.recipientWorkPending,
         recipientChangeCursor: recipientChangeCursor ?? null };
 }
 
@@ -200,8 +202,14 @@ export async function prepareMachineDataKeyEnvelopesForMachines(params: Readonly
             if (previous) previous.invalidated = true;
             return;
         }
-        const inputs = recipientPreparationInputs(machine, params.recipientChangeCursors.get(machine.id));
+        const publishedRow = publishedRows.get(machine.id);
+        const pending = publishedRow?.recipientWorkPending ?? machine.recipientWorkPending;
+        const rowCursor = publishedRow?.recipientWorkCursor ?? machine.recipientWorkCursor;
+        const changeCursor = params.recipientChangeCursors.get(machine.id);
+        const cursor = rowCursor === undefined ? changeCursor : changeCursor === undefined ? rowCursor : Math.max(rowCursor, changeCursor);
+        const inputs = recipientPreparationInputs({ ...machine, recipientWorkPending: pending }, cursor);
         const previous = machineRecipientPreparations.get(key);
+        const recipientChanged = previous !== undefined && previous.inputs.recipientChangeCursor !== inputs.recipientChangeCursor;
         if (previous) {
             if (!previous.invalidated && sameStrictJsonValue(previous.inputs, inputs)
                 && !previous.unprepared) return previous.result;
@@ -213,7 +221,12 @@ export async function prepareMachineDataKeyEnvelopesForMachines(params: Readonly
             }
         }
         if (!params.isCurrent()) return;
-        const publishedRow = publishedRows.get(machine.id);
+        // Only an explicit server answer proves no recipient work; an absent fact runs the exact pass.
+        if (pending === false && !recipientChanged) {
+            machineRecipientPreparations.set(key, { inputs, isCurrent: params.isCurrent, result: Promise.resolve(),
+                invalidated: false, unprepared: false });
+            return;
+        }
         const initialMachineRow = publishedRow ? MachinePublishedRowV1Schema.parse({ ...publishedRow,
             daemonState: publishedRow.daemonState ?? null, daemonStateVersion: publishedRow.daemonStateVersion ?? 0 }) : undefined;
         const result: Promise<void> = prepareMachineDataKeyEnvelopesDetachedForScope({ scope: params.scope, machineId: machine.id,

@@ -26,7 +26,38 @@ import { loadSyncSingletonForTests } from '@/dev/testkit/harness/syncSingletonLo
 await loadSyncSingletonForTests();
 
 describe('captured Machine recipient preparation transport', () => {
-    it('does no recipient work for fleet-wide content revisions and re-prepares only the Machine with recipient demand', async () => {
+    it('runs one exact preparation pass for a cold row without a recipient-work fact', async () => {
+        const secret = new Uint8Array(32).fill(62);
+        const author = await Encryption.create(secret);
+        author.configureNativeCryptoWorker({ routing: { mode: 'off' } });
+        const id = 'recipient-unknown-fact';
+        const key = new Uint8Array(32).fill(11);
+        await author.initializeMachines(new Map([[id, key]]));
+        const envelope = encodeBase64(await author.encryptEncryptionKey(key));
+        const machine = createMachineFixture({ id, storageMode: 'e2ee',
+            access: { custodian: { accountId: 'carol', displayName: 'Carol' }, role: 'manage',
+                resourceMode: 'e2ee', accessState: 'ready' } });
+        const row = { ...machine, kind: 'persistent' as const, revokedAt: null, replacedByMachineId: null,
+            metadata: await author.getMachineEncryption(id)!.encryptMetadata(machine.metadata!),
+            metadataVersion: 1, daemonState: null, daemonStateVersion: 0,
+            dataEncryptionKey: envelope, keyBasis: { dataEncryptionKey: envelope, metadataVersion: 1, daemonStateVersion: 0 } };
+        const home = await serveAccountHomes({ homes: [{ key: 'resource', serverUrl: 'https://recipient-unknown-fact.test',
+            accountId: 'alice', accountMode: 'e2ee', credentials: { token: createAccountTokenForTests('alice'), secret: encodeBase64(secret) } }],
+            route: request => request.path.endsWith('/data-key-envelopes') ? Response.json({
+                machineId: id, custodianAccountId: 'carol', encryptionMode: 'e2ee',
+                machineOwnerEnvelopeFingerprint: computeMachineOwnerEnvelopeFingerprintV1(decodeBase64(envelope)),
+                callerDataEncryptionKey: envelope, nextCursor: null,
+                content: { metadata: row.metadata, metadataVersion: 1, daemonState: null, daemonStateVersion: 0 }, recipients: [],
+            }) : undefined });
+        try {
+            await prepareMachineDataKeyEnvelopesForMachines({ scope: { serverId: home.homes.resource!.id, accountId: 'alice' },
+                machines: [row], publishedRows: [row], recipientChangeCursors: new Map(), isCurrent: () => true });
+            expect(home.requests.filter(request => request.path.endsWith('/data-key-envelopes')).map(request => request.method))
+                .toEqual(['GET', 'GET']);
+        } finally { await home.dispose(); }
+    });
+
+    it('reads only pending recipient work across cold start, navigation and recipient changes', async () => {
         const secret = new Uint8Array(32).fill(61);
         const author = await Encryption.create(secret);
         author.configureNativeCryptoWorker({ routing: { mode: 'off' } });
@@ -43,7 +74,7 @@ describe('captured Machine recipient preparation transport', () => {
                 metadata: await author.getMachineEncryption(id)!.encryptMetadata(machine.metadata!),
                 metadataVersion: revision, daemonState: null, daemonStateVersion: revision,
                 keyBasis: { dataEncryptionKey: envelope, metadataVersion: revision, daemonStateVersion: revision },
-                dataEncryptionKey: envelope } satisfies FetchedMachineRow;
+                dataEncryptionKey: envelope, recipientWorkPending: false, recipientWorkCursor: 0 };
         }));
         const rowsById = () => new Map(machines.map(machine => [machine.id, machine]));
         const home = await serveAccountHomes({ homes: [{ key: 'resource', serverUrl: 'https://recipient-scale.test',
@@ -65,9 +96,7 @@ describe('captured Machine recipient preparation transport', () => {
             recipientChangeCursors, isCurrent: () => true });
         try {
             await refresh();
-            // One admitted Machine pass owns an initial census and the canonical
-            // bounded final recheck; this is two reads, not two admissions.
-            expect(reads()).toHaveLength(ids.length * 2);
+            expect(reads()).toHaveLength(0);
             for (revision = 2; revision <= 5; revision++) {
                 machines = machines.map(machine => ({ ...machine, daemonStateVersion: revision,
                     keyBasis: { ...machine.keyBasis!, daemonStateVersion: revision } }));
@@ -76,6 +105,13 @@ describe('captured Machine recipient preparation transport', () => {
                 expect(reads().length - before).toBe(0);
             }
             const changedId = ids[73]!;
+            const pendingIds = new Set([ids[3]!, ids[17]!, changedId]);
+            machines = machines.map(machine => ({ ...machine, recipientWorkPending: pendingIds.has(machine.id) }));
+            await refresh();
+            expect(reads()).toHaveLength(pendingIds.size * 2);
+            const beforeNavigation = reads().length;
+            await refresh();
+            expect(reads()).toHaveLength(beforeNavigation);
             const beforeRecipientChange = reads().length;
             recipientChangeCursors.set(changedId, 1);
             await refresh();
@@ -99,7 +135,7 @@ describe('captured Machine recipient preparation transport', () => {
                 metadata: await author.getMachineEncryption(id)!.encryptMetadata(machine.metadata!),
                 daemonState: null, daemonStateVersion: 0,
                 keyBasis: { dataEncryptionKey: envelope, metadataVersion: 1, daemonStateVersion: 0 },
-                dataEncryptionKey: envelope } satisfies FetchedMachineRow;
+                dataEncryptionKey: envelope, recipientWorkPending: true, recipientWorkCursor: 0 } satisfies FetchedMachineRow;
         }));
         let rows: readonly FetchedMachineRow[] = [];
         const home = await serveAccountHomes({ homes: [{ key: 'resource', serverUrl: 'https://sync-recipient-pass.test',
@@ -167,7 +203,7 @@ describe('captured Machine recipient preparation transport', () => {
         const rowFor = (id: string) => ({ id, revokedAt: null, replacedByMachineId: null, storageMode: 'e2ee', dataEncryptionKey: null,
             metadata: encodeBase64(encryptLegacy({ host: id, platform: 'linux', happyCliVersion: '0.2',
                 homeDir: '/home/owner', happyHomeDir: '/home/owner/.happier' }, secret)),
-            metadataVersion: 1, daemonState: null, daemonStateVersion: 0, access });
+            metadataVersion: 1, daemonState: null, daemonStateVersion: 0, access, recipientWorkPending: true, recipientWorkCursor: 0 });
         const home = await serveAccountHomes({ homes: [{ key: 'resource', serverUrl: 'https://fleet-read.test',
             accountId: 'alice', accountMode: 'e2ee', credentials: { token: createAccountTokenForTests('alice'), secret: encodeBase64(secret) } }],
             // This device does not hold the key yet, so the preparation ends pending rather than prepared.
@@ -307,15 +343,17 @@ describe('captured Machine recipient preparation transport', () => {
                 // The fresh census fences a stale list observation before disclosure.
                 // A later unseeded attempt still uses the ordinary fresh owner path.
                 expect(await prepareMachineDataKeyEnvelopesForScope({ scope, machineId: 'machine' })).toEqual({ kind: 'prepared' });
+                const accountModeReads = () => fetches.mock.calls.filter(([url]) => {
+                    const target = new URL(String(url));
+                    return target.origin === new URL(home.homes.resource!.serverUrl).origin && target.pathname === '/v1/account/encryption';
+                }).length;
+                const beforeRepeatedPreparation = accountModeReads();
                 for (let pass = 0; pass < 3; pass += 1) {
                     expect(await prepareMachineDataKeyEnvelopesForScope({ scope, machineId: 'machine' })).toEqual({ kind: 'prepared' });
                 }
                 // Explicit current Machine mode owns these resource reads. Repeated
                 // invalidation must not perform an unrelated Account-mode N+1.
-                expect(fetches.mock.calls.filter(([url]) => {
-                    const target = new URL(String(url));
-                    return target.origin === new URL(home.homes.resource!.serverUrl).origin && target.pathname === '/v1/account/encryption';
-                })).toHaveLength(0);
+                expect(accountModeReads() - beforeRepeatedPreparation).toBe(0);
                 expect(fetches.mock.calls.filter(([url]) => new URL(String(url)).pathname === '/v1/machines/machine')).toHaveLength(4);
                 expect(machineRequests().filter(request => request.method === 'POST')).toHaveLength(1);
                 const machine = createMachineFixture({ id: 'machine', active: false, dataEncryptionKey: ownerEnvelope,
@@ -324,7 +362,8 @@ describe('captured Machine recipient preparation transport', () => {
                 const recipientChangeCursors = new Map<string, number>();
                 let lifetimeCurrent = true;
                 const refresh = (activeAt: number) => prepareMachineDataKeyEnvelopesForMachines({ scope,
-                    machines: [{ ...machine, activeAt, active: activeAt % 2 === 0 }], publishedRows: [{ ...machine, ...row() }],
+                    machines: [{ ...machine, activeAt, active: activeAt % 2 === 0 }],
+                    publishedRows: [{ ...machine, ...row(), recipientWorkPending: delivered === null, recipientWorkCursor: 0 }],
                     recipientChangeCursors, isCurrent: () => lifetimeCurrent });
                 const rowReadsBeforeRefresh = machineRequests().filter(request => request.path === '/v1/machines/machine').length;
                 await refresh(1);
@@ -367,16 +406,18 @@ describe('captured Machine recipient preparation transport', () => {
                 const afterAccessChange = refresh(12);
                 revokedRelease.resolve();
                 await Promise.all([beforeAccessChange, afterAccessChange]);
-                expect(censusReads() - before).toBe(10);
+                // The completed pass delivered the key. Re-admitting Manage
+                // with a settled work fact and the same cursor needs no pass.
+                expect(censusReads() - before).toBe(8);
                 censusGate = undefined;
                 revision++;
                 machine.keyBasis = row().keyBasis;
                 await refresh(13); // Content revisions on the same owner envelope are not recipient demand.
-                expect(censusReads() - before).toBe(10);
+                expect(censusReads() - before).toBe(8);
                 machine.metadataVersion = revision;
                 machine.daemonStateVersion = revision;
                 await refresh(14);
-                expect(censusReads() - before).toBe(10); // Hydrating that same published basis is not another input change.
+                expect(censusReads() - before).toBe(8); // Hydrating that same published basis is not another input change.
                 recipientChangeCursors.set(machine.id, 5);
                 delivered = null;
                 recipientBindingAvailable = false;
@@ -387,6 +428,7 @@ describe('captured Machine recipient preparation transport', () => {
                 expect(delivered).toEqual(preparedKey);
                 const beforeNewLifetime = censusReads();
                 lifetimeCurrent = false;
+                delivered = null;
                 await prepareMachineDataKeyEnvelopesForMachines({ scope, machines: [machine], recipientChangeCursors, isCurrent: () => true });
                 expect(censusReads() - beforeNewLifetime).toBe(2); // A retired crypto/Home lifetime cannot suppress new work.
                 const beforeRetiredScope = machineRequests().length;
