@@ -40,6 +40,10 @@
   "bundle": {
     "category": "DeveloperTool",
     "publisher": "Cxsmxnaut",
+    "licenseFile": "../../../LICENCE",
+    "resources": {
+      "../../../LICENCE": "LICENCE"
+    },
     "shortDescription": "A cross-device companion for coding agents",
     "longDescription": "Monitor, steer, approve, review, and continue coding agent sessions across your computers, phone, and browser.",
     "active": true,
