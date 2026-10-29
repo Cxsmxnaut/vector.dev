@@ -28,6 +28,14 @@ export function runTauriBeforeCommand(opts) {
     throw new Error(`mode must be 'dev' or 'build' (got: ${String(mode)})`);
   }
 
+  // Match the official desktop release environment when building outside GitHub Actions.
+  // A Tauri webview has no relay at its own origin; custom relay builds keep their explicit URL.
+  const hasRelay = [env.EXPO_PUBLIC_HAPPIER_SERVER_URL, env.EXPO_PUBLIC_HAPPY_SERVER_URL, env.EXPO_PUBLIC_SERVER_URL]
+    .some(value => String(value ?? '').trim().length > 0);
+  if (mode === 'build' && !hasRelay) {
+    env.EXPO_PUBLIC_HAPPIER_SERVER_URL = 'https://api.happier.dev';
+  }
+
   const yarnCmd = `yarn -s tauri:prepare:${mode}`;
 
   if (platform === 'win32') {

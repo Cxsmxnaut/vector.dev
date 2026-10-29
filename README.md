@@ -8,6 +8,8 @@ The fork starts from upstream stable `main` at [`97dd7ad63576d5678983b18acc7769d
 
 Development builds will be available under [Releases](https://github.com/Cxsmxnaut/vector.dev/releases). A compatible coding agent and a Happier account/relay connection are still required. The Mac build targets Apple Silicon and macOS 13 or newer.
 
+The default Relay/API URL is `https://api.happier.dev`; the browser app/sign-in URL is `https://cloud.happier.dev`. Use the same Relay and Happier account on your devices, then choose **Set up this computer** in the desktop app. Explicit relay environment overrides remain supported for custom builds.
+
 This fork retains Happier’s existing session synchronization and direct-session integrations. It does not establish exact two-way synchronization with every private Codex desktop sidebar setting.
 
 The application can use Happier’s existing relay infrastructure or a self-hosted relay. Service names such as Happier Cloud and Happier Voice identify upstream services. vector.dev does not operate those services. Model calls use your existing subscription or API credits; optional third-party services can have their own costs.
