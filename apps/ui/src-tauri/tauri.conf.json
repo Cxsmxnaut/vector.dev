@@ -40,7 +40,6 @@
   "bundle": {
     "category": "DeveloperTool",
     "publisher": "Cxsmxnaut",
-    "licenseFile": "../../../LICENCE",
     "resources": {
       "../../../LICENCE": "LICENCE"
     },
